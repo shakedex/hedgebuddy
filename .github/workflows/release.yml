@@ -116,20 +116,19 @@ jobs:
             - name: Create DMG
               run: |
                   cd build/bin
-
+                  
                   # List what was actually built
                   ls -la
-
+                  
                   # Create a temporary directory for DMG contents
                   mkdir -p dmg_temp
-
+                  
                   # Copy the app (Wails uses project name for .app bundle)
                   cp -r hedgebuddy-wails.app dmg_temp/HedgeBuddy.app
-
-                  # Create DMG with create-dmg
+                  
+                  # Create DMG with create-dmg (no custom icon for now - optional feature)
                   create-dmg \
                     --volname "HedgeBuddy" \
-                    --volicon "../../appicon.png" \
                     --window-pos 200 120 \
                     --window-size 800 400 \
                     --icon-size 100 \
