@@ -7,6 +7,8 @@
   import DeleteConfirm from './pages/DeleteConfirm.svelte';
   import ImportView from './pages/ImportView.svelte';
   import Loader from './components/Loader.svelte';
+  import Toast from './components/Toast.svelte';
+  import { toast } from './lib/toast';
   import './styles/global.css';
   
   let variables: Record<string, any> = {};
@@ -88,24 +90,29 @@
       
       if (editingName) {
         await UpdateVariable(editingName, name, value, type, description);
+        toast.success(`Variable "${name}" updated successfully`);
       } else {
         await AddVariable(name, value, type, description);
+        toast.success(`Variable "${name}" added successfully`);
       }
       
       await loadVariables();
       showListView();
     } catch (err: any) {
       formError = err.toString();
+      toast.error(`Failed to save: ${err.toString()}`);
     }
   }
   
   async function handleDelete() {
     try {
       await DeleteVariable(deleteVarName);
+      toast.success(`Variable "${deleteVarName}" deleted`);
       await loadVariables();
       showListView();
     } catch (err: any) {
-      console.error('Delete failed:', err);
+      console.error('Failed to delete variable:', err);
+      toast.error(`Failed to delete: ${err.toString()}`);
     }
   }
   
@@ -120,6 +127,7 @@
   async function handleImportComplete() {
     await loadVariables();
     showListView();
+    toast.success('Variables imported successfully');
   }
 </script>
 
@@ -160,4 +168,6 @@
     />
   {/if}
 </main>
+
+<Toast />
 

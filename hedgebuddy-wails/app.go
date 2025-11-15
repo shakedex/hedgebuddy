@@ -183,3 +183,16 @@ func (a *App) OpenFileDialog() (string, error) {
 
 	return filePath, nil
 }
+
+// OpenDirectoryDialog opens a directory picker dialog for path selection
+func (a *App) OpenDirectoryDialog() (string, error) {
+	dirPath, err := wailsRuntime.OpenDirectoryDialog(a.ctx, wailsRuntime.OpenDialogOptions{
+		Title: "Select Directory",
+	})
+
+	if err != nil {
+		return "", err
+	}
+
+	return dirPath, nil
+}

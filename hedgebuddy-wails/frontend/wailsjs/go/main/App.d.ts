@@ -16,6 +16,8 @@ export function ImportSelectedVariables(arg1:Record<string, storage.Variable>):P
 
 export function LoadExternalVariables(arg1:string):Promise<Record<string, storage.Variable>>;
 
+export function OpenDirectoryDialog():Promise<string>;
+
 export function OpenFileDialog():Promise<string>;
 
 export function OpenStorageFolder():Promise<void>;

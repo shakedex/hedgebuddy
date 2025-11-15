@@ -3,6 +3,7 @@
   import Button from '../components/Button.svelte';
   import FormGroup from '../components/FormGroup.svelte';
   import RadioGroup from '../components/RadioGroup.svelte';
+  import { OpenDirectoryDialog } from '../../wailsjs/go/main/App';
   
   export let name = '';
   export let value = '';
@@ -18,15 +19,26 @@
     { value: 'string', label: 'String' },
     { value: 'path', label: 'Path' },
     { value: 'url', label: 'URL' },
-    { value: 'secure', label: 'Secure' }
+    // { value: 'secure', label: 'Secure' } // Disabled for now
   ];
   
   const typeDescriptions: Record<string, string> = {
     string: 'General text value (default)',
     path: 'File or directory path (validated)',
     url: 'Web URL (validated format)',
-    secure: 'Sensitive data like API keys'
+    // secure: 'Sensitive data like API keys'
   };
+  
+  async function handleBrowsePath() {
+    try {
+      const selectedPath = await OpenDirectoryDialog();
+      if (selectedPath) {
+        value = selectedPath;
+      }
+    } catch (err: any) {
+      console.error('Failed to open directory dialog:', err);
+    }
+  }
 </script>
 
 <div class="header">
@@ -56,7 +68,14 @@
   <!-- Row 2: Value -->
   <div class="form-row">
     <FormGroup label="VALUE">
-      <input type="text" bind:value={value} placeholder="Enter the variable value..." />
+      <div class="value-input-group">
+        <input type="text" bind:value={value} placeholder="Enter the variable value..." />
+        {#if type === 'path'}
+          <Button variant="secondary" on:click={handleBrowsePath}>
+            Browse...
+          </Button>
+        {/if}
+      </div>
     </FormGroup>
   </div>
   
@@ -102,6 +121,21 @@
     display: flex;
     gap: var(--spacing-lg);
     margin-bottom: var(--spacing-lg);
+  }
+  
+  .value-input-group {
+    display: flex;
+    gap: var(--spacing-sm);
+    width: 100%;
+  }
+  
+  .value-input-group input {
+    flex: 1;
+  }
+  
+  .value-input-group :global(.btn) {
+    flex-shrink: 0;
+    white-space: nowrap;
   }
   
   .form-row :global(.form-group) {

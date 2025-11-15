@@ -3,6 +3,7 @@
   import Button from '../components/Button.svelte';
   import Modal from '../components/Modal.svelte';
   import { LoadExternalVariables, ImportSelectedVariables, OpenFileDialog } from '../../wailsjs/go/main/App';
+  import { EventsOn } from '../../wailsjs/runtime/runtime';
   
   import { createEventDispatcher, onMount } from 'svelte';
   const dispatch = createEventDispatcher();
@@ -14,7 +15,6 @@
   let importError = '';
   let isLoaded = false;
   let isDragging = false;
-  let dropZoneElement: HTMLDivElement;
   
   // Duplicate confirmation modal
   let showDuplicateModal = false;
@@ -25,10 +25,20 @@
   let editedValues: Record<string, { value: string; type: string; description: string }> = {};
   
   onMount(() => {
-    // Set up drop zone event listeners  
-    if (dropZoneElement) {
-      dropZoneElement.addEventListener('drop', handleDrop);
-    }
+    // Listen for Wails file drop events
+    console.log('Setting up Wails file drop listener');
+    EventsOn('wails:file-drop', async (data: any) => {
+      console.log('Wails file-drop event:', data);
+      if (data && data.length > 0) {
+        const filePath = data[0];
+        if (filePath.endsWith('.json')) {
+          selectedFile = filePath;
+          await handleFileSelect();
+        } else {
+          loadError = 'Please drop a JSON file';
+        }
+      }
+    });
   });
   
   async function handleBrowseFile() {
@@ -72,25 +82,70 @@
   
   function handleDragOver(e: DragEvent) {
     e.preventDefault();
+    e.stopPropagation();
+    console.log('Drag over');
     isDragging = true;
   }
   
-  function handleDragLeave() {
+  function handleDragLeave(e: DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    console.log('Drag leave');
     isDragging = false;
   }
   
   async function handleDrop(e: DragEvent) {
     e.preventDefault();
     e.stopPropagation();
+    console.log('Drop event', e.dataTransfer?.files);
     isDragging = false;
     
+    // Try to read the file content and use it
     const files = e.dataTransfer?.files;
     if (files && files.length > 0) {
       const file = files[0];
+      console.log('File dropped:', file);
+      
       if (file.name.endsWith('.json')) {
-        // Read file path - in Electron/Wails, we need a workaround
-        // For now, ask user to use Browse button
-        loadError = 'Drag & drop not fully supported yet. Please use the Browse button.';
+        try {
+          // Read the file content using FileReader
+          const reader = new FileReader();
+          reader.onload = async (event) => {
+            try {
+              const content = event.target?.result as string;
+              const jsonData = JSON.parse(content);
+              
+              // Validate it has variables
+              if (jsonData.variables) {
+                externalVariables = jsonData.variables;
+                selectedFile = file.name;
+                isLoaded = true;
+                
+                // Initialize edited values
+                editedValues = {};
+                for (const [key, variable] of Object.entries(externalVariables)) {
+                  editedValues[key] = {
+                    value: (variable as any).value,
+                    type: (variable as any).type,
+                    description: (variable as any).description
+                  };
+                }
+                
+                loadError = '';
+              } else {
+                loadError = 'Invalid JSON format - missing "variables" key';
+              }
+            } catch (err: any) {
+              loadError = `Failed to parse JSON: ${err.message}`;
+            }
+          };
+          reader.onerror = () => {
+            loadError = 'Failed to read file';
+          };
+          reader.readAsText(file);
+        } catch (err: any) {
+          loadError = `Error reading file: ${err.message}`;
+        }
       } else {
         loadError = 'Please drop a JSON file';
       }
@@ -171,11 +226,11 @@
   {#if !isLoaded}
     <!-- File Selection -->
     <div 
-      bind:this={dropZoneElement}
       class="file-selector"
       class:dragging={isDragging}
       on:dragover={handleDragOver}
       on:dragleave={handleDragLeave}
+      on:drop={handleDrop}
       role="button"
       tabindex="0"
     >
@@ -184,7 +239,7 @@
       </div>
       <h2>Select JSON File to Import</h2>
       <p class="description">Choose a vars.json file to load variables from</p>
-      <p class="drag-hint">Drag & drop a JSON file here or browse</p>
+      <p class="drag-hint">Drag & drop a JSON file here or click Browse</p>
       
       <div class="file-input-group">
         <input 

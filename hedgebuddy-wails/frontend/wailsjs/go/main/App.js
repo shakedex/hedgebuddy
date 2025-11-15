@@ -30,6 +30,10 @@ export function LoadExternalVariables(arg1) {
   return window['go']['main']['App']['LoadExternalVariables'](arg1);
 }
 
+export function OpenDirectoryDialog() {
+  return window['go']['main']['App']['OpenDirectoryDialog']();
+}
+
 export function OpenFileDialog() {
   return window['go']['main']['App']['OpenFileDialog']();
 }
