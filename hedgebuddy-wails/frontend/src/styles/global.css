@@ -1,0 +1,213 @@
+/* Global Styles */
+:root {
+  /* Colors */
+  --bg-primary: #1a1a1f;
+  --bg-secondary: #28282d;
+  --bg-tertiary: #323237;
+  --bg-hover: #3c3c42;
+
+  --text-primary: #f0f0f5;
+  --text-secondary: #c8c8d2;
+  --text-tertiary: #a0a0aa;
+  --text-muted: #787882;
+  --text-hint: #64646e;
+
+  --accent-blue: #4287f5;
+  --accent-blue-hover: #5a9aff;
+  --accent-red: #dc3545;
+  --accent-red-hover: #e74c3c;
+  --accent-red-bg: #4a2020;
+  --accent-red-text: #dc5050;
+
+  /* Spacing */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 12px;
+  --spacing-lg: 16px;
+  --spacing-xl: 20px;
+  --spacing-2xl: 24px;
+  --spacing-3xl: 32px;
+
+  /* Border radius */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+
+  /* Font sizes */
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-base: 14px;
+  --text-md: 15px;
+  --text-lg: 16px;
+  --text-xl: 17px;
+  --text-2xl: 22px;
+  --text-3xl: 28px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen,
+    Ubuntu, Cantarell, sans-serif;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Buttons */
+.btn {
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: var(--text-md);
+  font-weight: 500;
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm);
+  position: relative;
+  overflow: hidden;
+}
+
+.btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.btn:active:not(:disabled) {
+  transform: translateY(0);
+  transition: all 0.05s ease;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: var(--accent-blue);
+  color: white;
+  padding: 10px 16px;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--accent-blue-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(66, 135, 245, 0.3);
+}
+
+.btn-primary:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: 0 2px 6px rgba(66, 135, 245, 0.2);
+}
+
+.btn-secondary {
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+  padding: 12px 28px;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: #464651;
+  transform: translateY(-1px);
+}
+
+.btn-secondary:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.btn-danger {
+  background: var(--accent-red);
+  color: white;
+  padding: 12px 28px;
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: var(--accent-red-hover);
+}
+
+.btn-back {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  padding: 10px 16px;
+  font-size: var(--text-md);
+}
+
+.btn-back:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+.icon-btn {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  padding: 10px;
+  width: 40px;
+  height: 40px;
+}
+
+.icon-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+  transform: translateY(-1px) scale(1.05);
+}
+
+.icon-btn:active:not(:disabled) {
+  transform: translateY(0) scale(1);
+}
+
+/* Form Elements */
+input[type="text"],
+input[type="password"],
+textarea {
+  width: 100%;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  font-size: var(--text-lg);
+  padding: 0;
+  outline: none;
+  font-family: inherit;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-hint);
+}
+
+label {
+  display: block;
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: var(--spacing-sm);
+}
+
+/* Cards */
+.card {
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-xl);
+}
+
+/* Utilities */
+.container {
+  padding: var(--spacing-2xl) var(--spacing-3xl);
+  max-width: 1200px;
+  margin: 0 auto;
+  min-height: 100vh;
+}
+
+.error-message {
+  background: var(--accent-red-bg);
+  color: var(--accent-red-text);
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-base);
+}

@@ -1,0 +1,12 @@
+# Go
+/go-app/bin/
+/go-app/*.exe
+/go-app/vendor/
+*.exe
+# Python
+**/__pycache__/
+/python-lib/*.egg-info/
+/python-lib/dist/
+/python-lib/build/
+
+.github/
