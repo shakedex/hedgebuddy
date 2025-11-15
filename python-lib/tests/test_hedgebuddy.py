@@ -251,21 +251,22 @@ class TestStoragePath:
         """Test that Windows uses correct APPDATA path."""
         with patch.dict(os.environ, {"APPDATA": "C:\\Users\\Test\\AppData\\Roaming"}):
             path = get_storage_path()
-            assert path == Path("C:\\Users\\Test\\AppData\\Roaming\\hedgebuddy\\vars.json")
+            # Use as_posix() to normalize path separators for cross-platform testing
+            assert path.as_posix() == "C:/Users/Test/AppData/Roaming/hedgebuddy/vars.json"
     
     @patch("sys.platform", "darwin")
     def test_macos_storage_path(self):
         """Test that macOS uses correct Library path."""
         with patch("pathlib.Path.home", return_value=Path("/Users/test")):
             path = get_storage_path()
-            assert path == Path("/Users/test/Library/Application Support/hedgebuddy/vars.json")
+            assert path.as_posix() == "/Users/test/Library/Application Support/hedgebuddy/vars.json"
     
     @patch("sys.platform", "linux")
     def test_linux_storage_path(self):
         """Test that Linux uses .local/share path (future support)."""
         with patch("pathlib.Path.home", return_value=Path("/home/test")):
             path = get_storage_path()
-            assert path == Path("/home/test/.local/share/hedgebuddy/vars.json")
+            assert path.as_posix() == "/home/test/.local/share/hedgebuddy/vars.json"
 
 
 class TestEdgeCases:
