@@ -24,9 +24,6 @@ from .exceptions import (
     StorageCorruptedError,
 )
 
-"StorageCorruptedError",
-]
-
 __version__ = "0.5.0"
 __all__ = [
     "var",
@@ -39,4 +36,3 @@ __all__ = [
     "StorageNotFoundError",
     "StorageCorruptedError",
 ]
-
