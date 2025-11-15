@@ -122,10 +122,21 @@ hedgebuddy/
 
 ## Documentation
 
+📖 **[Read the Full Documentation](https://shakedex.github.io/hedgebuddy/)**
+
+**Quick Links:**
+
+- [Installation Guide](https://shakedex.github.io/hedgebuddy/#/installation)
+- [Python Library API](https://shakedex.github.io/hedgebuddy/#/python-library)
+- [Desktop App Guide](https://shakedex.github.io/hedgebuddy/#/desktop-app)
+- [Code Examples](https://shakedex.github.io/hedgebuddy/#/examples)
+- [FAQ & Troubleshooting](https://shakedex.github.io/hedgebuddy/#/faq)
+
+**Additional Resources:**
+
 - **Python Library**: See [`python-lib/README.md`](python-lib/README.md)
-- **Desktop App**: See [`go-app/README.md`](go-app/README.md)
+- **Desktop App**: See [`hedgebuddy-wails/README.md`](hedgebuddy-wails/README.md)
 - **Example Scripts**: See [`python-lib/examples/`](python-lib/examples/)
-- **Publishing Guide**: See [`python-lib/PUBLISHING.md`](python-lib/PUBLISHING.md)
 - **Download App**: [Releases](https://github.com/shakedex/hedgebuddy/releases)
 
 ---
@@ -243,11 +254,17 @@ MIT License - see [LICENSE](LICENSE) file
 
 ## Links
 
-- **PyPI Package**: https://pypi.org/project/hedgebuddy/
-- **GitHub**: https://github.com/shakedex/hedgebuddy
-- **Issues**: https://github.com/shakedex/hedgebuddy/issues
-- **Releases**: https://github.com/shakedex/hedgebuddy/releases
+- **PyPI Package**: <https://pypi.org/project/hedgebuddy/>
+- **GitHub**: <https://github.com/shakedex/hedgebuddy>
+- **Issues**: <https://github.com/shakedex/hedgebuddy/issues>
+- **Releases**: <https://github.com/shakedex/hedgebuddy/releases>
 
 ---
 
-**Built with ❤️ for the Hedge.co suite**
+---
+
+## Disclaimer
+
+**HedgeBuddy is an independent, open-source project.** It is NOT affiliated with, endorsed by, or officially associated with Hedge (hedge.co) or its parent company. This software is provided "as is" without warranty of any kind. Use at your own risk.
+
+---

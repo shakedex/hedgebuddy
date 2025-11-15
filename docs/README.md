@@ -4,7 +4,7 @@
 
 [![PyPI](https://img.shields.io/pypi/v/hedgebuddy)](https://pypi.org/project/hedgebuddy/)
 [![Python](https://img.shields.io/pypi/pyversions/hedgebuddy)](https://pypi.org/project/hedgebuddy/)
-[![License](https://img.shields.io/github/license/shakedex/hedgebuddy)](https://github.com/shakedex/hedgebuddy/blob/main/LICENSE)
+[![License](https://img.shields.io/github/license/shakedex/hedgebuddy)](https://github.com/shakedex/hedgebuddy/blob/master/LICENSE)
 [![GitHub](https://img.shields.io/github/stars/shakedex/hedgebuddy?style=social)](https://github.com/shakedex/hedgebuddy)
 
 ---
@@ -117,3 +117,11 @@ That's it! No system environment pollution, no complex setup.
 - [PyPI Package](https://pypi.org/project/hedgebuddy/)
 - [Report Issues](https://github.com/shakedex/hedgebuddy/issues)
 - [Desktop App Releases](https://github.com/shakedex/hedgebuddy/releases)
+
+---
+
+## Disclaimer
+
+?> **Independent Project**: HedgeBuddy is an independent, open-source project and is **NOT affiliated with, endorsed by, or officially associated with Hedge (hedge.co)** or its parent company. This software is created for the filmmaking community and users of Hedge.co applications, but is a third-party tool provided "as is" without warranty. Use at your own risk.
+
+---

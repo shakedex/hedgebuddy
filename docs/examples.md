@@ -6,7 +6,7 @@ Real-world examples showing how to use HedgeBuddy in your Python scripts.
 
 ## Running the Examples
 
-All example scripts are available in the [GitHub repository](https://github.com/shakedex/hedgebuddy/tree/main/python-lib/examples).
+All example scripts are available in the [GitHub repository](https://github.com/shakedex/hedgebuddy/tree/master/python-lib/examples).
 
 **Prerequisites:**
 
@@ -32,7 +32,7 @@ python error_handling.py
 
 ## Example 1: Basic Usage
 
-**File:** [`basic_usage.py`](https://github.com/shakedex/hedgebuddy/blob/main/python-lib/examples/basic_usage.py)
+**File:** [`basic_usage.py`](https://github.com/shakedex/hedgebuddy/blob/master/python-lib/examples/basic_usage.py)
 
 Demonstrates the core HedgeBuddy functions.
 
@@ -89,13 +89,13 @@ if __name__ == "__main__":
 - How to check if a variable exists
 - How to get all configured variables
 
-[View Full Code on GitHub →](https://github.com/shakedex/hedgebuddy/blob/main/python-lib/examples/basic_usage.py)
+[View Full Code on GitHub →](https://github.com/shakedex/hedgebuddy/blob/master/python-lib/examples/basic_usage.py)
 
 ---
 
 ## Example 2: Real-World Scenario
 
-**File:** [`real_world_example.py`](https://github.com/shakedex/hedgebuddy/blob/main/python-lib/examples/real_world_example.py)
+**File:** [`real_world_example.py`](https://github.com/shakedex/hedgebuddy/blob/master/python-lib/examples/real_world_example.py)
 
 Simulates a sales report generator that:
 
@@ -179,13 +179,13 @@ if __name__ == "__main__":
 - Graceful degradation when optional features aren't configured
 - Working with file paths
 
-[View Full Code on GitHub →](https://github.com/shakedex/hedgebuddy/blob/main/python-lib/examples/real_world_example.py)
+[View Full Code on GitHub →](https://github.com/shakedex/hedgebuddy/blob/master/python-lib/examples/real_world_example.py)
 
 ---
 
 ## Example 3: Legacy Code Migration
 
-**File:** [`legacy_migration.py`](https://github.com/shakedex/hedgebuddy/blob/main/python-lib/examples/legacy_migration.py)
+**File:** [`legacy_migration.py`](https://github.com/shakedex/hedgebuddy/blob/master/python-lib/examples/legacy_migration.py)
 
 Shows how to use HedgeBuddy with existing code that uses `os.environ`.
 
@@ -243,13 +243,13 @@ if __name__ == "__main__":
 - Gradual migration from `os.environ` to `hedgebuddy.var()`
 - When to use each approach
 
-[View Full Code on GitHub →](https://github.com/shakedex/hedgebuddy/blob/main/python-lib/examples/legacy_migration.py)
+[View Full Code on GitHub →](https://github.com/shakedex/hedgebuddy/blob/master/python-lib/examples/legacy_migration.py)
 
 ---
 
 ## Example 4: Error Handling
 
-**File:** [`error_handling.py`](https://github.com/shakedex/hedgebuddy/blob/main/python-lib/examples/error_handling.py)
+**File:** [`error_handling.py`](https://github.com/shakedex/hedgebuddy/blob/master/python-lib/examples/error_handling.py)
 
 Demonstrates proper error handling for production-ready code.
 
@@ -316,7 +316,7 @@ def example_3_validation():
 - Validating variable values after loading
 - Conditional feature enablement
 
-[View Full Code on GitHub →](https://github.com/shakedex/hedgebuddy/blob/main/python-lib/examples/error_handling.py)
+[View Full Code on GitHub →](https://github.com/shakedex/hedgebuddy/blob/master/python-lib/examples/error_handling.py)
 
 ---
 

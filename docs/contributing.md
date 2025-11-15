@@ -307,7 +307,7 @@ For GUI changes, manually test:
 
 See current priorities and planned features:
 
-- [TASKS.md](https://github.com/shakedex/hedgebuddy/blob/main/TASKS.md) - Detailed task list
+- [TASKS.md](https://github.com/shakedex/hedgebuddy/blob/master/TASKS.md) - Detailed task list
 - [Issues](https://github.com/shakedex/hedgebuddy/issues) - Current bugs and feature requests
 - [Discussions](https://github.com/shakedex/hedgebuddy/discussions) - Ideas and questions
 
