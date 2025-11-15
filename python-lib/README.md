@@ -6,20 +6,8 @@ Cross-platform environment variable management for Python scripts without system
 
 HedgeBuddy is designed for standalone scripts. **Install it globally** so all your scripts can use it:
 
-### Using pip
-
 ```bash
 pip install --user hedgebuddy
-```
-
-### Using uv (modern, fast, reccommended)
-
-```bash
-# Install uv package manager
-pip install uv
-
-# Install hedgebuddy globally
-uv pip install --system hedgebuddy
 ```
 
 ### Verify installation

@@ -6,20 +6,8 @@ This directory contains practical examples demonstrating how to use HedgeBuddy i
 
 Since HedgeBuddy is designed for standalone scripts, **install it globally** so it's available to all your scripts:
 
-### Using pip (recommended for most users)
-
 ```bash
 pip install --user hedgebuddy
-```
-
-### Using uv (modern, fast package manager)
-
-```bash
-# Install uv if you haven't already
-pip install uv
-
-# Install hedgebuddy globally with uv
-uv pip install --system hedgebuddy
 ```
 
 ### Verify installation

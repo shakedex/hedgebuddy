@@ -9,10 +9,6 @@ INSTALLATION:
 Install HedgeBuddy globally so all your scripts can use it:
 
     pip install --user hedgebuddy
-
-Or with uv (modern, fast):
-
-    uv pip install --system hedgebuddy
 """
 
 import hedgebuddy

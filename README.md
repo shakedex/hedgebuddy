@@ -1,98 +1,253 @@
-Project Brief: HedgeBuddy
-Overview
+# HedgeBuddy
 
-HedgeBuddy is a small, cross-platform utility designed for the Hedge.co suite (Offshoot, Foolcat, etc.) to make Python scripts more accessible and configurable. The goal is to centralize environment variables required by scripts without requiring end-users to touch the system environment or edit scripts manually.
+**Cross-platform environment variable management for Python scripts without system pollution.**
 
-Script developers continue using normal Python environment variable calls (e.g., os.environ["REPORT_PATH"]), but HedgeBuddy injects or exposes these values dynamically via a local file or service.
+[![PyPI](https://img.shields.io/pypi/v/hedgebuddy)](https://pypi.org/project/hedgebuddy/)
+[![Python](https://img.shields.io/pypi/pyversions/hedgebuddy)](https://pypi.org/project/hedgebuddy/)
+[![License](https://img.shields.io/github/license/shakedex/hedgebuddy)](LICENSE)
 
-Key Goals
+---
 
-Zero-friction for script developers
+## What is HedgeBuddy?
 
-No changes required in existing scripts beyond importing the HedgeBuddy library.
+HedgeBuddy is a lightweight utility that makes Python scripts more accessible and configurable for Hedge's software suite without needing to hardcode important variables. It consists of two components:
 
-Developers can continue using $VAR style variables or os.environ["VAR"].
+1. **Python Library** (`hedgebuddy`) - Dead-simple API for reading variables in your scripts
+2. **Desktop GUI App** - Beautiful interface for managing variables (Windows & macOS)
 
-No global system pollution
+Perfect for script developers who want to make their tools user-friendly without requiring technical setup after script creation.
 
-Variables are stored locally in a secure, app-controlled location.
+---
 
-Avoids writing to HKCU/launchctl or global PATH.
+## Quick Start
 
-User-friendly for end-users
+### For Script Users
 
-Simple GUI for adding/editing environment variables.
+1. **Install Python 3.13+** (if not already installed)
+   - Windows: Download from [python.org](https://www.python.org/downloads/)
+   - macOS: `brew install python` or download from [python.org](https://www.python.org/downloads/)
+2. **Install the desktop app** (download from [Releases](https://github.com/shakedex/hedgebuddy/releases))
+3. **Install the Python library**:
 
-Variables automatically used by scripts without the user needing technical knowledge.
+   ```bash
+   pip install --user hedgebuddy
+   ```
 
-Cross-platform support
+4. **Add your variables** using the GUI, fill up the corresponding variables called in your scripts.
+5. **Run your scripts** - they just work! ✨
 
-Must run natively on Windows and macOS.
+### For Script Developers
 
-Scripts should behave identically on both platforms.
+```python
+import hedgebuddy
 
-Core Components
+# Required variable (raises error if not configured)
+api_key = hedgebuddy.var("API_KEY")
 
-HedgeBuddy Library (Python module)
+# Optional variable with fallback
+api_url = hedgebuddy.var("API_URL", "https://api.example.com")
 
-Name: hedgebuddy
+# Check if variable exists
+if hedgebuddy.exists("PREMIUM_FEATURES"):
+    enable_premium()
 
-Provides a single function: hedgebuddy.var("VAR_NAME") which reads the variable from HedgeBuddy’s local storage.
+# Get all variables as a dictionary
+all_variables = hedgebuddy.all_vars()
 
-Optional: override Python’s os.environ temporarily when scripts are loaded.
+# Inject into os.environ for legacy code (optional)
+hedgebuddy.inject_env(overwrite=False)
+```
 
-Reads from a local JSON/SQLite file or a local HTTP endpoint exposed by HedgeBuddy.
+That's it! No system environment pollution, no complex setup.
 
-HedgeBuddy App (GUI + backend)
+---
 
-GUI for managing variables:
+## Key Features
 
-Add, edit, remove variables
+✅ **Zero System Pollution** - Variables stored locally, never touch system environment  
+✅ **Cross-Platform** - Works seamlessly on Windows and macOS  
+✅ **Simple API** - Just `hedgebuddy.var("NAME")` in your scripts  
+✅ **Beautiful GUI** - Modern desktop app for variable management  
+✅ **Type Support** - String, Path, URL, and Secure variable types  
+✅ **Validation** - Built-in path and URL validation  
+✅ **Zero Friction** - Scripts work immediately after variable configuration
 
-Set type: string, path, secure (password)
+---
 
-Validate entries (paths exist, URLs well-formed)
+## Architecture
 
-Stores variables in local JSON/SQLite, encrypted if necessary.
+```
+┌─────────────────┐
+│   Desktop App   │ ← User manages variables via GUI
+│   (Go + Wails)  │
+└────────┬────────┘
+         │
+         ↓ Writes to
+┌─────────────────┐
+│   vars.json     │ ← Local storage (no system pollution)
+│  (AppData/      │
+│   Library)      │
+└────────┬────────┘
+         │
+         ↓ Reads from
+┌─────────────────┐
+│ Python Library  │ ← Scripts call hedgebuddy.var()
+│  (hedgebuddy)   │
+└─────────────────┘
+```
 
-Optionally exposes variables over a local HTTP API (e.g., http://localhost:12345/vars/REPORT_PATH) for HedgeBuddy Python module to consume.
+**Storage Locations:**
 
-Workflow
+- **Windows**: `%APPDATA%\hedgebuddy\vars.json`
+- **macOS**: `~/Library/Application Support/hedgebuddy/vars.json`
 
-User opens HedgeBuddy app → edits/creates variables.
+---
 
-Variables are saved in a local, secure storage.
+## Project Structure
 
-Python scripts call hedgebuddy.var("VAR_NAME") → returns the value.
+```
+hedgebuddy/
+├── python-lib/          # Python library (published to PyPI)
+│   ├── hedgebuddy/      # Core library code
+│   ├── tests/           # Unit tests (95% coverage)
+│   └── examples/        # Example scripts
+├── go-app/              # Desktop GUI application (Wails)
+│   ├── frontend/        # Svelte + TypeScript UI
+│   └── backend/         # Go backend logic
+├── website/             # Documentation website
+└── docs/                # Additional documentation
+```
 
-Scripts continue to run in Hedge normally with all variables injected dynamically.
+---
 
-Developer Notes
+## Documentation
 
-No need to touch system environment.
+- **Python Library**: See [`python-lib/README.md`](python-lib/README.md)
+- **Desktop App**: See [`go-app/README.md`](go-app/README.md)
+- **Example Scripts**: See [`python-lib/examples/`](python-lib/examples/)
+- **Publishing Guide**: See [`python-lib/PUBLISHING.md`](python-lib/PUBLISHING.md)
+- **Download App**: [Releases](https://github.com/shakedex/hedgebuddy/releases)
 
-Support Windows (%APPDATA%/HedgeBuddy/vars.json) and macOS (~/Library/Application Support/HedgeBuddy/vars.json).
+---
 
-Python module should have fallback: return None if variable not set.
+## Installation
 
-Consider optional automatic injection into os.environ when module is imported.
+### Prerequisites
 
-GUI framework can be Tauri, Fyne, Wails, or Electron, depending on preferred stack.
+**Python 3.13 or higher** is required. Check if you have Python installed:
 
-Local HTTP API (optional) should be lightweight, only accessible from localhost.
+```bash
+python --version
+```
 
-Deliverables
+If not installed, download from [python.org](https://www.python.org/downloads/) or use your system's package manager.
 
-Python library hedgebuddy (PyPI-ready)
+### Python Library
 
-Cross-platform GUI app to manage variables
+```bash
+pip install --user hedgebuddy
+```
 
-Documentation:
+Verify:
 
-How to install Python module
+```bash
+python -c "import hedgebuddy; print('✓ HedgeBuddy ready!')"
+```
 
-How to configure variables
+### Desktop App
 
-How script developers use it
+Download the latest release for your platform:
 
-Optional: local HTTP API for more advanced scripts
+- [Windows (x64)](https://github.com/shakedex/hedgebuddy/releases)
+- [macOS (Apple Silicon)](https://github.com/shakedex/hedgebuddy/releases)
+
+---
+
+## Development
+
+### Python Library
+
+```bash
+cd python-lib
+pip install --user -e .
+pytest tests/ -v
+```
+
+### Desktop App
+
+```bash
+cd go-app
+wails dev
+```
+
+Build:
+
+```bash
+wails build
+```
+
+---
+
+## Status
+
+### ✅ Python Library (v0.5.0)
+
+- Published to PyPI
+- 95% test coverage
+- Production ready
+- Feature complete
+
+### ✅ Desktop GUI App
+
+- Cross-platform (Windows & macOS)
+- Variable CRUD operations
+- Type validation (Path, URL)
+- Modern UI with Svelte
+- Production ready
+
+### 🚧 Documentation Website
+
+- Landing page (in progress)
+- User guide
+- API reference
+
+---
+
+## Design Philosophy
+
+**For Script Developers:**
+
+- No changes to existing code patterns
+- Simple, predictable API
+- Clear error messages
+
+**For End Users:**
+
+- No technical knowledge required
+- Beautiful, intuitive GUI
+- Variables just work
+
+**For Everyone:**
+
+- No system pollution
+- Cross-platform consistency
+- Zero-friction setup
+
+---
+
+## License
+
+MIT License - see [LICENSE](LICENSE) file
+
+---
+
+## Links
+
+- **PyPI Package**: https://pypi.org/project/hedgebuddy/
+- **GitHub**: https://github.com/shakedex/hedgebuddy
+- **Issues**: https://github.com/shakedex/hedgebuddy/issues
+- **Releases**: https://github.com/shakedex/hedgebuddy/releases
+
+---
+
+**Built with ❤️ for the Hedge.co suite**

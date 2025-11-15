@@ -11,8 +11,6 @@ This script demonstrates the core functionality of HedgeBuddy:
 PREREQUISITES:
 1. Install HedgeBuddy globally:
    pip install --user hedgebuddy
-   OR
-   uv pip install --system hedgebuddy
 
 2. Install and run the HedgeBuddy desktop app
 
