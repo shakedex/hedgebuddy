@@ -1,6 +1,6 @@
 [project]
 name = "hedgebuddy"
-version = "0.1.0"
+version = "0.5.0"
 description = "Cross-platform environment variable management for Python scripts without system pollution"
 readme = "README.md"
 authors = [
@@ -11,7 +11,7 @@ keywords = ["environment", "variables", "configuration", "cross-platform", "hedg
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
+    "License :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.13",
     "Operating System :: Microsoft :: Windows",
@@ -20,6 +20,12 @@ classifiers = [
 ]
 requires-python = ">=3.13"
 dependencies = []
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=4.1.0",
+]
 
 [project.urls]
 Homepage = "https://github.com/shakedex/hedgebuddy"

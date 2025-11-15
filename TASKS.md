@@ -15,7 +15,7 @@
 - [ ] Update `pyproject.toml` with proper metadata
 - [ ] Create usage examples in `examples/python/`
 
-### Go GUI App (`go-app/`)
+### Go GUI App (`hedgebuddy-wails/`)
 
 - [ ] Initialize Wails project structure
   - [ ] Set up Go backend with Wails CLI (`wails init`)

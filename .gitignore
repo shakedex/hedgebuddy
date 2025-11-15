@@ -10,3 +10,4 @@
 /python-lib/build/
 
 .github/copilot-instructions.md
+.env
