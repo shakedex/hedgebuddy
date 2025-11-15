@@ -1,108 +1,108 @@
 name: Publish Python Package to PyPI
 
 on:
-  release:
-    types: [published]
-  workflow_dispatch:
-    inputs:
-      version:
-        description: 'Version to publish (e.g., 0.1.0)'
-        required: true
-        type: string
+    release:
+        types: [published]
+    workflow_dispatch:
+        inputs:
+            version:
+                description: "Version to publish (e.g., 0.1.0)"
+                required: true
+                type: string
 
 jobs:
-  publish:
-    name: Build and Publish to PyPI
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.13'
-      
-      - name: Install uv
-        run: |
-          curl -LsSf https://astral.sh/uv/install.sh | sh
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-      
-      - name: Verify version matches (release trigger)
-        if: github.event_name == 'release'
-        working-directory: ./python-lib
-        run: |
-          RELEASE_VERSION="${{ github.event.release.tag_name }}"
-          # Remove 'v' prefix if present
-          RELEASE_VERSION="${RELEASE_VERSION#v}"
-          
-          # Get version from pyproject.toml
-          PACKAGE_VERSION=$(grep '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/')
-          
-          echo "Release version: $RELEASE_VERSION"
-          echo "Package version: $PACKAGE_VERSION"
-          
-          if [ "$RELEASE_VERSION" != "$PACKAGE_VERSION" ]; then
-            echo "Error: Release version ($RELEASE_VERSION) does not match package version ($PACKAGE_VERSION)"
-            exit 1
-          fi
-      
-      - name: Update version (manual trigger)
-        if: github.event_name == 'workflow_dispatch'
-        working-directory: ./python-lib
-        run: |
-          VERSION="${{ github.event.inputs.version }}"
-          echo "Updating version to $VERSION"
-          
-          # Update pyproject.toml
-          sed -i "s/^version = .*/version = \"$VERSION\"/" pyproject.toml
-          
-          # Update __init__.py
-          sed -i "s/__version__ = .*/__version__ = \"$VERSION\"/" hedgebuddy/__init__.py
-      
-      - name: Install dependencies
-        working-directory: ./python-lib
-        run: |
-          uv pip install --system build twine
-      
-      - name: Run tests
-        working-directory: ./python-lib
-        run: |
-          uv pip install --system pytest pytest-cov
-          uv run pytest tests/ -v
-      
-      - name: Build package
-        working-directory: ./python-lib
-        run: |
-          python -m build
-      
-      - name: Check package
-        working-directory: ./python-lib
-        run: |
-          twine check dist/*
-      
-      - name: Publish to PyPI
-        working-directory: ./python-lib
-        env:
-          TWINE_USERNAME: __token__
-          TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
-        run: |
-          twine upload dist/*
-      
-      - name: Create summary
-        if: github.event_name == 'release'
-        run: |
-          echo "## 🎉 Published to PyPI!" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Package**: hedgebuddy" >> $GITHUB_STEP_SUMMARY
-          echo "**Version**: ${{ github.event.release.tag_name }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Installation" >> $GITHUB_STEP_SUMMARY
-          echo '```bash' >> $GITHUB_STEP_SUMMARY
-          echo "pip install --user hedgebuddy" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**PyPI**: https://pypi.org/project/hedgebuddy/" >> $GITHUB_STEP_SUMMARY
+    publish:
+        name: Build and Publish to PyPI
+        runs-on: ubuntu-latest
+        permissions:
+            contents: read
+
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+
+            - name: Set up Python
+              uses: actions/setup-python@v5
+              with:
+                  python-version: "3.13"
+
+            - name: Install uv
+              run: |
+                  curl -LsSf https://astral.sh/uv/install.sh | sh
+                  echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+            - name: Verify version matches (release trigger)
+              if: github.event_name == 'release'
+              working-directory: ./python-lib
+              run: |
+                  RELEASE_VERSION="${{ github.event.release.tag_name }}"
+                  # Remove 'v' prefix if present
+                  RELEASE_VERSION="${RELEASE_VERSION#v}"
+
+                  # Get version from pyproject.toml
+                  PACKAGE_VERSION=$(grep '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/')
+
+                  echo "Release version: $RELEASE_VERSION"
+                  echo "Package version: $PACKAGE_VERSION"
+
+                  if [ "$RELEASE_VERSION" != "$PACKAGE_VERSION" ]; then
+                    echo "Error: Release version ($RELEASE_VERSION) does not match package version ($PACKAGE_VERSION)"
+                    exit 1
+                  fi
+
+            - name: Update version (manual trigger)
+              if: github.event_name == 'workflow_dispatch'
+              working-directory: ./python-lib
+              run: |
+                  VERSION="${{ github.event.inputs.version }}"
+                  echo "Updating version to $VERSION"
+
+                  # Update pyproject.toml
+                  sed -i "s/^version = .*/version = \"$VERSION\"/" pyproject.toml
+
+                  # Update __init__.py
+                  sed -i "s/__version__ = .*/__version__ = \"$VERSION\"/" hedgebuddy/__init__.py
+
+            - name: Install dependencies
+              working-directory: ./python-lib
+              run: |
+                  uv pip install --system build twine
+
+            - name: Run tests
+              working-directory: ./python-lib
+              run: |
+                  uv pip install --system pytest pytest-cov
+                  uv run pytest tests/ -v
+
+            - name: Build package
+              working-directory: ./python-lib
+              run: |
+                  python -m build
+
+            - name: Check package
+              working-directory: ./python-lib
+              run: |
+                  twine check dist/*
+
+            - name: Publish to PyPI
+              working-directory: ./python-lib
+              env:
+                  TWINE_USERNAME: __token__
+                  TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
+              run: |
+                  twine upload dist/*
+
+            - name: Create summary
+              if: github.event_name == 'release'
+              run: |
+                  echo "## 🎉 Published to PyPI!" >> $GITHUB_STEP_SUMMARY
+                  echo "" >> $GITHUB_STEP_SUMMARY
+                  echo "**Package**: hedgebuddy" >> $GITHUB_STEP_SUMMARY
+                  echo "**Version**: ${{ github.event.release.tag_name }}" >> $GITHUB_STEP_SUMMARY
+                  echo "" >> $GITHUB_STEP_SUMMARY
+                  echo "### Installation" >> $GITHUB_STEP_SUMMARY
+                  echo '```bash' >> $GITHUB_STEP_SUMMARY
+                  echo "pip install --user hedgebuddy" >> $GITHUB_STEP_SUMMARY
+                  echo '```' >> $GITHUB_STEP_SUMMARY
+                  echo "" >> $GITHUB_STEP_SUMMARY
+                  echo "**PyPI**: https://pypi.org/project/hedgebuddy/" >> $GITHUB_STEP_SUMMARY

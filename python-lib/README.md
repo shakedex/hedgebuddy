@@ -176,6 +176,7 @@ except hedgebuddy.StorageNotFoundError:
 ### Functions
 
 - **`hedgebuddy.var(name, default=...)`** - Get variable value
+
   - No default = raises error if missing (required variable)
   - With default = returns default if missing (optional variable)
 

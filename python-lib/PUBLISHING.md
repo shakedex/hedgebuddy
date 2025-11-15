@@ -13,14 +13,17 @@ This guide explains how to publish new versions of the HedgeBuddy Python library
 This method automatically publishes when you create a GitHub release:
 
 1. **Update version number** in `python-lib/pyproject.toml` and `python-lib/hedgebuddy/__init__.py`
+
    ```toml
    version = "0.1.0"  # Update this
    ```
+
    ```python
    __version__ = "0.1.0"  # And this
    ```
 
 2. **Commit and push changes**
+
    ```bash
    git add python-lib/pyproject.toml python-lib/hedgebuddy/__init__.py
    git commit -m "Bump version to 0.1.0"
@@ -28,6 +31,7 @@ This method automatically publishes when you create a GitHub release:
    ```
 
 3. **Create a GitHub Release**
+
    - Go to https://github.com/shakedex/hedgebuddy/releases/new
    - Tag: `v0.1.0` (must match package version with 'v' prefix)
    - Title: `v0.1.0 - Initial Release`
@@ -59,6 +63,7 @@ This will automatically update version numbers and publish.
 1. **Verify on PyPI**: https://pypi.org/project/hedgebuddy/
 
 2. **Test installation**:
+
    ```bash
    pip install --user hedgebuddy
    python -c "import hedgebuddy; print(hedgebuddy.__version__)"
@@ -75,6 +80,7 @@ Follow [Semantic Versioning](https://semver.org/):
 - **PATCH** version (0.1.1): Bug fixes (backwards compatible)
 
 Examples:
+
 - `0.1.0` - Initial release
 - `0.1.1` - Bug fix
 - `0.2.0` - New feature (exists() function, new exception types)
@@ -83,18 +89,22 @@ Examples:
 ## Troubleshooting
 
 ### "Version already exists"
+
 - PyPI doesn't allow overwriting versions
 - Increment version number and republish
 
 ### "Invalid token"
+
 - Verify `PYPI_TOKEN` secret is set correctly
 - Regenerate token at https://pypi.org/manage/account/token/
 
 ### "Tests failed"
+
 - Fix failing tests before publishing
 - Run `pytest tests/ -v` locally to debug
 
 ### "Version mismatch"
+
 - Ensure `pyproject.toml` version matches Git tag (without 'v' prefix)
 - Tag: `v0.1.0` → Package: `0.1.0`
 
