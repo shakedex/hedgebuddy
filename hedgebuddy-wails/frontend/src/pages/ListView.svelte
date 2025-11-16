@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { FolderOpen, RefreshCw, Plus, FileDown } from 'lucide-svelte';
+  import { FolderOpen, RefreshCw, Plus, FileDown, Info } from 'lucide-svelte';
   import Button from '../components/Button.svelte';
   import VariableCard from '../components/VariableCard.svelte';
   import Loader from '../components/Loader.svelte';
@@ -35,6 +35,9 @@
     </p>
   </div>
   <div class="header-actions">
+    <Button variant="icon" title="About" on:click={() => dispatch('about')}>
+      <Info size={20} />
+    </Button>
     <Button variant="icon" title="Import from file" on:click={() => dispatch('import')}>
       <FileDown size={20} />
     </Button>

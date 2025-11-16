@@ -6,6 +6,7 @@
   import VariableForm from './pages/VariableForm.svelte';
   import DeleteConfirm from './pages/DeleteConfirm.svelte';
   import ImportView from './pages/ImportView.svelte';
+  import AboutView from './pages/AboutView.svelte';
   import Loader from './components/Loader.svelte';
   import Toast from './components/Toast.svelte';
   import { toast } from './lib/toast';
@@ -13,7 +14,7 @@
   
   let variables: Record<string, any> = {};
   let sortedKeys: string[] = [];
-  let currentView: 'list' | 'form' | 'delete' | 'import' = 'list';
+  let currentView: 'list' | 'form' | 'delete' | 'import' | 'about' = 'list';
   let isLoading = true;
   
   // Form state
@@ -77,6 +78,10 @@
   
   function showImportView() {
     currentView = 'import';
+  }
+  
+  function showAboutView() {
+    currentView = 'about';
   }
   
   function showListView() {
@@ -143,6 +148,7 @@
       on:refresh={loadVariables}
       on:openFolder={handleOpenFolder}
       on:import={showImportView}
+      on:about={showAboutView}
     />
   {:else if currentView === 'form'}
     <VariableForm
@@ -165,6 +171,10 @@
     <ImportView
       on:imported={handleImportComplete}
       on:cancel={showListView}
+    />
+  {:else if currentView === 'about'}
+    <AboutView
+      on:back={showListView}
     />
   {/if}
 </main>
