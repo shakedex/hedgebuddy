@@ -201,7 +201,7 @@ wails build
 
 ## Status
 
-### ✅ Python Library (v0.5.0)
+### ✅ Python Library (v0.5.1)
 
 - Published to PyPI
 - 95% test coverage
