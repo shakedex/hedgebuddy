@@ -233,7 +233,7 @@ The app validates your input and shows helpful error messages:
 - ✅ **Valid**: Path exists on filesystem
 - ⚠️ **Warning**: Path doesn't exist (still allows saving)
 
-```
+```md
 ⚠️ Warning: Path does not exist
 The path 'C:\NonExistent\Folder' was not found.
 You can still save it if you plan to create it later.
@@ -244,7 +244,7 @@ You can still save it if you plan to create it later.
 - ✅ **Valid**: Proper HTTP/HTTPS URL format
 - ❌ **Error**: Invalid URL format (prevents saving)
 
-```
+```md
 ❌ Invalid URL format
 URLs must start with http:// or https://
 Example: https://api.example.com
@@ -255,7 +255,7 @@ Example: https://api.example.com
 - **Name**: Cannot be empty
 - **Value**: Cannot be empty
 
-```
+```md
 ❌ Name is required
 Please enter a variable name.
 ```
@@ -308,7 +308,7 @@ You can manually edit `vars.json` with a text editor, but we recommend using the
 
 Add descriptions to remember what each variable is for:
 
-```
+```md
 Name: API_KEY
 Description: Production API key from Hedge.co dashboard
 ```
@@ -317,7 +317,7 @@ Description: Production API key from Hedge.co dashboard
 
 Use prefixes to group related variables:
 
-```
+```md
 REPORT_PATH
 REPORT_EMAIL
 REPORT_FORMAT
@@ -331,7 +331,7 @@ API_TIMEOUT
 
 Export your variables periodically as backup:
 
-```
+```md
 File → Export → Save as hedgebuddy-backup-2025-11-16.json
 ```
 
@@ -349,7 +349,7 @@ print(hedgebuddy.var("YOUR_NEW_VARIABLE"))
 
 Windows uses backslashes (`\`) but you can also use forward slashes (`/`) - Python handles both:
 
-```
+```md
 ✅ C:\Users\John\Reports
 ✅ C:/Users/John/Reports
 ```

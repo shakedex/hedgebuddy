@@ -132,7 +132,7 @@ pip install --user hedgebuddy
 
 ## Example Configuration
 
-```
+```md
 Variable: HB_PAYLOAD_OUTPUT_PATH
 Type: Path
 Value: D:\Logs\OffShoot\payloads.json
@@ -195,7 +195,7 @@ The script creates a JSON array with timestamped payload entries:
 
 ### Inspect OffShoot Transfer Events
 
-```
+```md
 HB_PAYLOAD_OUTPUT_PATH: D:\Dev\offshoot-transfers.json
 ```
 
@@ -209,7 +209,7 @@ Run transfers and inspect `offshoot-transfers.json` to see:
 
 ### Capture FoolCat Report Events
 
-```
+```md
 HB_PAYLOAD_OUTPUT_PATH: D:\Dev\foolcat-reports.json
 ```
 
@@ -225,7 +225,7 @@ Generate reports and inspect `foolcat-reports.json` to see:
 
 Use the same output file for multiple event types:
 
-```
+```md
 HB_PAYLOAD_OUTPUT_PATH: D:\Dev\all-events.json
 ```
 

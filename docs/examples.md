@@ -25,7 +25,7 @@ Send beautifully formatted Slack notifications when OffShoot transfers complete.
 **Setup:**
 
 1. Install: `pip install --user hedgebuddy requests`
-2. Create Slack webhook at https://api.slack.com/messaging/webhooks
+2. Create Slack webhook at <https://api.slack.com/messaging/webhooks>
 3. Import `offshoot-slack-notifier-template.json` in HedgeBuddy app
 4. Update webhook URL in HedgeBuddy
 5. Add script to OffShoot's "File Copy Completed" event

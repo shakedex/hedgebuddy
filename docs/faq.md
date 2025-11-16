@@ -66,19 +66,19 @@ Linux support is planned for a future release.
 
 ### "pip install hedgebuddy" fails
 
-**Solution 1: Try pip3**
+#### Solution 1: Try pip3
 
 ```bash
 pip3 install --user hedgebuddy
 ```
 
-**Solution 2: Use python -m pip**
+#### Solution 2: Use python -m pip
 
 ```bash
 python -m pip install --user hedgebuddy
 ```
 
-**Solution 3: Check Python version**
+#### Solution 3: Check Python version
 
 ```bash
 python --version  # Must be 3.13+
@@ -136,13 +136,13 @@ ls ~/Library/Application\ Support/hedgebuddy/vars.json
 
 **Cause:** HedgeBuddy not installed or installed in wrong Python environment.
 
-**Solution 1: Install globally**
+#### Solution 1: Install globally
 
 ```bash
 pip install --user hedgebuddy
 ```
 
-**Solution 2: Check which Python**
+#### Solution 2: Check which Python
 
 ```bash
 # Which python are you using?
@@ -154,7 +154,7 @@ where python  # Windows
 python -m pip install --user hedgebuddy
 ```
 
-**Solution 3: Verify installation**
+#### Solution 3: Verify installation
 
 ```bash
 python -c "import hedgebuddy; print('Installed!')"
