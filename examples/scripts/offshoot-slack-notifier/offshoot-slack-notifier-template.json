@@ -1,0 +1,19 @@
+{
+  "variables": {
+    "HB_OS_SLACK_WEBHOOK_URL": {
+      "value": "",
+      "type": "url",
+      "description": "Slack Incoming Webhook URL (get from https://api.slack.com/messaging/webhooks)"
+    },
+    "HB_OS_SLACK_CHANNEL": {
+      "value": "",
+      "type": "string",
+      "description": "Optional: Override default Slack channel (e.g., #transfers or #dit-team)"
+    },
+    "HB_OS_NOTIFY_ON_FAILED_ONLY": {
+      "value": "false",
+      "type": "string",
+      "description": "Set to 'true' to only send notifications on failed/warning transfers (reduces noise)"
+    }
+  }
+}

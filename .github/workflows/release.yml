@@ -1,226 +1,226 @@
 name: Release HedgeBuddy
 
 on:
-    push:
-        tags:
-            - "v*.*.*" # Triggers on version tags like v1.0.0, v1.2.3
-    workflow_dispatch: # Allows manual execution from GitHub UI
-        inputs:
-            version:
-                description: "Version number (e.g., 1.0.0)"
-                required: true
-                default: "1.0.0"
-            create_tag:
-                description: "Create git tag for this version?"
-                required: true
-                type: boolean
-                default: true
+  push:
+    tags:
+      - "v*.*.*" # Triggers on version tags like v1.0.0, v1.2.3
+  workflow_dispatch: # Allows manual execution from GitHub UI
+    inputs:
+      version:
+        description: "Version number (e.g., 1.0.0)"
+        required: true
+        default: "1.0.0"
+      create_tag:
+        description: "Create git tag for this version?"
+        required: true
+        type: boolean
+        default: true
 
 permissions:
-    contents: write
+  contents: write
 
 jobs:
-    create-tag:
-        name: Create Version Tag
-        runs-on: ubuntu-latest
-        if: github.event_name == 'workflow_dispatch' && github.event.inputs.create_tag == 'true'
-        steps:
-            - name: Checkout code
-              uses: actions/checkout@v4
-              with:
-                  fetch-depth: 0
+  create-tag:
+    name: Create Version Tag
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.create_tag == 'true'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-            - name: Create and push tag
-              run: |
-                  git config user.name "GitHub Actions"
-                  git config user.email "actions@github.com"
-                  git tag -a "v${{ github.event.inputs.version }}" -m "Release v${{ github.event.inputs.version }}"
-                  git push origin "v${{ github.event.inputs.version }}"
+      - name: Create and push tag
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git tag -a "v${{ github.event.inputs.version }}" -m "Release v${{ github.event.inputs.version }}"
+          git push origin "v${{ github.event.inputs.version }}"
 
-    build-windows:
-        name: Build Windows
-        runs-on: windows-latest
-        needs: [create-tag]
-        if: always() && (needs.create-tag.result == 'success' || needs.create-tag.result == 'skipped')
-        defaults:
-            run:
-                working-directory: ./hedgebuddy-wails
-        steps:
-            - name: Checkout code
-              uses: actions/checkout@v4
+  build-windows:
+    name: Build Windows
+    runs-on: windows-latest
+    needs: [create-tag]
+    if: always() && (needs.create-tag.result == 'success' || needs.create-tag.result == 'skipped')
+    defaults:
+      run:
+        working-directory: ./hedgebuddy-wails
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-            - name: Setup Go
-              uses: actions/setup-go@v5
-              with:
-                  go-version: "1.25"
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
 
-            - name: Setup Node.js
-              uses: actions/setup-node@v4
-              with:
-                  node-version: "24"
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
 
-            - name: Install Wails
-              run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+      - name: Install Wails
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
 
-            - name: Copy icon to build directory
-              run: |
-                  New-Item -ItemType Directory -Force -Path build
-                  Copy-Item ..\branding\hedgebuddy_icon.png build\appicon.png
-              shell: powershell
+      - name: Copy icon to build directory
+        run: |
+          New-Item -ItemType Directory -Force -Path build
+          Copy-Item ..\branding\hedgebuddy_icon.png build\appicon.png
+        shell: powershell
 
-            - name: Build Windows executable
-              run: wails build -platform windows/amd64 -clean
+      - name: Build Windows executable
+        run: wails build -platform windows/amd64 -clean
 
-            - name: Upload Windows artifact
-              uses: actions/upload-artifact@v4
-              with:
-                  name: HedgeBuddy-Windows
-                  path: hedgebuddy-wails/build/bin/HedgeBuddy.exe
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: HedgeBuddy-Windows
+          path: hedgebuddy-wails/build/bin/HedgeBuddy.exe
 
-    build-macos:
-        name: Build macOS (ARM64)
-        runs-on: macos-14 # M1/M2 runner
-        needs: [create-tag]
-        if: always() && (needs.create-tag.result == 'success' || needs.create-tag.result == 'skipped')
-        defaults:
-            run:
-                working-directory: ./hedgebuddy-wails
-        steps:
-            - name: Checkout code
-              uses: actions/checkout@v4
+  build-macos:
+    name: Build macOS (ARM64)
+    runs-on: macos-14 # M1/M2 runner
+    needs: [create-tag]
+    if: always() && (needs.create-tag.result == 'success' || needs.create-tag.result == 'skipped')
+    defaults:
+      run:
+        working-directory: ./hedgebuddy-wails
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-            - name: Setup Go
-              uses: actions/setup-go@v5
-              with:
-                  go-version: "1.25"
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
 
-            - name: Setup Node.js
-              uses: actions/setup-node@v4
-              with:
-                  node-version: "24"
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
 
-            - name: Install Wails
-              run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+      - name: Install Wails
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
 
-            - name: Copy icon to build directory
-              run: |
-                  mkdir -p build
-                  cp ../branding/hedgebuddy_icon.png build/appicon.png
+      - name: Copy icon to build directory
+        run: |
+          mkdir -p build
+          cp ../branding/hedgebuddy_icon.png build/appicon.png
 
-            - name: Build macOS executable
-              run: wails build -platform darwin/arm64 -clean
+      - name: Build macOS executable
+        run: wails build -platform darwin/arm64 -clean
 
-            - name: Install create-dmg
-              run: brew install create-dmg
+      - name: Install create-dmg
+        run: brew install create-dmg
 
-            - name: Create DMG
-              run: |
-                  cd build/bin
+      - name: Create DMG
+        run: |
+          cd build/bin
 
-                  # List what was actually built
-                  ls -la
+          # List what was actually built
+          ls -la
 
-                  # Create a temporary directory for DMG contents
-                  mkdir -p dmg_temp
+          # Create a temporary directory for DMG contents
+          mkdir -p dmg_temp
 
-                  # Copy the app (Wails uses project name for .app bundle)
-                  cp -r hedgebuddy-wails.app dmg_temp/HedgeBuddy.app
+          # Copy the app (Wails uses project name for .app bundle)
+          cp -r hedgebuddy-wails.app dmg_temp/HedgeBuddy.app
 
-                  # Create DMG with create-dmg (no custom icon for now - optional feature)
-                  create-dmg \
-                    --volname "HedgeBuddy" \
-                    --window-pos 200 120 \
-                    --window-size 800 400 \
-                    --icon-size 100 \
-                    --icon "HedgeBuddy.app" 200 190 \
-                    --hide-extension "HedgeBuddy.app" \
-                    --app-drop-link 600 185 \
-                    --no-internet-enable \
-                    "HedgeBuddy-macOS-arm64.dmg" \
-                    "dmg_temp/"
+          # Create DMG with create-dmg (no custom icon for now - optional feature)
+          create-dmg \
+            --volname "HedgeBuddy" \
+            --window-pos 200 120 \
+            --window-size 800 400 \
+            --icon-size 100 \
+            --icon "HedgeBuddy.app" 200 190 \
+            --hide-extension "HedgeBuddy.app" \
+            --app-drop-link 600 185 \
+            --no-internet-enable \
+            "HedgeBuddy-macOS-arm64.dmg" \
+            "dmg_temp/"
 
-            - name: Upload macOS artifact
-              uses: actions/upload-artifact@v4
-              with:
-                  name: HedgeBuddy-macOS-ARM64
-                  path: hedgebuddy-wails/build/bin/HedgeBuddy-macOS-arm64.dmg
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: HedgeBuddy-macOS-ARM64
+          path: hedgebuddy-wails/build/bin/HedgeBuddy-macOS-arm64.dmg
 
-    create-release:
-        name: Create GitHub Release
-        runs-on: ubuntu-latest
-        needs: [build-windows, build-macos]
-        if: always() && needs.build-windows.result == 'success' && needs.build-macos.result == 'success'
-        steps:
-            - name: Checkout code
-              uses: actions/checkout@v4
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: [build-windows, build-macos]
+    if: always() && needs.build-windows.result == 'success' && needs.build-macos.result == 'success'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-            - name: Download Windows artifact
-              uses: actions/download-artifact@v4
-              with:
-                  name: HedgeBuddy-Windows
-                  path: ./artifacts/windows
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: HedgeBuddy-Windows
+          path: ./artifacts/windows
 
-            - name: Download macOS artifact
-              uses: actions/download-artifact@v4
-              with:
-                  name: HedgeBuddy-macOS-ARM64
-                  path: ./artifacts/macos
+      - name: Download macOS artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: HedgeBuddy-macOS-ARM64
+          path: ./artifacts/macos
 
-            - name: Get version
-              id: get_version
-              run: |
-                  if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-                    echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
-                    echo "tag=v${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
-                  else
-                    echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
-                    echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-                  fi
+      - name: Get version
+        id: get_version
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+            echo "tag=v${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+            echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          fi
 
-            - name: Create Release
-              uses: softprops/action-gh-release@v2
-              with:
-                  tag_name: ${{ steps.get_version.outputs.tag }}
-                  name: HedgeBuddy v${{ steps.get_version.outputs.version }}
-                  body: |
-                      ## HedgeBuddy v${{ steps.get_version.outputs.version }}
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.get_version.outputs.tag }}
+          name: HedgeBuddy v${{ steps.get_version.outputs.version }}
+          body: |
+            ## HedgeBuddy v${{ steps.get_version.outputs.version }}
 
-                      Cross-platform environment variable manager for Hedge.co Python scripts.
+            Cross-platform environment variable manager for Hedge.co Python scripts.
 
-                      ### 📦 Downloads
-                      - **Windows (x64)**: `HedgeBuddy.exe`
-                      - **macOS (Apple Silicon)**: `HedgeBuddy-macOS-arm64.dmg`
+            ### 📦 Downloads
+            - **Windows (x64)**: `HedgeBuddy.exe`
+            - **macOS (Apple Silicon)**: `HedgeBuddy-macOS-arm64.dmg`
 
-                      ### 💾 Installation
+            ### 💾 Installation
 
-                      **Windows**
-                      1. Download `HedgeBuddy.exe`
-                      2. Run the executable (no installation needed)
-                      3. Variables stored at: `%APPDATA%\hedgebuddy\vars.json`
+            **Windows**
+            1. Download `HedgeBuddy.exe`
+            2. Run the executable (no installation needed)
+            3. Variables stored at: `%APPDATA%\hedgebuddy\vars.json`
 
-                      **macOS**
-                      1. Download `HedgeBuddy-macOS-arm64.dmg`
-                      2. Open the DMG file
-                      3. Drag `HedgeBuddy.app` to the Applications folder
-                      4. Eject the DMG
-                      5. Open HedgeBuddy from Applications (right-click → Open on first launch)
-                      6. Variables stored at: `~/Library/Application Support/hedgebuddy/vars.json`
+            **macOS**
+            1. Download `HedgeBuddy-macOS-arm64.dmg`
+            2. Open the DMG file
+            3. Drag `HedgeBuddy.app` to the Applications folder
+            4. Eject the DMG
+            5. Open HedgeBuddy from Applications (right-click → Open on first launch)
+            6. Variables stored at: `~/Library/Application Support/hedgebuddy/vars.json`
 
-                      ### ✨ Features
-                      - Add, edit, and delete environment variables
-                      - Import/export variables from JSON files
-                      - Path validation and browsing
-                      - Type-safe variables (string, path, url)
-                      - Drag & drop JSON import
-                      - Order-preserving storage
+            ### ✨ Features
+            - Add, edit, and delete environment variables
+            - Import/export variables from JSON files
+            - Path validation and browsing
+            - Type-safe variables (string, path, url)
+            - Drag & drop JSON import
+            - Order-preserving storage
 
-                      ### 🐍 Python Library
-                      Install companion library: `pip install hedgebuddy`
-                      Use in scripts: `from hedgebuddy import var`
-                  files: |
-                      ./artifacts/windows/HedgeBuddy.exe
-                      ./artifacts/macos/HedgeBuddy-macOS-arm64.dmg
-                  draft: false
-                  prerelease: false
-              env:
-                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            ### 🐍 Python Library
+            Install companion library: `pip install hedgebuddy`
+            Use in scripts: `import hedgebuddy`
+          files: |
+            ./artifacts/windows/HedgeBuddy.exe
+            ./artifacts/macos/HedgeBuddy-macOS-arm64.dmg
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

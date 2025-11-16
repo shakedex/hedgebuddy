@@ -11,11 +11,15 @@
 
 ## What is HedgeBuddy?
 
-HedgeBuddy makes Python scripts easy to configure without hardcoding variables or polluting your system environment. It's designed for **Hedge's software suite** but works for any Python automation.
+HedgeBuddy makes Python automation scripts easy to configure for **filmmaking DIT/Data Wrangling workflows** using Hedge's software ecosystem:
+
+- **OffShoot** - Automate post-transfer workflows (Slack notifications, cloud uploads, metadata logging)
+- **FoolCat** - Auto-move camera reports to production folders
+- **EditReady** - Configure transcode destinations and settings
 
 **Two Simple Components:**
 
-1. 🐍 **Python Library** - Dead-simple API: `hedgebuddy.var("API_KEY")`
+1. 🐍 **Python Library** - Dead-simple API: `hedgebuddy.var("SLACK_WEBHOOK")`
 2. 🖥️ **Desktop App** - Beautiful GUI for managing variables (Windows & macOS)
 
 <!-- Screenshot Placeholder -->

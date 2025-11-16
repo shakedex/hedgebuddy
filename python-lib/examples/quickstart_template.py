@@ -1,9 +1,9 @@
 """
-HedgeBuddy Quick Start - Copy & Paste Template
-===============================================
+HedgeBuddy Quick Start - OffShoot Automation Template
+=====================================================
 
-This is a minimal template you can copy and paste to get started quickly.
-Just replace the variable names and add your logic!
+This is a minimal template for OffShoot automation scripts.
+Copy and paste this to get started quickly!
 
 INSTALLATION:
 Install HedgeBuddy globally so all your scripts can use it:
@@ -11,6 +11,8 @@ Install HedgeBuddy globally so all your scripts can use it:
     pip install --user hedgebuddy
 """
 
+import sys
+import json
 import hedgebuddy
 
 # ============================================================================
@@ -18,35 +20,55 @@ import hedgebuddy
 # ============================================================================
 
 # Required variables (script will fail if not configured)
-API_KEY = hedgebuddy.var("API_KEY")
-DATABASE_URL = hedgebuddy.var("DATABASE_URL")
+SLACK_WEBHOOK = hedgebuddy.var("HB_SLACK_WEBHOOK_URL")
+LOG_PATH = hedgebuddy.var("HB_LOG_PATH")
 
 # Optional variables with defaults
-API_TIMEOUT = int(hedgebuddy.var("API_TIMEOUT", "30"))
-DEBUG_MODE = hedgebuddy.var("DEBUG_MODE", "false") == "true"
-MAX_RETRIES = int(hedgebuddy.var("MAX_RETRIES", "3"))
-
-# Optional variables (None if not configured)
-REPORT_EMAIL = hedgebuddy.var("REPORT_EMAIL", None)
-WEBHOOK_URL = hedgebuddy.var("WEBHOOK_URL", None)
+S3_BUCKET = hedgebuddy.var("HB_S3_BUCKET", None)
+NOTIFY_FAILED_ONLY = hedgebuddy.var("HB_NOTIFY_ON_FAILED_ONLY", "false") == "true"
+PRODUCTION_FOLDER = hedgebuddy.var("HB_PRODUCTION_FOLDER", None)
 
 # ============================================================================
-# Step 2: Use your variables in your logic
+# Step 2: Parse OffShoot event (if triggered by OffShoot)
+# ============================================================================
+
+def parse_event():
+    """Parse OffShoot event data from command line."""
+    if len(sys.argv) < 2:
+        return None
+    
+    try:
+        return json.loads(sys.argv[1])
+    except json.JSONDecodeError:
+        return None
+
+# ============================================================================
+# Step 3: Your automation logic
 # ============================================================================
 
 def main():
-    print("Starting your script...")
-    print(f"API Key: {API_KEY[:10]}...")
-    print(f"Database: {DATABASE_URL}")
-    print(f"Timeout: {API_TIMEOUT}s")
-    print(f"Debug Mode: {DEBUG_MODE}")
+    print("Starting OffShoot automation...")
+    
+    # Parse event
+    event_data = parse_event()
+    if event_data:
+        state = event_data.get("FileCopyCompleted_state", "Unknown")
+        source = event_data.get("FileCopyCompleted_sourcePaths", "Unknown")
+        print(f"Transfer {state}: {source}")
+    
+    # Use your variables
+    print(f"Slack webhook: {SLACK_WEBHOOK[:50]}...")
+    print(f"Log path: {LOG_PATH}")
     
     # Your main logic here
     # ...
     
     # Conditional features based on optional variables
-    if REPORT_EMAIL:
-        print(f"Will send report to: {REPORT_EMAIL}")
+    if S3_BUCKET:
+        print(f"Will upload to S3: {S3_BUCKET}")
+    
+    if PRODUCTION_FOLDER:
+        print(f"Will move files to: {PRODUCTION_FOLDER}")
     
     if hedgebuddy.exists("WEBHOOK_URL"):
         print(f"Will notify webhook: {WEBHOOK_URL}")

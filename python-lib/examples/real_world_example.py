@@ -1,103 +1,204 @@
 """
-HedgeBuddy Demo - Real-World Scenario
-======================================
+HedgeBuddy Demo - Real-World OffShoot Automation
+=================================================
 
-This script simulates a real-world use case: generating a report and
-optionally uploading it to S3 or sending it via email.
+This script simulates a real-world DIT workflow: automating OffShoot transfers
+with Slack notifications, cloud uploads, and transfer logging.
+
+This demonstrates how HedgeBuddy makes OffShoot automation scripts portable
+across different productions - just update variables in the GUI!
 
 Required variables (add via HedgeBuddy app):
-- REPORT_PATH: Where to save reports locally (e.g., C:\\Reports)
+- HB_OS_SLACK_WEBHOOK_URL: Slack webhook for transfer notifications
+- HB_TRANSFER_LOG_PATH: Where to save transfer logs (e.g., D:\\Logs\\Transfers)
 
 Optional variables:
-- S3_BUCKET: AWS S3 bucket name (if you want S3 upload)
-- REPORT_EMAIL: Email address to send reports (if you want email delivery)
-- API_URL: Custom API endpoint (has sensible default)
+- HB_S3_BUCKET: AWS S3 bucket for cloud backup
+- HB_S3_ACCESS_KEY: S3 access key
+- HB_PRODUCTION_FOLDER: Path for production department files
+- HB_NOTIFY_ON_FAILED_ONLY: Set to "true" to only notify on failures (default: "false")
 """
 
+import json
 from datetime import datetime
 from pathlib import Path
 import hedgebuddy
 
 
-def generate_report():
-    """Simulate report generation."""
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    report_content = f"""
-    Sales Report - {timestamp}
-    {'=' * 40}
+def parse_offshoot_event(event_json):
+    """Parse OffShoot File Copy Completed event payload."""
+    payload = json.loads(event_json)
+    return {
+        'source': payload.get('FileCopyCompleted_sourcePaths', 'Unknown'),
+        'destination': payload.get('FileCopyCompleted_destinationPath', 'Unknown'),
+        'size_bytes': payload.get('FileCopyCompleted_bytesCopied', 0),
+        'duration': payload.get('FileCopyCompleted_duration', '0'),
+        'state': payload.get('FileCopyCompleted_state', 'Unknown'),
+        'preset': payload.get('FileCopyCompleted_presetName', 'N/A'),
+    }
+
+
+def format_bytes(bytes_value):
+    """Convert bytes to human-readable format."""
+    try:
+        bytes_value = int(bytes_value)
+    except (ValueError, TypeError):
+        return "0 B"
     
-    Total Sales: $125,450.00
-    New Customers: 42
-    Revenue Growth: +15.3%
+    for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
+        if bytes_value < 1024.0:
+            return f"{bytes_value:.2f} {unit}"
+        bytes_value /= 1024.0
+    return f"{bytes_value:.2f} PB"
+
+
+def send_slack_notification(transfer_info):
+    """Send Slack notification about transfer completion."""
+    webhook_url = hedgebuddy.var("HB_OS_SLACK_WEBHOOK_URL")
     
-    Generated using HedgeBuddy variables!
-    """
-    return report_content, f"sales_report_{timestamp}.txt"
-
-
-def save_report_locally(report_content, filename):
-    """Save report to local filesystem."""
-    # Get report path from HedgeBuddy (required variable)
-    report_path = Path(hedgebuddy.var("REPORT_PATH"))
+    # Check if we should only notify on failures
+    notify_failed_only = hedgebuddy.var("HB_NOTIFY_ON_FAILED_ONLY", "false").lower() == "true"
     
-    # Create directory if it doesn't exist
-    report_path.mkdir(parents=True, exist_ok=True)
+    if notify_failed_only and transfer_info['state'] == "Success":
+        print("   ℹ Transfer successful, skipping notification (failures-only mode)")
+        return
     
-    # Save the report
-    file_path = report_path / filename
-    file_path.write_text(report_content, encoding="utf-8")
+    # Format message
+    size = format_bytes(transfer_info['size_bytes'])
+    status_emoji = "✅" if transfer_info['state'] == "Success" else "❌"
     
-    print(f"   ✓ Report saved to: {file_path}")
-    return file_path
+    print(f"   {status_emoji} Would send Slack notification:")
+    print(f"      Webhook: {webhook_url[:50]}...")
+    print(f"      Status: {transfer_info['state']}")
+    print(f"      Size: {size}")
+    print(f"      Duration: {transfer_info['duration']}s")
+    print(f"   ℹ (Simulated - in production, use requests.post)")
 
 
-def upload_to_s3(file_path, filename):
-    """Simulate S3 upload (would use boto3 in real scenario)."""
-    bucket = hedgebuddy.var("S3_BUCKET")
-    print(f"   ✓ Would upload to: s3://{bucket}/{filename}")
-    print(f"   ℹ (Simulated - in production, use boto3.upload_file)")
+def upload_to_s3(transfer_info):
+    """Upload footage to S3 if configured."""
+    if not hedgebuddy.exists("HB_S3_BUCKET"):
+        return False
+    
+    bucket = hedgebuddy.var("HB_S3_BUCKET")
+    access_key = hedgebuddy.var("HB_S3_ACCESS_KEY")
+    
+    print(f"   ✓ Would upload to S3:")
+    print(f"      Bucket: {bucket}")
+    print(f"      Source: {transfer_info['source']}")
+    print(f"      Access Key: {access_key[:10]}...")
+    print(f"   ℹ (Simulated - in production, use boto3)")
+    
+    return True
 
 
-def send_email_report(file_path):
-    """Simulate email sending (would use SMTP in real scenario)."""
-    email = hedgebuddy.var("REPORT_EMAIL")
-    print(f"   ✓ Would email report to: {email}")
-    print(f"   ℹ (Simulated - in production, use smtplib or email service)")
+def log_transfer(transfer_info):
+    """Log transfer details to local file."""
+    log_path = Path(hedgebuddy.var("HB_TRANSFER_LOG_PATH"))
+    log_path.mkdir(parents=True, exist_ok=True)
+    
+    # Create daily log file
+    log_file = log_path / f"transfers_{datetime.now().strftime('%Y%m%d')}.txt"
+    
+    # Format log entry
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    size = format_bytes(transfer_info['size_bytes'])
+    log_entry = (
+        f"[{timestamp}] {transfer_info['state']} | "
+        f"{transfer_info['source']} → {transfer_info['destination']} | "
+        f"{size} in {transfer_info['duration']}s | "
+        f"Preset: {transfer_info['preset']}\n"
+    )
+    
+    # Append to log
+    with open(log_file, 'a', encoding='utf-8') as f:
+        f.write(log_entry)
+    
+    print(f"   ✓ Transfer logged to: {log_file}")
 
 
-def fetch_data_from_api():
-    """Simulate API call with configurable endpoint."""
-    # Use custom API URL or fall back to default
-    api_url = hedgebuddy.var("API_URL", "https://api.hedge.co/v1")
-    print(f"   ✓ Fetching data from: {api_url}/sales")
-    print(f"   ℹ (Simulated - in production, use requests library)")
+def move_production_files(transfer_info):
+    """Move camera reports to production folder if configured."""
+    if not hedgebuddy.exists("HB_PRODUCTION_FOLDER"):
+        return False
+    
+    prod_folder = hedgebuddy.var("HB_PRODUCTION_FOLDER")
+    
+    print(f"   ✓ Would move camera reports to: {prod_folder}")
+    print(f"   ℹ (Simulated - in production, use shutil.move)")
+    
+    return True
 
 
 def main():
     print("=" * 70)
-    print("HedgeBuddy Demo - Real-World Report Generation")
+    print("HedgeBuddy Demo - OffShoot Transfer Automation")
     print("=" * 70)
     print()
-
-    # Step 1: Fetch data from API
-    print("Step 1: Fetching sales data from API...")
-    fetch_data_from_api()
+    
+    # Simulate OffShoot File Copy Completed event
+    # (In production, this would come from OffShoot as sys.argv[1])
+    event_json = '''{
+        "FileCopyCompleted_sourcePaths": "/Volumes/CARD_A001",
+        "FileCopyCompleted_destinationPath": "D:\\\\Production\\\\CAM_A\\\\A001",
+        "FileCopyCompleted_bytesCopied": 52428800,
+        "FileCopyCompleted_duration": "5.2",
+        "FileCopyCompleted_state": "Success",
+        "FileCopyCompleted_presetName": "Production A"
+    }'''
+    
+    # Parse transfer info
+    print("Step 1: Parsing OffShoot event...")
+    transfer_info = parse_offshoot_event(event_json)
+    print(f"   ✓ Transfer detected: {transfer_info['source']}")
+    print(f"   ✓ State: {transfer_info['state']}")
     print()
-
-    # Step 2: Generate report
-    print("Step 2: Generating report...")
-    report_content, filename = generate_report()
-    print(f"   ✓ Report generated: {filename}")
+    
+    # Required: Log transfer locally
+    print("Step 2: Logging transfer...")
+    log_transfer(transfer_info)
     print()
-
-    # Step 3: Save locally (always required)
-    print("Step 3: Saving report locally...")
-    file_path = save_report_locally(report_content, filename)
+    
+    # Required: Send Slack notification
+    print("Step 3: Sending Slack notification...")
+    send_slack_notification(transfer_info)
     print()
+    
+    # Optional: Upload to S3
+    print("Step 4: Checking for S3 cloud upload...")
+    if upload_to_s3(transfer_info):
+        print("   ✓ S3 upload configured")
+    else:
+        print("   ℹ S3 not configured, skipping cloud upload")
+    print()
+    
+    # Optional: Move production files
+    print("Step 5: Checking for production file routing...")
+    if move_production_files(transfer_info):
+        print("   ✓ Production folder configured")
+    else:
+        print("   ℹ Production folder not configured, skipping")
+    print()
+    
+    print("=" * 70)
+    print("✓ OffShoot automation complete!")
+    print("=" * 70)
+    print()
+    print("CHANGE PRODUCTIONS?")
+    print("→ Just update variables in HedgeBuddy GUI - no script editing needed!")
+    print("→ New Slack webhook? Update HB_OS_SLACK_WEBHOOK_URL")
+    print("→ Different S3 bucket? Update HB_S3_BUCKET")
+    print("→ New log location? Update HB_TRANSFER_LOG_PATH")
 
-    # Step 4: Optional S3 upload
-    print("Step 4: Checking for S3 upload...")
-    if hedgebuddy.exists("S3_BUCKET"):
+
+if __name__ == "__main__":
+    try:
+        main()
+    except hedgebuddy.VariableNotFoundError as e:
+        print(f"\n❌ Missing required variable: {e.variable_name}")
+        print("Please add it using the HedgeBuddy desktop app")
+    except Exception as e:
+        print(f"\n❌ Error: {e}")
         upload_to_s3(file_path, filename)
     else:
         print("   ℹ S3_BUCKET not configured - skipping upload")

@@ -75,28 +75,29 @@ if email:
     send_report(email)
 ```
 
-### Complete Example
+### Complete Example - OffShoot Automation
 
 ```python
 import hedgebuddy
+import json
 
 def main():
-    # Required configuration
-    api_key = hedgebuddy.var("API_KEY")
-    report_path = hedgebuddy.var("REPORT_PATH")
+    # Required: Slack webhook for transfer notifications
+    slack_webhook = hedgebuddy.var("HB_OS_SLACK_WEBHOOK_URL")
 
-    # Optional configuration
-    api_url = hedgebuddy.var("API_URL", "https://api.hedge.co/v1")
-    timeout = int(hedgebuddy.var("TIMEOUT", "30"))
-
-    # Conditional features
-    if hedgebuddy.exists("S3_BUCKET"):
-        bucket = hedgebuddy.var("S3_BUCKET")
+    # Optional: S3 upload for cloud backup
+    if hedgebuddy.exists("HB_S3_BUCKET"):
+        bucket = hedgebuddy.var("HB_S3_BUCKET")
+        access_key = hedgebuddy.var("HB_S3_ACCESS_KEY")
         print(f"Will upload to S3: {bucket}")
 
-    # Your script logic here
-    print(f"Connecting to {api_url}...")
-    print(f"Saving reports to {report_path}")
+    # Optional: Only notify on failures
+    notify_failed_only = hedgebuddy.var("HB_NOTIFY_ON_FAILED_ONLY", "false") == "true"
+
+    # Parse OffShoot event data (passed by OffShoot)
+    # Your automation logic here
+    print(f"Sending notifications to Slack...")
+    print(f"Processing OffShoot transfer...")
 
 if __name__ == "__main__":
     main()

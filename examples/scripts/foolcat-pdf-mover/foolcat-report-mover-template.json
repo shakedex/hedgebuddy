@@ -1,0 +1,14 @@
+{
+  "variables": {
+    "HB_FC_DESTINATION_PATH": {
+      "value": "",
+      "type": "path",
+      "description": "Destination folder for FoolCat PDF reports (e.g., D:\\Production\\Reports or /Volumes/Production/Reports)"
+    },
+    "HB_FC_OPERATION_TYPE": {
+      "value": "move",
+      "type": "string",
+      "description": "Operation mode: 'move' (delete original) or 'copy' (keep original)"
+    }
+  }
+}

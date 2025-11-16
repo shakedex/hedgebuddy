@@ -1,0 +1,9 @@
+{
+  "variables": {
+    "HB_PAYLOAD_OUTPUT_PATH": {
+      "value": "",
+      "type": "path",
+      "description": "Full path to output JSON file for captured payloads (e.g., D:\\OffShoot\\payloads.json or /Users/john/offshoot-payloads.json)"
+    }
+  }
+}

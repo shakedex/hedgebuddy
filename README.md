@@ -10,12 +10,12 @@
 
 ## What is HedgeBuddy?
 
-HedgeBuddy is a lightweight utility that makes Python scripts more accessible and configurable for Hedge's software suite without needing to hardcode important variables. It consists of two components:
+HedgeBuddy makes Python automation scripts easy to configure for **DIT/Data Wrangling workflows** using Hedge's software ecosystem (**OffShoot**, **FoolCat**, **EditReady**). It consists of two components:
 
 1. **Python Library** (`hedgebuddy`) - Dead-simple API for reading variables in your scripts
 2. **Desktop GUI App** - Beautiful interface for managing variables (Windows & macOS)
 
-Perfect for script developers who want to make their tools user-friendly without requiring technical setup after script creation.
+Perfect for DITs and script developers who automate OffShoot transfers, FoolCat reports, and EditReady transcoding without hardcoding paths, webhooks, or credentials.
 
 ---
 

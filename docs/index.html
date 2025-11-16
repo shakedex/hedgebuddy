@@ -37,8 +37,11 @@
         name: '<img src="hedgebuddy_icon.png" alt="HedgeBuddy"> HedgeBuddy',
         repo: "shakedex/hedgebuddy",
         loadSidebar: true,
-        subMaxLevel: 3,
-        auto2top: true,
+        loadFooter: true,
+        autoHeader: true,
+
+        subMaxLevel: 2,
+        auto2top: false,
         coverpage: false,
         search: {
           maxAge: 86400000,
@@ -62,6 +65,11 @@
           sync: true,
           theme: "classic",
         },
+        timeUpdater: {
+          text: ">Last Update: {docsify-updated}",
+          formatUpdated: "{DD}/{MM}/{YYYY}",
+          whereToPlace: "bottom",
+        },
       };
     </script>
     <!-- Docsify v4 -->
@@ -81,5 +89,9 @@
     <script src="//cdn.jsdelivr.net/npm/docsify-tabs@1"></script>
     <!-- Emoji support -->
     <script src="//cdn.jsdelivr.net/npm/docsify@4/lib/plugins/emoji.min.js"></script>
+    <!-- Docsify updated plugin -->
+    <script src="https://cdn.jsdelivr.net/npm/docsify-updated/src/time-updater.min.js"></script>
+    <!-- Docsify Footer -->
+    <script src="//cdn.jsdelivr.net/npm/@alertbox/docsify-footer/dist/docsify-footer.min.js"></script>
   </body>
 </html>
