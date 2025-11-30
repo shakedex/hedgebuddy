@@ -51,13 +51,14 @@ def test_enable_logging_daily_filename(tmp_path, monkeypatch):
 def test_enable_logging_auto_detect_script_name(tmp_path, monkeypatch):
     """Test auto-detection of script name from __main__."""
     monkeypatch.setattr("hedgebuddy.logger._get_storage_dir", lambda: tmp_path)
-    
-    # __main__.__file__ should be this test file
+
+    # __main__.__file__ will be pytest when running tests
     log_file = enable_logging()
-    
-    assert log_file.name.startswith("test_logger_")
 
-
+    # Should create a log file with some detected name and today's date
+    today = datetime.now().strftime("%Y-%m-%d")
+    assert log_file.name.endswith(f"_{today}.log")
+    assert log_file.exists()
 def test_log_function_writes_to_file(tmp_path, monkeypatch):
     """Test that log() writes messages to file."""
     monkeypatch.setattr("hedgebuddy.logger._get_storage_dir", lambda: tmp_path)
