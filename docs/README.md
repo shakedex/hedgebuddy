@@ -46,7 +46,7 @@ HedgeBuddy makes Python automation scripts easy to configure for **filmmaking DI
 
 Just want to run existing scripts? Follow these 4 steps:
 
-1. **Install Python 3.13+** ([Download](https://www.python.org/downloads/))
+1. **Install Python 3.9+** ([Download](https://www.python.org/downloads/))
 2. **Install HedgeBuddy library**:
 
    ```bash

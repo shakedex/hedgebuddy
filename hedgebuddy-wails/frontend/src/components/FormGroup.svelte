@@ -4,7 +4,7 @@
 </script>
 
 <div class="form-group">
-  <label>{label}</label>
+  <span class="label">{label}</span>
   <slot />
   {#if hint}
     <p class="hint">{hint}</p>
@@ -16,6 +16,16 @@
     background: var(--bg-secondary);
     padding: var(--spacing-xl);
     border-radius: var(--radius-md);
+  }
+  
+  .label {
+    display: block;
+    color: var(--text-tertiary);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: var(--spacing-sm);
   }
   
   .hint {

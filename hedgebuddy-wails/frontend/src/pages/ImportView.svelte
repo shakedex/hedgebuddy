@@ -299,8 +299,9 @@
           {#if isSelected}
             <div class="editable-fields">
               <div class="field-group">
-                <label>VALUE</label>
+                <label for="value-{name}">VALUE</label>
                 <input 
+                  id="value-{name}"
                   type="text" 
                   bind:value={editedValues[name].value}
                   placeholder="Variable value"
@@ -309,8 +310,9 @@
               
               {#if variable.description || editedValues[name].description}
                 <div class="field-group">
-                  <label>DESCRIPTION</label>
+                  <label for="desc-{name}">DESCRIPTION</label>
                   <input 
+                    id="desc-{name}"
                     type="text" 
                     bind:value={editedValues[name].description}
                     placeholder="Description (optional)"

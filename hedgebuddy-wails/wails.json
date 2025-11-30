@@ -13,7 +13,7 @@
   "info": {
     "companyName": "HedgeBuddy",
     "productName": "HedgeBuddy",
-    "productVersion": "1.0.0",
+    "productVersion": "0.6.0",
     "copyright": "Copyright © 2025 shakedex",
     "comments": "Environment Variable Manager for Hedge.co Python Scripts",
     "icon": "build/appicon.png"

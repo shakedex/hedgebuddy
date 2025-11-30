@@ -23,7 +23,7 @@
   <div class="about-content">
     <img src={logo} alt="HedgeBuddy" class="about-logo" />
     <h1>HedgeBuddy</h1>
-    <p class="version">v0.5.1</p>
+    <p class="version">v0.6.0</p>
     
     <div class="section credits">
       <p class="credits-author">Created by <strong>Shaked Lipszyc</strong></p>

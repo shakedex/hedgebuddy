@@ -14,6 +14,11 @@ Advanced usage:
     >>> if exists("OPTIONAL_VAR"):
     ...     value = var("OPTIONAL_VAR")
     >>> all_variables = all_vars()
+
+Logging (for headless scripts):
+    >>> from hedgebuddy import enable_logging
+    >>> enable_logging()  # All print() now logged to daily file
+    >>> print("This gets logged automatically!")
 """
 
 from .core import var, get, exists, all_vars, inject_env
@@ -23,8 +28,18 @@ from .exceptions import (
     StorageNotFoundError,
     StorageCorruptedError,
 )
+from .logger import (
+    enable_logging,
+    disable_logging,
+    log,
+    log_error,
+    log_warning,
+    log_debug,
+    get_log_dir,
+    is_logging_enabled,
+)
 
-__version__ = "0.5.1"
+__version__ = "0.6.0"
 __all__ = [
     "var",
     "get",
@@ -35,4 +50,12 @@ __all__ = [
     "VariableNotFoundError",
     "StorageNotFoundError",
     "StorageCorruptedError",
+    "enable_logging",
+    "disable_logging",
+    "log",
+    "log_error",
+    "log_warning",
+    "log_debug",
+    "get_log_dir",
+    "is_logging_enabled",
 ]

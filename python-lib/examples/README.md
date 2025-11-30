@@ -48,6 +48,31 @@ Shows the core HedgeBuddy functions:
 
 **Required variables**: `API_KEY`
 
+### 2. `logging_example.py` - Automatic Logging
+
+**Best for**: Headless scripts (OffShoot/FoolCat automation)
+
+Demonstrates automatic logging for debugging headless scripts:
+
+- Enable daily log files with `enable_logging()`
+- Automatic capture of all print() statements
+- Direct logging with `log()`, `log_error()`, `log_warning()`
+- Log file location and format
+
+**Features**:
+
+- One log file per script per day
+- Automatic log rotation (keeps last 30 days)
+- Structured format with timestamps
+- Cross-platform (Windows & macOS)
+
+**Required variables**: `API_KEY` (for demo)
+
+**Log location**:
+
+- Windows: `%APPDATA%\hedgebuddy\logs\logging_example_2025-11-17.log`
+- macOS: `~/Library/Application Support/hedgebuddy/logs/logging_example_2025-11-17.log`
+
 ---
 
 ### 2. `real_world_example.py` - Practical Scenario

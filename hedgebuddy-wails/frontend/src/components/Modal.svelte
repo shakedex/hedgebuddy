@@ -3,10 +3,16 @@
   
   import { createEventDispatcher } from 'svelte';
   const dispatch = createEventDispatcher();
+  
+  function handleKeydown(e: KeyboardEvent) {
+    if (e.key === 'Escape') dispatch('close');
+  }
 </script>
 
-<div class="modal-overlay" on:click={() => dispatch('close')} role="button" tabindex="0">
-  <div class="modal" on:click|stopPropagation role="dialog" tabindex="0">
+<!-- svelte-ignore a11y-click-events-have-key-events -->
+<!-- svelte-ignore a11y-no-static-element-interactions -->
+<div class="modal-overlay" on:click={() => dispatch('close')} on:keydown={handleKeydown}>
+  <div class="modal" on:click|stopPropagation role="dialog" aria-modal="true" aria-labelledby="modal-title">
     <h2>{title}</h2>
     <slot />
   </div>

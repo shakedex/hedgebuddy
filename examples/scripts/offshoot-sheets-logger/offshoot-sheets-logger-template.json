@@ -1,0 +1,24 @@
+{
+  "variables": {
+    "HB_GS_SERVICE_ACCOUNT_JSON": {
+      "value": "",
+      "type": "path",
+      "description": "Full path to Google service account JSON key file (e.g., D:\\Keys\\service-account.json)"
+    },
+    "HB_GS_SPREADSHEET_ID": {
+      "value": "",
+      "type": "string",
+      "description": "Google Sheets spreadsheet ID from URL (e.g., 1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms)"
+    },
+    "HB_GS_SHEET_NAME": {
+      "value": "",
+      "type": "string",
+      "description": "Name of the sheet/tab to update (e.g., 'Day 1', 'Nov 17', leave empty for first sheet)"
+    },
+    "HB_GS_HEADER_ROW": {
+      "value": "6",
+      "type": "string",
+      "description": "Row number where column headers are located (default: 6)"
+    }
+  }
+}

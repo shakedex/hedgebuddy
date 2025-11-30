@@ -126,7 +126,28 @@ jobs:
           # Copy the app (Wails uses project name for .app bundle)
           cp -r hedgebuddy-wails.app dmg_temp/HedgeBuddy.app
 
-          # Create DMG with create-dmg (no custom icon for now - optional feature)
+          # Create README for unsigned app instructions
+          cat > dmg_temp/README.txt << 'EOF'
+          ╔══════════════════════════════════════════════════════════════╗
+          ║                    HedgeBuddy Installation                   ║
+          ╠══════════════════════════════════════════════════════════════╣
+          ║                                                              ║
+          ║  1. Drag HedgeBuddy.app to your Applications folder          ║
+          ║                                                              ║
+          ║  2. IMPORTANT: This app is not signed. Before first launch,  ║
+          ║     open Terminal and run:                                   ║
+          ║                                                              ║
+          ║     xattr -cr /Applications/HedgeBuddy.app                   ║
+          ║                                                              ║
+          ║  3. Open HedgeBuddy from Applications                        ║
+          ║                                                              ║
+          ║  Variables are stored at:                                    ║
+          ║  ~/Library/Application Support/hedgebuddy/vars.json          ║
+          ║                                                              ║
+          ╚══════════════════════════════════════════════════════════════╝
+          EOF
+
+          # Create DMG with create-dmg (using custom volume icon)
           create-dmg \
             --volname "HedgeBuddy" \
             --window-pos 200 120 \
@@ -199,12 +220,14 @@ jobs:
             3. Variables stored at: `%APPDATA%\hedgebuddy\vars.json`
 
             **macOS**
-            1. Download `HedgeBuddy-macOS-arm64.dmg`
-            2. Open the DMG file
-            3. Drag `HedgeBuddy.app` to the Applications folder
-            4. Eject the DMG
-            5. Open HedgeBuddy from Applications (right-click → Open on first launch)
-            6. Variables stored at: `~/Library/Application Support/hedgebuddy/vars.json`
+            1. Download and open `HedgeBuddy-macOS-arm64.dmg`
+            2. Drag `HedgeBuddy.app` to Applications
+            3. **Important (unsigned app):** Open Terminal and run:
+               ```
+               xattr -cr /Applications/HedgeBuddy.app
+               ```
+            4. Open HedgeBuddy from Applications
+            5. Variables stored at: `~/Library/Application Support/hedgebuddy/vars.json`
 
             ### ✨ Features
             - Add, edit, and delete environment variables

@@ -1,128 +1,85 @@
 # Quick Start
 
-Get up and running with HedgeBuddy in 5 minutes.
+Get up and running in 5 minutes.
 
 ---
 
-## For Script Users (Non-Technical)
-
-Just want to run existing Python scripts that use HedgeBuddy?
-
-### Step 1: Install Python
-
-If you don't have Python 3.13+:
-
-- **Windows**: [Download Python](https://www.python.org/downloads/) and run installer
-- **macOS**: Run `brew install python` or [download](https://www.python.org/downloads/)
-
-### Step 2: Install HedgeBuddy Library
-
-Open Terminal/Command Prompt and run:
+## 1. Install Python Library
 
 ```bash
 pip install --user hedgebuddy
 ```
 
-### Step 3: Install Desktop App
-
-1. Download from [GitHub Releases](https://github.com/shakedex/hedgebuddy/releases)
-2. Extract and run the app
-
-### Step 4: Configure Variables
-
-The script you're trying to run will tell you what variables it needs. For example, if you get this error:
+Verify:
 
 ```bash
-VariableNotFoundError: Variable 'API_KEY' not found in HedgeBuddy storage.
+python -c "import hedgebuddy; print('Ready!')"
 ```
 
-1. Open the HedgeBuddy desktop app
-2. Click **"Add Variable"**
-3. Fill in:
-   - **Name**: `API_KEY`
-   - **Value**: Your API key (provided by the script author)
-   - **Type**: `Secure` (for sensitive data) or `String`
+---
+
+## 2. Install Desktop App
+
+Download from [GitHub Releases](https://github.com/shakedex/hedgebuddy/releases).
+
+- **Windows:** Extract folder, run `HedgeBuddy.exe`
+- **macOS:** Open `.dmg`, drag to Applications, then run:
+  ```bash
+  xattr -cr /Applications/HedgeBuddy.app
+  ```
+
+---
+
+## 3. Add Variables
+
+1. Open HedgeBuddy app
+2. Click **"+ New"**
+3. Enter:
+   - **Name:** `API_KEY`
+   - **Value:** Your actual value
+   - **Type:** String (or Path/URL)
 4. Click **Save**
 
-### Step 5: Run Your Script
-
-Now the script will work! Just run it:
-
-```bash
-python your_script.py
-```
-
 ---
 
-## For Script Developers
-
-Want to make your Python scripts configurable with HedgeBuddy?
-
-### Basic Usage
+## 4. Use in Scripts
 
 ```python
 import hedgebuddy
 
-# Required variable (raises error if missing)
+# Required variable
 api_key = hedgebuddy.var("API_KEY")
 
-# Optional variable with fallback
-api_url = hedgebuddy.var("API_URL", "https://api.example.com")
+# Optional with fallback
+timeout = hedgebuddy.var("TIMEOUT", "30")
 
-# Optional variable (None if missing)
-email = hedgebuddy.var("REPORT_EMAIL", None)
-if email:
-    send_report(email)
-```
-
-### Complete Example - OffShoot Automation
-
-```python
-import hedgebuddy
-import json
-
-def main():
-    # Required: Slack webhook for transfer notifications
-    slack_webhook = hedgebuddy.var("HB_OS_SLACK_WEBHOOK_URL")
-
-    # Optional: S3 upload for cloud backup
-    if hedgebuddy.exists("HB_S3_BUCKET"):
-        bucket = hedgebuddy.var("HB_S3_BUCKET")
-        access_key = hedgebuddy.var("HB_S3_ACCESS_KEY")
-        print(f"Will upload to S3: {bucket}")
-
-    # Optional: Only notify on failures
-    notify_failed_only = hedgebuddy.var("HB_NOTIFY_ON_FAILED_ONLY", "false") == "true"
-
-    # Parse OffShoot event data (passed by OffShoot)
-    # Your automation logic here
-    print(f"Sending notifications to Slack...")
-    print(f"Processing OffShoot transfer...")
-
-if __name__ == "__main__":
-    main()
+# Check if exists
+if hedgebuddy.exists("S3_BUCKET"):
+    bucket = hedgebuddy.var("S3_BUCKET")
 ```
 
 ---
 
-## What Variables to Use?
+## Variable Types
 
-Choose variable types based on what you're storing:
+| Type | Use For | Example |
+|------|---------|---------|
+| **String** | Text values | `API_KEY`, `USERNAME` |
+| **Path** | File/folder paths | `REPORT_PATH`, `CONFIG_DIR` |
+| **URL** | Web addresses | `API_URL`, `WEBHOOK_URL` |
 
-| Type       | Use For             | Example                     |
-| ---------- | ------------------- | --------------------------- |
-| **String** | General text values | `API_KEY`, `USERNAME`       |
-| **Path**   | File/folder paths   | `REPORT_PATH`, `CONFIG_DIR` |
-| **URL**    | Web addresses       | `API_URL`, `WEBHOOK_URL`    |
-| **Secure** | Sensitive data      | `PASSWORD`, `SECRET_TOKEN`  |
+---
 
-!> **Security Note**: In the current version, all variable types (including `Secure`) are stored as plaintext in `vars.json`. Keychain integration is planned for a future release.
+## Storage Location
+
+- **Windows:** `%APPDATA%\hedgebuddy\vars.json`
+- **macOS:** `~/Library/Application Support/hedgebuddy/vars.json`
 
 ---
 
 ## Next Steps
 
-- [Python Library Guide](python-library.md) - Complete API documentation
-- [Desktop App Guide](desktop-app.md) - Using the GUI in detail
-- [Examples](examples.md) - Real-world usage patterns
-- [FAQ](faq.md) - Common questions and troubleshooting
+- [Python Library Guide](python-library.md) - Full API reference
+- [Desktop App Guide](desktop-app.md) - Using the GUI
+- [Examples](examples.md) - Real-world patterns
+- [FAQ](faq.md) - Troubleshooting

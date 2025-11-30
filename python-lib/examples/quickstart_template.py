@@ -16,7 +16,16 @@ import json
 import hedgebuddy
 
 # ============================================================================
-# Step 1: Load your variables
+# Step 1: Enable logging (recommended for headless scripts)
+# ============================================================================
+
+# Enable automatic logging - all print() statements will be logged to:
+# Windows: %APPDATA%\hedgebuddy\logs\quickstart_template_2025-11-17.log
+# macOS: ~/Library/Application Support/hedgebuddy/logs/quickstart_template_2025-11-17.log
+hedgebuddy.enable_logging()
+
+# ============================================================================
+# Step 2: Load your variables
 # ============================================================================
 
 # Required variables (script will fail if not configured)
@@ -29,7 +38,7 @@ NOTIFY_FAILED_ONLY = hedgebuddy.var("HB_NOTIFY_ON_FAILED_ONLY", "false") == "tru
 PRODUCTION_FOLDER = hedgebuddy.var("HB_PRODUCTION_FOLDER", None)
 
 # ============================================================================
-# Step 2: Parse OffShoot event (if triggered by OffShoot)
+# Step 3: Parse OffShoot event (if triggered by OffShoot)
 # ============================================================================
 
 def parse_event():
@@ -43,7 +52,7 @@ def parse_event():
         return None
 
 # ============================================================================
-# Step 3: Your automation logic
+# Step 4: Your automation logic
 # ============================================================================
 
 def main():
@@ -71,20 +80,26 @@ def main():
         print(f"Will move files to: {PRODUCTION_FOLDER}")
     
     if hedgebuddy.exists("WEBHOOK_URL"):
-        print(f"Will notify webhook: {WEBHOOK_URL}")
+        webhook_url = hedgebuddy.var("WEBHOOK_URL")
+        print(f"Will notify webhook: {webhook_url}")
     
     print("Script completed!")
 
 
 # ============================================================================
-# Step 3: Run with error handling
+# Step 5: Run with error handling
 # ============================================================================
 
 if __name__ == "__main__":
     try:
         main()
-    except Exception as e:
+    except hedgebuddy.VariableNotFoundError as e:
+        hedgebuddy.log_error(f"Configuration error: {e}")
         print(f"Error: {e}")
         print("\nMake sure you've configured these variables using HedgeBuddy:")
-        print("  - API_KEY (required)")
-        print("  - DATABASE_URL (required)")
+        print("  - HB_SLACK_WEBHOOK_URL (required)")
+        print("  - HB_LOG_PATH (required)")
+    except Exception as e:
+        hedgebuddy.log_error(f"Unexpected error: {e}")
+        print(f"Error: {e}")
+        raise

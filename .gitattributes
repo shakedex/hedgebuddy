@@ -1,0 +1,36 @@
+# Auto detect text files and perform LF normalization
+* text=auto
+
+# Force LF for code files
+*.py text eol=lf
+*.go text eol=lf
+*.js text eol=lf
+*.ts text eol=lf
+*.svelte text eol=lf
+*.css text eol=lf
+*.html text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+
+# Windows-specific files keep CRLF
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Binary files
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.icns binary
+*.psd binary
+*.exe binary
+*.dll binary
+*.so binary
+*.dylib binary
+
+# Merge strategies
+package-lock.json merge=ours
