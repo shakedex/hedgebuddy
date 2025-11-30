@@ -28,7 +28,7 @@ def cleanup_logging():
 def test_enable_logging_creates_log_file(tmp_path, monkeypatch):
     """Test that enable_logging creates a log file."""
     # Mock storage directory
-    monkeypatch.setattr("hedgebuddy.logger.get_storage_dir", lambda: tmp_path)
+    monkeypatch.setattr("hedgebuddy.logger._get_storage_dir", lambda: tmp_path)
     
     log_file = enable_logging(script_name="test-script")
     
@@ -40,7 +40,7 @@ def test_enable_logging_creates_log_file(tmp_path, monkeypatch):
 
 def test_enable_logging_daily_filename(tmp_path, monkeypatch):
     """Test that log filename includes today's date."""
-    monkeypatch.setattr("hedgebuddy.logger.get_storage_dir", lambda: tmp_path)
+    monkeypatch.setattr("hedgebuddy.logger._get_storage_dir", lambda: tmp_path)
     
     log_file = enable_logging(script_name="test-script")
     today = datetime.now().strftime("%Y-%m-%d")
@@ -50,7 +50,7 @@ def test_enable_logging_daily_filename(tmp_path, monkeypatch):
 
 def test_enable_logging_auto_detect_script_name(tmp_path, monkeypatch):
     """Test auto-detection of script name from __main__."""
-    monkeypatch.setattr("hedgebuddy.logger.get_storage_dir", lambda: tmp_path)
+    monkeypatch.setattr("hedgebuddy.logger._get_storage_dir", lambda: tmp_path)
     
     # __main__.__file__ should be this test file
     log_file = enable_logging()
@@ -60,7 +60,7 @@ def test_enable_logging_auto_detect_script_name(tmp_path, monkeypatch):
 
 def test_log_function_writes_to_file(tmp_path, monkeypatch):
     """Test that log() writes messages to file."""
-    monkeypatch.setattr("hedgebuddy.logger.get_storage_dir", lambda: tmp_path)
+    monkeypatch.setattr("hedgebuddy.logger._get_storage_dir", lambda: tmp_path)
     
     log_file = enable_logging(script_name="test-script")
     log("Test message")
@@ -75,7 +75,7 @@ def test_log_function_writes_to_file(tmp_path, monkeypatch):
 
 def test_log_error_function(tmp_path, monkeypatch):
     """Test that log_error() writes error messages."""
-    monkeypatch.setattr("hedgebuddy.logger.get_storage_dir", lambda: tmp_path)
+    monkeypatch.setattr("hedgebuddy.logger._get_storage_dir", lambda: tmp_path)
     
     log_file = enable_logging(script_name="test-script")
     log_error("Error occurred")
@@ -89,7 +89,7 @@ def test_log_error_function(tmp_path, monkeypatch):
 
 def test_log_warning_function(tmp_path, monkeypatch):
     """Test that log_warning() writes warning messages."""
-    monkeypatch.setattr("hedgebuddy.logger.get_storage_dir", lambda: tmp_path)
+    monkeypatch.setattr("hedgebuddy.logger._get_storage_dir", lambda: tmp_path)
     
     log_file = enable_logging(script_name="test-script")
     log_warning("Warning message")
@@ -103,7 +103,7 @@ def test_log_warning_function(tmp_path, monkeypatch):
 
 def test_log_debug_function(tmp_path, monkeypatch):
     """Test that log_debug() writes debug messages when level is DEBUG."""
-    monkeypatch.setattr("hedgebuddy.logger.get_storage_dir", lambda: tmp_path)
+    monkeypatch.setattr("hedgebuddy.logger._get_storage_dir", lambda: tmp_path)
     
     log_file = enable_logging(script_name="test-script", level="DEBUG")
     log_debug("Debug info")
@@ -117,7 +117,7 @@ def test_log_debug_function(tmp_path, monkeypatch):
 
 def test_capture_stdout(tmp_path, monkeypatch, capsys):
     """Test that print() statements are captured when capture_stdout=True."""
-    monkeypatch.setattr("hedgebuddy.logger.get_storage_dir", lambda: tmp_path)
+    monkeypatch.setattr("hedgebuddy.logger._get_storage_dir", lambda: tmp_path)
     
     log_file = enable_logging(script_name="test-script", capture_stdout=True)
     print("Printed message")
@@ -130,7 +130,7 @@ def test_capture_stdout(tmp_path, monkeypatch, capsys):
 
 def test_multiple_executions_append_to_same_file(tmp_path, monkeypatch):
     """Test that multiple script executions on same day append to same file."""
-    monkeypatch.setattr("hedgebuddy.logger.get_storage_dir", lambda: tmp_path)
+    monkeypatch.setattr("hedgebuddy.logger._get_storage_dir", lambda: tmp_path)
     
     # First execution
     log_file1 = enable_logging(script_name="test-script")
@@ -153,7 +153,7 @@ def test_multiple_executions_append_to_same_file(tmp_path, monkeypatch):
 
 def test_log_rotation_deletes_old_files(tmp_path, monkeypatch):
     """Test that old log files are deleted based on max_days."""
-    monkeypatch.setattr("hedgebuddy.logger.get_storage_dir", lambda: tmp_path)
+    monkeypatch.setattr("hedgebuddy.logger._get_storage_dir", lambda: tmp_path)
     
     logs_dir = tmp_path / "logs"
     logs_dir.mkdir()
@@ -172,7 +172,7 @@ def test_log_rotation_deletes_old_files(tmp_path, monkeypatch):
 
 def test_log_rotation_keeps_recent_files(tmp_path, monkeypatch):
     """Test that recent log files are kept."""
-    monkeypatch.setattr("hedgebuddy.logger.get_storage_dir", lambda: tmp_path)
+    monkeypatch.setattr("hedgebuddy.logger._get_storage_dir", lambda: tmp_path)
     
     logs_dir = tmp_path / "logs"
     logs_dir.mkdir()
@@ -191,7 +191,7 @@ def test_log_rotation_keeps_recent_files(tmp_path, monkeypatch):
 
 def test_disable_logging_restores_stdout(tmp_path, monkeypatch):
     """Test that disable_logging() restores original stdout."""
-    monkeypatch.setattr("hedgebuddy.logger.get_storage_dir", lambda: tmp_path)
+    monkeypatch.setattr("hedgebuddy.logger._get_storage_dir", lambda: tmp_path)
     
     original_stdout = sys.stdout
     
@@ -204,7 +204,7 @@ def test_disable_logging_restores_stdout(tmp_path, monkeypatch):
 
 def test_is_logging_enabled(tmp_path, monkeypatch):
     """Test is_logging_enabled() returns correct state."""
-    monkeypatch.setattr("hedgebuddy.logger.get_storage_dir", lambda: tmp_path)
+    monkeypatch.setattr("hedgebuddy.logger._get_storage_dir", lambda: tmp_path)
     
     assert not is_logging_enabled()
     
@@ -217,7 +217,7 @@ def test_is_logging_enabled(tmp_path, monkeypatch):
 
 def test_get_log_dir(tmp_path, monkeypatch):
     """Test get_log_dir() returns correct directory."""
-    monkeypatch.setattr("hedgebuddy.logger.get_storage_dir", lambda: tmp_path)
+    monkeypatch.setattr("hedgebuddy.logger._get_storage_dir", lambda: tmp_path)
     
     log_dir = get_log_dir()
     assert log_dir == tmp_path / "logs"
@@ -225,7 +225,7 @@ def test_get_log_dir(tmp_path, monkeypatch):
 
 def test_include_context(tmp_path, monkeypatch):
     """Test that include_context=True adds system info to logs."""
-    monkeypatch.setattr("hedgebuddy.logger.get_storage_dir", lambda: tmp_path)
+    monkeypatch.setattr("hedgebuddy.logger._get_storage_dir", lambda: tmp_path)
     
     log_file = enable_logging(script_name="test-script", include_context=True)
     
@@ -238,7 +238,7 @@ def test_include_context(tmp_path, monkeypatch):
 
 def test_prevent_multiple_initialization(tmp_path, monkeypatch, capsys):
     """Test that calling enable_logging() twice doesn't break."""
-    monkeypatch.setattr("hedgebuddy.logger.get_storage_dir", lambda: tmp_path)
+    monkeypatch.setattr("hedgebuddy.logger._get_storage_dir", lambda: tmp_path)
     
     log_file1 = enable_logging(script_name="test-script")
     log_file2 = enable_logging(script_name="test-script")
@@ -250,7 +250,7 @@ def test_prevent_multiple_initialization(tmp_path, monkeypatch, capsys):
 
 def test_different_log_levels(tmp_path, monkeypatch):
     """Test different log levels filter messages appropriately."""
-    monkeypatch.setattr("hedgebuddy.logger.get_storage_dir", lambda: tmp_path)
+    monkeypatch.setattr("hedgebuddy.logger._get_storage_dir", lambda: tmp_path)
     
     # Enable with WARNING level
     log_file = enable_logging(script_name="test-script", level="WARNING")
