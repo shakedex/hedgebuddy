@@ -3,8 +3,8 @@ name: Release HedgeBuddy
 on:
   push:
     tags:
-      - "v*.*.*" # Triggers on version tags like v1.0.0, v1.2.3
-  workflow_dispatch: # Allows manual execution from GitHub UI
+      - "v*.*.*"
+  workflow_dispatch:
     inputs:
       version:
         description: "Version number (e.g., 1.0.0)"
@@ -44,110 +44,65 @@ jobs:
     if: always() && (needs.create-tag.result == 'success' || needs.create-tag.result == 'skipped')
     defaults:
       run:
-        working-directory: ./hedgebuddy-wails
+        working-directory: ./app
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Verify version sync
+        run: python scripts/sync_version.py --check
 
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
           go-version: "1.25"
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "24"
+      - name: Install Fyne CLI
+        run: go install fyne.io/tools/cmd/fyne@latest
 
-      - name: Install Wails
-        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
-
-      - name: Copy icon to build directory
-        run: |
-          New-Item -ItemType Directory -Force -Path build
-          Copy-Item ..\branding\hedgebuddy_icon.png build\appicon.png
-        shell: powershell
-
-      - name: Build Windows executable
-        run: wails build -platform windows/amd64 -clean
+      - name: Package Windows executable
+        run: fyne package -os windows -icon icon.png -name HedgeBuddy
 
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
         with:
           name: HedgeBuddy-Windows
-          path: hedgebuddy-wails/build/bin/HedgeBuddy.exe
+          path: app/HedgeBuddy.exe
 
   build-macos:
     name: Build macOS (ARM64)
-    runs-on: macos-14 # M1/M2 runner
+    runs-on: macos-14
     needs: [create-tag]
     if: always() && (needs.create-tag.result == 'success' || needs.create-tag.result == 'skipped')
     defaults:
       run:
-        working-directory: ./hedgebuddy-wails
+        working-directory: ./app
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Verify version sync
+        run: python3 scripts/sync_version.py --check
 
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
           go-version: "1.25"
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "24"
+      - name: Install Fyne CLI
+        run: go install fyne.io/tools/cmd/fyne@latest
 
-      - name: Install Wails
-        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
-
-      - name: Copy icon to build directory
-        run: |
-          mkdir -p build
-          cp ../branding/hedgebuddy_icon.png build/appicon.png
-
-      - name: Build macOS executable
-        run: wails build -platform darwin/arm64 -clean
+      - name: Package macOS app bundle
+        run: fyne package -os darwin -icon icon.png -name HedgeBuddy
 
       - name: Install create-dmg
         run: brew install create-dmg
 
       - name: Create DMG
         run: |
-          cd build/bin
-
-          # List what was actually built
-          ls -la
-
-          # Create a temporary directory for DMG contents
           mkdir -p dmg_temp
+          cp -r HedgeBuddy.app dmg_temp/HedgeBuddy.app
 
-          # Copy the app (Wails uses project name for .app bundle)
-          cp -r hedgebuddy-wails.app dmg_temp/HedgeBuddy.app
-
-          # Create README for unsigned app instructions
-          cat > dmg_temp/README.txt << 'EOF'
-          ╔══════════════════════════════════════════════════════════════╗
-          ║                    HedgeBuddy Installation                   ║
-          ╠══════════════════════════════════════════════════════════════╣
-          ║                                                              ║
-          ║  1. Drag HedgeBuddy.app to your Applications folder          ║
-          ║                                                              ║
-          ║  2. IMPORTANT: This app is not signed. Before first launch,  ║
-          ║     open Terminal and run:                                   ║
-          ║                                                              ║
-          ║     xattr -cr /Applications/HedgeBuddy.app                   ║
-          ║                                                              ║
-          ║  3. Open HedgeBuddy from Applications                        ║
-          ║                                                              ║
-          ║  Variables are stored at:                                    ║
-          ║  ~/Library/Application Support/hedgebuddy/vars.json          ║
-          ║                                                              ║
-          ╚══════════════════════════════════════════════════════════════╝
-          EOF
-
-          # Create DMG with create-dmg (using custom volume icon)
           create-dmg \
             --volname "HedgeBuddy" \
             --window-pos 200 120 \
@@ -164,7 +119,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: HedgeBuddy-macOS-ARM64
-          path: hedgebuddy-wails/build/bin/HedgeBuddy-macOS-arm64.dmg
+          path: app/HedgeBuddy-macOS-arm64.dmg
 
   create-release:
     name: Create GitHub Release
@@ -208,16 +163,16 @@ jobs:
 
             Cross-platform environment variable manager for Hedge.co Python scripts.
 
-            ### 📦 Downloads
+            ### Downloads
             - **Windows (x64)**: `HedgeBuddy.exe`
             - **macOS (Apple Silicon)**: `HedgeBuddy-macOS-arm64.dmg`
 
-            ### 💾 Installation
+            ### Installation
 
             **Windows**
             1. Download `HedgeBuddy.exe`
             2. Run the executable (no installation needed)
-            3. Variables stored at: `%APPDATA%\hedgebuddy\vars.json`
+            3. Variables stored at: `%APPDATA%\HedgeBuddy\vars.json`
 
             **macOS**
             1. Download and open `HedgeBuddy-macOS-arm64.dmg`
@@ -227,17 +182,9 @@ jobs:
                xattr -cr /Applications/HedgeBuddy.app
                ```
             4. Open HedgeBuddy from Applications
-            5. Variables stored at: `~/Library/Application Support/hedgebuddy/vars.json`
+            5. Variables stored at: `~/Library/Application Support/HedgeBuddy/vars.json`
 
-            ### ✨ Features
-            - Add, edit, and delete environment variables
-            - Import/export variables from JSON files
-            - Path validation and browsing
-            - Type-safe variables (string, path, url)
-            - Drag & drop JSON import
-            - Order-preserving storage
-
-            ### 🐍 Python Library
+            ### Python Library
             Install companion library: `pip install hedgebuddy`
             Use in scripts: `import hedgebuddy`
           files: |

@@ -3,12 +3,16 @@
 /go-app/*.exe
 /go-app/vendor/
 *.exe
+
 # Python
 **/__pycache__/
 /python-lib/*.egg-info/
 /python-lib/dist/
 /python-lib/build/
-
+.venv/
+.pytest_cache/
 .github/copilot-instructions.md
 .env
 **/TODO.md
+.agents/
+skills-lock.json

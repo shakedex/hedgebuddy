@@ -1,0 +1,34 @@
+package ui
+
+// App metadata
+const (
+	AppName    = "HedgeBuddy"
+	AppVersion = "0.7.0"
+
+	WindowTitle  = "HedgeBuddy — Variable Manager"
+	WindowWidth  = 1024
+	WindowHeight = 768
+
+	GithubURL  = "https://github.com/shakedex/hedgebuddy"
+	WebsiteURL = "https://shaked.co"
+)
+
+// Variable types — single source of truth used by UI, validators, and storage
+const (
+	TypeString = "string"
+	TypePath   = "path"
+	TypeURL    = "url"
+	TypeSecret = "secret"
+)
+
+// AllTypes returns the ordered list of variable types for UI selectors
+func AllTypes() []string {
+	return []string{TypeString, TypePath, TypeURL, TypeSecret}
+}
+
+// Display constants
+const (
+	SecretMask       = "••••••••"
+	ValueTruncateLen = 80
+	StatusDuration   = 3 // seconds
+)

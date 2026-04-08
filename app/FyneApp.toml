@@ -1,0 +1,8 @@
+Website = "https://shaked.co"
+
+[Details]
+Icon = "icon.png"
+Name = "HedgeBuddy"
+ID = "co.hedge.hedgebuddy"
+Version = "0.7.0"
+Build = 7

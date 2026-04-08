@@ -39,7 +39,7 @@ from .logger import (
     is_logging_enabled,
 )
 
-__version__ = "0.6.0"
+__version__ = "0.7.0"
 __all__ = [
     "var",
     "get",

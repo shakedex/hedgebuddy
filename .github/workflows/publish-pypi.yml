@@ -32,37 +32,13 @@ jobs:
                   curl -LsSf https://astral.sh/uv/install.sh | sh
                   echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
-            - name: Verify version matches (release trigger)
+            - name: Verify version sync (release trigger)
               if: github.event_name == 'release'
-              working-directory: ./python-lib
-              run: |
-                  RELEASE_VERSION="${{ github.event.release.tag_name }}"
-                  # Remove 'v' prefix if present
-                  RELEASE_VERSION="${RELEASE_VERSION#v}"
-
-                  # Get version from pyproject.toml
-                  PACKAGE_VERSION=$(grep '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/')
-
-                  echo "Release version: $RELEASE_VERSION"
-                  echo "Package version: $PACKAGE_VERSION"
-
-                  if [ "$RELEASE_VERSION" != "$PACKAGE_VERSION" ]; then
-                    echo "Error: Release version ($RELEASE_VERSION) does not match package version ($PACKAGE_VERSION)"
-                    exit 1
-                  fi
+              run: python scripts/sync_version.py --check
 
             - name: Update version (manual trigger)
               if: github.event_name == 'workflow_dispatch'
-              working-directory: ./python-lib
-              run: |
-                  VERSION="${{ github.event.inputs.version }}"
-                  echo "Updating version to $VERSION"
-
-                  # Update pyproject.toml
-                  sed -i "s/^version = .*/version = \"$VERSION\"/" pyproject.toml
-
-                  # Update __init__.py
-                  sed -i "s/__version__ = .*/__version__ = \"$VERSION\"/" hedgebuddy/__init__.py
+              run: python scripts/sync_version.py --set ${{ github.event.inputs.version }}
 
             - name: Install dependencies
               working-directory: ./python-lib
