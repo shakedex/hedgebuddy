@@ -20,5 +20,7 @@ func main() {
 	ctrl := ui.NewAppController(a, w)
 	ctrl.ShowListView()
 
+	go ctrl.RunPythonCheck()
+
 	w.ShowAndRun()
 }
