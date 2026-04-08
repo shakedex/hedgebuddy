@@ -4,5 +4,5 @@ Website = "https://shaked.co"
 Icon = "icon.png"
 Name = "HedgeBuddy"
 ID = "co.hedge.hedgebuddy"
-Version = "0.7.0"
+Version = "0.7.1"
 Build = 7

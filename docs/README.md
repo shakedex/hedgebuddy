@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="hedgebuddy_icon2.png" alt="HedgeBuddy" width="120" />
+</p>
+
 # HedgeBuddy
 
 > Cross-platform environment variable management for Python scripts without system pollution.

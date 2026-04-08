@@ -51,3 +51,15 @@ func Install(executable string, w io.Writer) error {
 	}
 	return nil
 }
+
+// Upgrade runs "pip install --user --upgrade hedgebuddy" using the given
+// Python executable, streaming all output to w in real time.
+func Upgrade(executable string, w io.Writer) error {
+	cmd := exec.Command(executable, "-m", "pip", "install", "--user", "--upgrade", "hedgebuddy")
+	cmd.Stdout = w
+	cmd.Stderr = w
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("pip upgrade failed: %w", err)
+	}
+	return nil
+}

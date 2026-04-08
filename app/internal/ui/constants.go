@@ -3,7 +3,7 @@ package ui
 // App metadata
 const (
 	AppName    = "HedgeBuddy"
-	AppVersion = "0.7.0"
+	AppVersion = "0.7.1"
 
 	WindowTitle  = "HedgeBuddy — Variable Manager"
 	WindowWidth  = 1024

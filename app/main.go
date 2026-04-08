@@ -21,6 +21,7 @@ func main() {
 	ctrl.ShowListView()
 
 	go ctrl.RunPythonCheck()
+	go ctrl.RunUpdateCheck()
 
 	w.ShowAndRun()
 }

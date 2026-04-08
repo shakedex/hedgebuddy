@@ -111,9 +111,17 @@ func showLibraryMissingDialog(w fyne.Window, executable string) {
 // --- Installing (progress + live console) ---
 
 func showInstallingDialog(w fyne.Window, executable string) {
+	showPipProgressDialog(w, "Installing hedgebuddy…", "Installing", func(writer *entryWriter) error {
+		return pythoncheck.Install(executable, writer)
+	}, executable)
+}
+
+// showPipProgressDialog runs a pip operation with a live console log.
+// The console stays visible after completion so the user can review it.
+func showPipProgressDialog(w fyne.Window, label, title string, run func(*entryWriter) error, executable string) {
 	progress := widget.NewProgressBarInfinite()
 
-	statusLabel := canvas.NewText("Installing hedgebuddy…", ColorTextPrimary)
+	statusLabel := canvas.NewText(label, ColorTextPrimary)
 	statusLabel.TextSize = 14
 	statusLabel.TextStyle = fyne.TextStyle{Bold: true}
 
@@ -129,30 +137,32 @@ func showInstallingDialog(w fyne.Window, executable string) {
 		container.NewStack(logEntry),
 	)
 
-	d := dialog.NewCustomWithoutButtons("Installing", content, w)
+	d := dialog.NewCustomWithoutButtons(title, content, w)
 	d.Resize(fyne.NewSize(560, 400))
 	d.Show()
 
 	go func() {
 		writer := &entryWriter{entry: logEntry}
-		err := pythoncheck.Install(executable, writer)
+		err := run(writer)
+
+		// Stop the spinner — keep the log visible for review.
+		progress.Hide()
 
 		if err != nil {
-			d.Hide()
-			dialog.ShowError(
-				fmt.Errorf("%w\n\nYou can also install manually:\n  %s -m pip install hedgebuddy", err, executable),
-				w,
-			)
-			return
+			statusLabel.Text = "Installation failed"
+			statusLabel.Color = ColorAccentRed
+			statusLabel.Refresh()
+
+			hint := MutedLabel(fmt.Sprintf("You can also run manually: %s -m pip install hedgebuddy", executable))
+			content.Add(hint)
+		} else {
+			statusLabel.Text = "✓ Installed successfully"
+			statusLabel.Color = ColorSuccess
+			statusLabel.Refresh()
 		}
 
-		d.Hide()
-		dialog.ShowInformation(
-			"Installed!",
-			"The hedgebuddy Python library was installed successfully.\n"+
-				"Your scripts are ready to use.",
-			w,
-		)
+		closeBtn := widget.NewButton("Close", func() { d.Hide() })
+		d.SetButtons([]fyne.CanvasObject{layout.NewSpacer(), closeBtn})
 	}()
 }
 
