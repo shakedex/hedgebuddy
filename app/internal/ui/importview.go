@@ -9,9 +9,9 @@ import (
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
-	"fyne.io/fyne/v2/storage"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+	"github.com/ncruces/zenity"
 
 	appStorage "app/internal/storage"
 )
@@ -27,6 +27,9 @@ func NewImportView(ctrl *AppController) fyne.CanvasObject {
 
 	listContainer := container.NewVBox()
 	scrollable := container.NewVScroll(listContainer)
+
+	emptyState := EmptyState(theme.UploadIcon(), "No file loaded", "Select a JSON template file to import variables.")
+	contentArea := container.NewStack(emptyState)
 
 	selectAllBtn := widget.NewButton("Select All", nil)
 	deselectAllBtn := widget.NewButton("Deselect All", nil)
@@ -83,6 +86,8 @@ func NewImportView(ctrl *AppController) fyne.CanvasObject {
 		selectAllBtn.Enable()
 		deselectAllBtn.Enable()
 		listContainer.Refresh()
+		contentArea.Objects = []fyne.CanvasObject{scrollable}
+		contentArea.Refresh()
 	}
 
 	loadFile := func(filePath string) {
@@ -103,15 +108,14 @@ func NewImportView(ctrl *AppController) fyne.CanvasObject {
 	}
 
 	browseBtn := widget.NewButtonWithIcon("Browse...", theme.FolderOpenIcon(), func() {
-		fd := dialog.NewFileOpen(func(reader fyne.URIReadCloser, err error) {
-			if err != nil || reader == nil {
-				return
-			}
-			reader.Close()
-			loadFile(reader.URI().Path())
-		}, ctrl.Window)
-		fd.SetFilter(storage.NewExtensionFileFilter([]string{".json"}))
-		fd.Show()
+		path, err := zenity.SelectFile(
+			zenity.Title("Select JSON template"),
+			zenity.FileFilters{{Name: "JSON files", Patterns: []string{"*.json"}}},
+		)
+		if err != nil {
+			return
+		}
+		loadFile(path)
 	})
 	browseBtn.Importance = widget.HighImportance
 
@@ -173,7 +177,12 @@ func NewImportView(ctrl *AppController) fyne.CanvasObject {
 		container.NewHBox(selectAllBtn, deselectAllBtn),
 	)
 
-	footer := FooterBar(nil, []fyne.CanvasObject{importBtn})
+	cancelBtn := widget.NewButtonWithIcon("Cancel", theme.NavigateBackIcon(), func() {
+		ctrl.Window.SetOnDropped(nil)
+		ctrl.ShowListView()
+	})
 
-	return container.NewBorder(header, footer, nil, nil, scrollable)
+	footer := FooterBar([]fyne.CanvasObject{cancelBtn}, []fyne.CanvasObject{importBtn})
+
+	return container.NewBorder(header, footer, nil, nil, contentArea)
 }

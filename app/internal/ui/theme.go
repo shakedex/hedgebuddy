@@ -19,7 +19,7 @@ var (
 	ColorSeparator   = color.NRGBA{R: 0x26, G: 0x26, B: 0x2E, A: 0xFF}
 	ColorTextPrimary = color.NRGBA{R: 0xEC, G: 0xEC, B: 0xF0, A: 0xFF}
 	ColorTextSecond  = color.NRGBA{R: 0xA0, G: 0xA0, B: 0xAC, A: 0xFF}
-	ColorTextMuted   = color.NRGBA{R: 0x5C, G: 0x5C, B: 0x68, A: 0xFF}
+	ColorTextMuted   = color.NRGBA{R: 0x88, G: 0x88, B: 0xA0, A: 0xFF}
 	ColorAccentBlue  = color.NRGBA{R: 0x42, G: 0x87, B: 0xF5, A: 0xFF}
 	ColorAccentRed   = color.NRGBA{R: 0xEF, G: 0x44, B: 0x44, A: 0xFF}
 	ColorSuccess     = color.NRGBA{R: 0x22, G: 0xC5, B: 0x5E, A: 0xFF}
@@ -56,7 +56,7 @@ func (t *HedgeBuddyTheme) Color(name fyne.ThemeColorName, _ fyne.ThemeVariant) c
 	case theme.ColorNamePrimary:
 		return ColorAccentBlue
 	case theme.ColorNameScrollBar:
-		return ColorBorder
+		return ColorTextMuted
 	case theme.ColorNameSeparator:
 		return ColorSeparator
 	case theme.ColorNameShadow:
@@ -104,9 +104,9 @@ func (t *HedgeBuddyTheme) Size(name fyne.ThemeSizeName) float32 {
 	case theme.SizeNameSeparatorThickness:
 		return 1
 	case theme.SizeNameScrollBarSmall:
-		return 4
+		return 6
 	case theme.SizeNameScrollBar:
-		return 8
+		return 10
 	case theme.SizeNameLineSpacing:
 		return 6
 	}
@@ -128,6 +128,6 @@ func TypeColor(varType string) color.NRGBA {
 	case TypeSecret:
 		return ColorAccentRed
 	default:
-		return ColorTextMuted
+		return ColorTextSecond
 	}
 }

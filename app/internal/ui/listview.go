@@ -82,7 +82,7 @@ func NewListView(ctrl *AppController) fyne.CanvasObject {
 		})
 
 		return container.NewBorder(header, nil, nil, nil,
-			EmptyState("No variables configured yet",
+			EmptyState(nil, "No variables configured yet",
 				"Add your first variable or import a template to get started.",
 				addBtn, importBtn),
 		)
@@ -93,45 +93,7 @@ func NewListView(ctrl *AppController) fyne.CanvasObject {
 
 // buildListHeader creates the structured multi-row header for the list view.
 func buildListHeader(ctrl *AppController, searchEntry *widget.Entry, countLabel *canvas.Text) fyne.CanvasObject {
-	// Row 1: Logo + title | status text + utility buttons
-	logo := canvas.NewImageFromResource(AppIcon())
-	logo.FillMode = canvas.ImageFillContain
-	logo.SetMinSize(fyne.NewSize(28, 28))
-
-	titleText := canvas.NewText(AppName, ColorAccentBlue)
-	titleText.TextSize = 20
-	titleText.TextStyle = fyne.TextStyle{Bold: true}
-
-	refreshBtn := widget.NewButtonWithIcon("", theme.ViewRefreshIcon(), func() {
-		if err := ctrl.Reload(); err != nil {
-			ctrl.ShowStatus("Failed to reload: " + err.Error())
-			return
-		}
-		ctrl.ShowStatus("Variables reloaded")
-		ctrl.ShowListView()
-	})
-	folderBtn := widget.NewButtonWithIcon("", theme.FolderIcon(), func() {
-		ctrl.OpenStorageFolder()
-	})
-	aboutBtn := widget.NewButtonWithIcon("", theme.InfoIcon(), func() {
-		ctrl.ShowAboutView()
-	})
-
-	rightSide := container.NewVBox(
-		container.NewHBox(layout.NewSpacer(), refreshBtn, folderBtn, aboutBtn),
-		container.NewHBox(layout.NewSpacer(), ctrl.StatusText),
-	)
-
-	leftSide := container.NewVBox(
-		container.NewHBox(logo, titleText),
-	)
-
-	brandRow := container.NewBorder(nil, nil,
-		leftSide,
-		rightSide,
-	)
-
-	// Row 2: Action buttons
+	// Row 1: Action buttons | status text + utility buttons
 	addBtn := widget.NewButtonWithIcon("New", theme.ContentAddIcon(), func() {
 		ctrl.ShowFormView("", "", "", TypeString, "")
 	})
@@ -144,13 +106,33 @@ func buildListHeader(ctrl *AppController, searchEntry *widget.Entry, countLabel 
 		ctrl.ShowExportView()
 	})
 
-	actionRow := container.NewHBox(addBtn, importBtn, exportBtn)
+	refreshBtn := newTooltipButton("", theme.ViewRefreshIcon(), "Reload variables from disk", func() {
+		if err := ctrl.Reload(); err != nil {
+			ctrl.ShowStatus("Failed to reload: " + err.Error())
+			return
+		}
+		ctrl.ShowStatus("Variables reloaded")
+		ctrl.ShowListView()
+	})
+	folderBtn := newTooltipButton("", theme.FolderIcon(), "Open storage folder", func() {
+		ctrl.OpenStorageFolder()
+	})
+	aboutBtn := newTooltipButton("", theme.InfoIcon(), "About HedgeBuddy", func() {
+		ctrl.ShowAboutView()
+	})
 
-	// Row 3: Search + count
-	searchRow := container.NewBorder(nil, nil, nil, nil, searchEntry)
+	rightSide := container.NewHBox(layout.NewSpacer(), ctrl.StatusText, refreshBtn, folderBtn, aboutBtn)
+	leftSide := container.NewHBox(addBtn, importBtn, exportBtn)
+
+	actionRow := container.NewBorder(nil, nil, leftSide, rightSide)
+
+	// Row 2: Search with clear button
+	clearBtn := widget.NewButtonWithIcon("", theme.CancelIcon(), func() {
+		searchEntry.SetText("")
+	})
+	searchRow := container.NewBorder(nil, nil, nil, clearBtn, searchEntry)
 
 	return container.NewVBox(
-		brandRow,
 		actionRow,
 		searchRow,
 		countLabel,
@@ -175,15 +157,15 @@ func createVariableCardTemplate() fyne.CanvasObject {
 	descLabel.TextSize = 12
 	descLabel.TextStyle = fyne.TextStyle{Italic: true}
 
-	// Distinct icons: copy, reveal, edit, duplicate, delete
-	copyBtn := widget.NewButtonWithIcon("", theme.ContentCopyIcon(), nil)
+	// Distinct icons: reveal (secrets only), copy, edit, duplicate, delete
 	revealBtn := widget.NewButtonWithIcon("", theme.VisibilityIcon(), nil)
+	copyBtn := widget.NewButtonWithIcon("", theme.ContentCopyIcon(), nil)
 	editBtn := widget.NewButtonWithIcon("", theme.DocumentCreateIcon(), nil)
-	dupeBtn := widget.NewButtonWithIcon("", theme.ContentAddIcon(), nil)
+	dupeBtn := widget.NewButtonWithIcon("", theme.ContentPasteIcon(), nil)
 	deleteBtn := widget.NewButtonWithIcon("", theme.DeleteIcon(), nil)
 	deleteBtn.Importance = widget.DangerImportance
 
-	topRow := container.NewHBox(nameLabel, typeBadge, layout.NewSpacer(), copyBtn, revealBtn, editBtn, dupeBtn, deleteBtn)
+	topRow := container.NewHBox(nameLabel, typeBadge, layout.NewSpacer(), revealBtn, copyBtn, editBtn, dupeBtn, deleteBtn)
 	infoCol := container.NewVBox(topRow, valueLabel, descLabel)
 
 	// Type-colored accent bar on left (wider for visual impact)
@@ -211,8 +193,8 @@ func updateVariableCard(obj fyne.CanvasObject, name string, v storage.Variable, 
 
 	nameLabel := topRow.Objects[0].(*canvas.Text)
 	typeBadge := topRow.Objects[1].(*canvas.Text)
-	copyBtn := topRow.Objects[3].(*widget.Button)
-	revealBtn := topRow.Objects[4].(*widget.Button)
+	revealBtn := topRow.Objects[3].(*widget.Button)
+	copyBtn := topRow.Objects[4].(*widget.Button)
 	editBtn := topRow.Objects[5].(*widget.Button)
 	dupeBtn := topRow.Objects[6].(*widget.Button)
 	deleteBtn := topRow.Objects[7].(*widget.Button)
@@ -240,7 +222,7 @@ func updateVariableCard(obj fyne.CanvasObject, name string, v storage.Variable, 
 	descLabel.Text = v.Description
 	descLabel.Refresh()
 
-	// Show/hide reveal button based on type
+	// Reveal button: only visible for secret type variables
 	if v.Type == TypeSecret {
 		revealBtn.Show()
 		if isRevealed {

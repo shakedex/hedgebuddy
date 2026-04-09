@@ -8,9 +8,9 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/layout"
-	fyneStorage "fyne.io/fyne/v2/storage"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+	"github.com/ncruces/zenity"
 
 	appStorage "app/internal/storage"
 )
@@ -23,7 +23,7 @@ func NewExportView(ctrl *AppController) fyne.CanvasObject {
 
 	if len(keys) == 0 {
 		return container.NewBorder(header, nil, nil, nil,
-			EmptyState("No variables to export.", "Add some variables first."),
+			EmptyState(nil, "No variables to export.", "Add some variables first."),
 		)
 	}
 
@@ -73,21 +73,21 @@ func NewExportView(ctrl *AppController) fyne.CanvasObject {
 			dialog.ShowInformation("Nothing Selected", "Select at least one variable to export.", ctrl.Window)
 			return
 		}
-		fd := dialog.NewFileSave(func(writer fyne.URIWriteCloser, err error) {
-			if err != nil || writer == nil {
-				return
-			}
-			writer.Close()
-			if err := appStorage.ExportToJSON(selected, writer.URI().Path()); err != nil {
-				dialog.ShowError(err, ctrl.Window)
-				return
-			}
-			ctrl.ShowStatus(fmt.Sprintf("Exported %d variables to JSON", len(selected)))
-			ctrl.ShowListView()
-		}, ctrl.Window)
-		fd.SetFilter(fyneStorage.NewExtensionFileFilter([]string{".json"}))
-		fd.SetFileName("hedgebuddy-export.json")
-		fd.Show()
+		path, err := zenity.SelectFileSave(
+			zenity.Title("Export as JSON Template"),
+			zenity.ConfirmOverwrite(),
+			zenity.Filename("hedgebuddy-export.json"),
+			zenity.FileFilters{{Name: "JSON files", Patterns: []string{"*.json"}}},
+		)
+		if err != nil {
+			return
+		}
+		if err := appStorage.ExportToJSON(selected, path); err != nil {
+			dialog.ShowError(err, ctrl.Window)
+			return
+		}
+		ctrl.ShowStatus(fmt.Sprintf("Exported %d variables to JSON", len(selected)))
+		ctrl.ShowListView()
 	}
 
 	doExportEnv := func() {
@@ -98,21 +98,21 @@ func NewExportView(ctrl *AppController) fyne.CanvasObject {
 		}
 
 		saveEnv := func() {
-			fd := dialog.NewFileSave(func(writer fyne.URIWriteCloser, err error) {
-				if err != nil || writer == nil {
-					return
-				}
-				writer.Close()
-				if err := appStorage.ExportToEnv(selected, writer.URI().Path()); err != nil {
-					dialog.ShowError(err, ctrl.Window)
-					return
-				}
-				ctrl.ShowStatus(fmt.Sprintf("Exported %d variables to .env", len(selected)))
-				ctrl.ShowListView()
-			}, ctrl.Window)
-			fd.SetFilter(fyneStorage.NewExtensionFileFilter([]string{".env"}))
-			fd.SetFileName(".env")
-			fd.Show()
+			path, err := zenity.SelectFileSave(
+				zenity.Title("Export as .env"),
+				zenity.ConfirmOverwrite(),
+				zenity.Filename(".env"),
+				zenity.FileFilters{{Name: "Env files", Patterns: []string{"*.env", ".env"}}},
+			)
+			if err != nil {
+				return
+			}
+			if err := appStorage.ExportToEnv(selected, path); err != nil {
+				dialog.ShowError(err, ctrl.Window)
+				return
+			}
+			ctrl.ShowStatus(fmt.Sprintf("Exported %d variables to .env", len(selected)))
+			ctrl.ShowListView()
 		}
 
 		// Check for secrets in selection
@@ -175,7 +175,11 @@ func NewExportView(ctrl *AppController) fyne.CanvasObject {
 		secretWarningObj,
 	)
 
-	footer := FooterBar(nil, []fyne.CanvasObject{exportEnvBtn, exportJSONBtn})
+	cancelBtn := widget.NewButtonWithIcon("Cancel", theme.NavigateBackIcon(), func() {
+		ctrl.ShowListView()
+	})
+
+	footer := FooterBar([]fyne.CanvasObject{cancelBtn}, []fyne.CanvasObject{exportEnvBtn, exportJSONBtn})
 
 	return container.NewBorder(topSection, footer, nil, nil, scrollable)
 }

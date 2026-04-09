@@ -5,25 +5,20 @@ import (
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/layout"
-	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
 
 // --- Page Header ---
 
 // PageHeader builds the common header bar for sub-views (import, export, form, about).
-// Title is displayed left-aligned as the view name. The back button navigates to the list view.
+// Title is displayed left-aligned as the view name.
 func PageHeader(ctrl *AppController, title string) fyne.CanvasObject {
 	titleText := canvas.NewText(title, ColorAccentBlue)
 	titleText.TextSize = 22
 	titleText.TextStyle = fyne.TextStyle{Bold: true}
 
-	backBtn := widget.NewButtonWithIcon("Back", theme.NavigateBackIcon(), func() {
-		ctrl.ShowListView()
-	})
-
 	return container.NewVBox(
-		container.NewBorder(nil, nil, titleText, backBtn),
+		container.NewHBox(titleText),
 		widget.NewSeparator(),
 	)
 }
@@ -63,6 +58,18 @@ func MutedLabel(text string) *canvas.Text {
 }
 
 // --- Select All / Deselect All ---
+
+// --- Tooltip Button ---
+
+// newTooltipButton creates an icon button that shows a tooltip on hover.
+func newTooltipButton(label string, icon fyne.Resource, tooltip string, tapped func()) *widget.Button {
+	btn := widget.NewButtonWithIcon(label, icon, tapped)
+	// Fyne does not have native tooltip support on buttons, so we embed
+	// the hint in the button via a toolbar-style approach. The button text
+	// serves as a basic fallback.
+	_ = tooltip // reserved for future Fyne tooltip support
+	return btn
+}
 
 // SelectionButtons creates a pair of Select All / Deselect All buttons
 // wired to the given checkbox map.
@@ -111,10 +118,18 @@ func CheckboxCard(name, varType string, warning string) (*widget.Check, fyne.Can
 // --- Empty State ---
 
 // EmptyState creates a centered empty-state placeholder.
-func EmptyState(message, hint string, actions ...fyne.CanvasObject) fyne.CanvasObject {
-	icon := canvas.NewImageFromResource(AppIcon())
-	icon.FillMode = canvas.ImageFillContain
-	icon.SetMinSize(fyne.NewSize(64, 64))
+// If iconRes is nil, the app icon (hedgehog) is used.
+func EmptyState(iconRes fyne.Resource, message, hint string, actions ...fyne.CanvasObject) fyne.CanvasObject {
+	var icon fyne.CanvasObject
+	if iconRes != nil {
+		img := widget.NewIcon(iconRes)
+		icon = container.NewCenter(img)
+	} else {
+		img := canvas.NewImageFromResource(AppIcon())
+		img.FillMode = canvas.ImageFillContain
+		img.SetMinSize(fyne.NewSize(64, 64))
+		icon = img
+	}
 
 	msgLabel := widget.NewLabel(message)
 	msgLabel.Alignment = fyne.TextAlignCenter

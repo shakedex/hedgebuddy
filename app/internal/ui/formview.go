@@ -8,6 +8,7 @@ import (
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+	"github.com/ncruces/zenity"
 )
 
 // NewFormView creates the add/edit variable form
@@ -44,14 +45,16 @@ func NewFormView(ctrl *AppController, editingName string, prefillName, prefillVa
 	secretEntry.SetPlaceHolder("Secret value")
 	secretEntry.SetText(prefillValue)
 
-	// Browse button for path type
+	// Browse button for path type — uses native OS file dialog
 	browseBtn := widget.NewButtonWithIcon("Browse...", theme.FolderOpenIcon(), func() {
-		dialog.ShowFolderOpen(func(uri fyne.ListableURI, err error) {
-			if err != nil || uri == nil {
-				return
-			}
-			valueEntry.SetText(uri.Path())
-		}, ctrl.Window)
+		path, err := zenity.SelectFile(
+			zenity.Title("Select file or folder"),
+			zenity.Directory(),
+		)
+		if err != nil {
+			return
+		}
+		valueEntry.SetText(path)
 	})
 
 	// Hint label
