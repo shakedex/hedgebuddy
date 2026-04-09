@@ -17,7 +17,7 @@
 HedgeBuddy makes Python automation scripts easy to configure for **DIT/Data Wrangling workflows** using Hedge's software ecosystem (**OffShoot**, **FoolCat**, **EditReady**):
 
 1. **Python Library** (`hedgebuddy`) - Simple API for reading variables in scripts
-2. **Desktop GUI App** - Beautiful interface for managing variables (Windows & macOS)
+2. **Desktop GUI App** - Native app for managing variables (Windows & macOS)
 
 ---
 
@@ -47,17 +47,13 @@ if hedgebuddy.exists("PREMIUM_FEATURES"):
     enable_premium()
 ```
 
-That's it! No system environment pollution, no complex setup.
-
 ---
 
 ## Key Features
 
-✅ **Zero System Pollution** - Variables stored locally, never touch system environment  
-✅ **Cross-Platform** - Windows and macOS  
-✅ **Simple API** - Just `hedgebuddy.var("NAME")`  
-✅ **Beautiful GUI** - Modern desktop app for variable management  
-✅ **Validation** - Built-in path and URL validation  
+**Localized Enviroment** - Variables stored locally, never touch system environment  
+**Cross-Platform** - Windows and macOS  
+**Simple Usage in Scripts** - Just `hedgebuddy.var("NAME")`  
 
 ---
 
@@ -83,7 +79,7 @@ That's it! No system environment pollution, no complex setup.
 
 ## Documentation
 
-📖 **[Full Documentation](https://shakedex.github.io/hedgebuddy/)**
+**[Full Documentation](https://shakedex.github.io/hedgebuddy/)**
 
 - [Python Library](python-lib/README.md)
 - [Desktop App](app/README.md)

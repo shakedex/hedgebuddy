@@ -4,21 +4,7 @@ Get up and running in 5 minutes.
 
 ---
 
-## 1. Install Python Library
-
-```bash
-pip install --user hedgebuddy
-```
-
-Verify:
-
-```bash
-python -c "import hedgebuddy; print('Ready!')"
-```
-
----
-
-## 2. Install Desktop App
+## 1. Install Desktop App
 
 Download from [GitHub Releases](https://github.com/shakedex/hedgebuddy/releases).
 
@@ -27,6 +13,20 @@ Download from [GitHub Releases](https://github.com/shakedex/hedgebuddy/releases)
   ```bash
   xattr -cr /Applications/HedgeBuddy.app
   ```
+
+---
+
+## 2. Install Python Library
+
+**The app handles this for you.** On first launch, HedgeBuddy checks whether the `hedgebuddy` Python library is installed and offers to install it automatically.
+
+If you prefer to install it manually:
+
+```bash
+pip install --user hedgebuddy
+```
+
+> If Python itself is not found, the app will prompt you to download it from [python.org](https://www.python.org/downloads/).
 
 ---
 

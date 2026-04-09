@@ -21,26 +21,18 @@ HedgeBuddy makes Python automation scripts easy to configure for **filmmaking DI
 - **FoolCat** - Auto-move camera reports to production folders
 - **EditReady** - Configure transcode destinations and settings
 
-**Two Simple Components:**
-
-1. 🐍 **Python Library** - Dead-simple API: `hedgebuddy.var("SLACK_WEBHOOK")`
-2. 🖥️ **Desktop App** - Beautiful GUI for managing variables (Windows & macOS)
+1. **Python Library** - Simple API: `hedgebuddy.var("SLACK_WEBHOOK")`
+2. **Desktop App** - GUI for managing variables (Windows & macOS)
 
 <!-- Screenshot Placeholder -->
-
-!> **Screenshot Coming Soon**: Desktop app interface showing variable management
 
 ---
 
 ## Why HedgeBuddy?
 
-✅ **Zero System Pollution** - Variables stored locally, never touch system environment  
-✅ **Cross-Platform** - Works seamlessly on Windows and macOS  
-✅ **Simple API** - Just `hedgebuddy.var("NAME")` in your scripts  
-✅ **Beautiful GUI** - Modern desktop app for variable management  
-✅ **Type Support** - String, Path, URL, and Secure variable types  
-✅ **Validation** - Built-in path and URL validation  
-✅ **Zero Friction** - Scripts work immediately after variable configuration
+**Localized Enviroment** - Variables stored locally, never touch system environment  
+**Cross-Platform** - Windows and macOS  
+**Simple Usage in Scripts** - Just `hedgebuddy.var("NAME")`
 
 ---
 
@@ -48,16 +40,11 @@ HedgeBuddy makes Python automation scripts easy to configure for **filmmaking DI
 
 ### For Script Users (Non-Technical)
 
-Just want to run existing scripts? Follow these 4 steps:
+Just want to run existing scripts? Follow these steps:
 
 1. **Install Python 3.9+** ([Download](https://www.python.org/downloads/))
-2. **Install HedgeBuddy library**:
-
-   ```bash
-   pip install --user hedgebuddy
-   ```
-
-3. **Download & install the desktop app** ([Releases](https://github.com/shakedex/hedgebuddy/releases))
+2. **Download & install the desktop app** ([Releases](https://github.com/shakedex/hedgebuddy/releases))
+3. **On first launch, the app detects whether the `hedgebuddy` Python library is installed** and offers to install it for you automatically.
 4. **Configure your variables** using the GUI, then run your scripts!
 
 ### For Script Developers
@@ -75,8 +62,6 @@ api_url = hedgebuddy.var("API_URL", "https://api.example.com")
 if hedgebuddy.exists("PREMIUM_FEATURES"):
     enable_premium()
 ```
-
-That's it! No system environment pollution, no complex setup.
 
 ---
 
@@ -111,11 +96,11 @@ That's it! No system environment pollution, no complex setup.
 
 ## Next Steps
 
-- 📚 [Installation Guide](installation.md) - Detailed setup instructions
-- 🐍 [Python Library Guide](python-library.md) - Complete API reference
-- 🖥️ [Desktop App Guide](desktop-app.md) - How to use the GUI
-- 💡 [Examples](examples.md) - Real-world usage patterns
-- ❓ [FAQ & Troubleshooting](faq.md) - Common questions
+- [Installation Guide](installation.md) - Detailed setup instructions
+- [Python Library Guide](python-library.md) - Complete API reference
+- [Desktop App Guide](desktop-app.md) - How to use the GUI
+- [Examples](examples.md) - Real-world usage patterns
+- [FAQ & Troubleshooting](faq.md) - Common questions
 
 ---
 

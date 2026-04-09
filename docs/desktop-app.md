@@ -85,6 +85,32 @@ Click import icon → Select JSON file → Variables are added.
 
 ---
 
+## Python Library Setup
+
+HedgeBuddy automatically checks for the `hedgebuddy` Python library on startup so your scripts can read variables without any manual setup.
+
+### What happens on first launch
+
+| Situation | What the app does |
+|-----------|------------------|
+| Python not found | Shows a dialog with a link to [python.org](https://www.python.org/downloads/) |
+| Python found, library missing | Prompts to install `hedgebuddy` automatically |
+| Everything OK | No dialog — fully ready |
+
+### Automatic install
+
+When the library is missing, click **Install Now** in the prompt. The app runs:
+
+```
+pip install --user hedgebuddy
+```
+
+### Skip or silence
+
+Click **Don't Ask Again** in either dialog to permanently suppress the check. This preference is saved per machine. You can re-trigger a manual install at any time by running the pip command above in a terminal.
+
+---
+
 ## Troubleshooting
 
 ### App won't start
