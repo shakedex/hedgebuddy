@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -290,6 +291,12 @@ func (s *Storage) Save() error {
 				}
 			}
 		}
+	}
+
+	// Re-indent the JSON to ensure consistent formatting regardless of how sjson inserted keys
+	var prettyBuf bytes.Buffer
+	if err := json.Indent(&prettyBuf, jsonData, "", "  "); err == nil {
+		jsonData = prettyBuf.Bytes()
 	}
 
 	s.rawJSON = jsonData
