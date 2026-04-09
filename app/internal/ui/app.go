@@ -85,9 +85,11 @@ func (c *AppController) ShowStatus(message string) {
 
 	go func() {
 		time.Sleep(time.Duration(StatusDuration) * time.Second)
-		c.StatusText.Text = ""
-		c.StatusText.Color = ColorTextMuted
-		c.StatusText.Refresh()
+		fyne.DoAndWait(func() {
+			c.StatusText.Text = ""
+			c.StatusText.Color = ColorTextMuted
+			c.StatusText.Refresh()
+		})
 	}()
 }
 
