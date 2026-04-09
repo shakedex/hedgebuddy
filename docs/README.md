@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="hedgebuddy_icon2.png" alt="HedgeBuddy" width="120" />
+  <img src="github.png" alt="HedgeBuddy" width="640" />
 </p>
 
 # HedgeBuddy

@@ -8,5 +8,5 @@ Designed for **Hedge OffShoot**, **FoolCat**, and **EditReady** automation workf
 
 ---
 
-Copyright © 2025 |
+Copyright © 2026 |
 Licensed under [MIT License](https://github.com/shakedex/hedgebuddy/blob/master/LICENSE)

@@ -2,7 +2,7 @@
 
 - **Getting Started**
 
-  - [Home](/)
+  - [](/)
   - [Installation](installation.md)
   - [Quick Start](quick-start.md)
 
