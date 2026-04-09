@@ -11,6 +11,7 @@ import (
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
+	"app/internal/profile"
 	"app/internal/storage"
 )
 
@@ -93,7 +94,26 @@ func NewListView(ctrl *AppController) fyne.CanvasObject {
 
 // buildListHeader creates the structured multi-row header for the list view.
 func buildListHeader(ctrl *AppController, searchEntry *widget.Entry, countLabel *canvas.Text) fyne.CanvasObject {
-	// Row 1: Action buttons | status text + utility buttons
+	// Profile selector
+	profileNames := profile.ListProfiles(ctrl.ProfileIndex)
+	profileSelect := widget.NewSelect(profileNames, func(selected string) {
+		if selected == ctrl.ProfileIndex.Active {
+			return
+		}
+		if err := ctrl.SwitchProfile(selected); err != nil {
+			ctrl.ShowStatus("Failed to switch profile")
+			return
+		}
+		ctrl.ShowStatus(fmt.Sprintf("Switched to '%s'", selected))
+		ctrl.ShowListView()
+	})
+	profileSelect.Selected = ctrl.ProfileIndex.Active
+
+	manageBtn := widget.NewButtonWithIcon("", theme.SettingsIcon(), func() {
+		ctrl.ShowProfileView()
+	})
+
+	// Row 1: Action buttons | profile selector | status text + utility buttons
 	addBtn := widget.NewButtonWithIcon("New", theme.ContentAddIcon(), func() {
 		ctrl.ShowFormView("", "", "", TypeString, "")
 	})
@@ -121,7 +141,7 @@ func buildListHeader(ctrl *AppController, searchEntry *widget.Entry, countLabel 
 		ctrl.ShowAboutView()
 	})
 
-	rightSide := container.NewHBox(layout.NewSpacer(), ctrl.StatusText, refreshBtn, folderBtn, aboutBtn)
+	rightSide := container.NewHBox(layout.NewSpacer(), ctrl.StatusText, profileSelect, manageBtn, refreshBtn, folderBtn, aboutBtn)
 	leftSide := container.NewHBox(addBtn, importBtn, exportBtn)
 
 	actionRow := container.NewBorder(nil, nil, leftSide, rightSide)

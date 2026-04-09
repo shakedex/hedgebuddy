@@ -14,15 +14,17 @@ import (
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
+	"app/internal/profile"
 	"app/internal/storage"
 	"app/internal/validator"
 )
 
 // AppController is the central controller managing navigation and state.
 type AppController struct {
-	App     fyne.App
-	Window  fyne.Window
-	Storage *storage.Storage
+	App          fyne.App
+	Window       fyne.Window
+	Storage      *storage.Storage
+	ProfileIndex *profile.ProfileIndex
 
 	// StatusText is the mutable text element displayed in the header's right area.
 	// When idle it shows "Variable Manager"; on action it briefly shows a status message.
@@ -41,7 +43,24 @@ func NewAppController(fyneApp fyne.App, window fyne.Window) *AppController {
 		StatusText: statusText,
 	}
 
-	_, err := storage.InitStorage()
+	// Run profile migration before loading storage
+	if err := profile.Migrate(); err != nil {
+		fmt.Println("Warning: profile migration failed:", err.Error())
+	}
+
+	// Load profile index
+	idx, err := profile.LoadIndex()
+	if err != nil || idx == nil {
+		// If something went wrong, create a minimal index
+		idx = &profile.ProfileIndex{
+			Active:   "default",
+			Profiles: map[string]profile.ProfileMeta{"default": {Description: "Default profile"}},
+		}
+	}
+	ctrl.ProfileIndex = idx
+
+	// Initialize and load storage for the active profile
+	_, err = storage.InitStorage()
 	if err != nil {
 		fmt.Println("Warning: failed to initialize storage:", err.Error())
 	}
@@ -51,6 +70,9 @@ func NewAppController(fyneApp fyne.App, window fyne.Window) *AppController {
 		store = &storage.Storage{Variables: make(map[string]storage.Variable)}
 	}
 	ctrl.Storage = store
+
+	// Set window title with active profile
+	ctrl.updateWindowTitle()
 
 	return ctrl
 }
@@ -104,6 +126,39 @@ func (c *AppController) ShowExportView() {
 
 func (c *AppController) ShowAboutView() {
 	c.Window.SetContent(c.wrapView(NewAboutView(c)))
+}
+
+func (c *AppController) ShowProfileView() {
+	c.Window.SetContent(c.wrapView(NewProfileView(c)))
+}
+
+// SwitchProfile saves current storage, switches active profile, and reloads.
+func (c *AppController) SwitchProfile(name string) error {
+	// Save current storage first
+	if err := c.Storage.Save(); err != nil {
+		return err
+	}
+	// Switch active profile in index
+	if err := profile.SetActiveProfile(c.ProfileIndex, name); err != nil {
+		return err
+	}
+	// Reload storage from new profile
+	store, err := storage.Load()
+	if err != nil {
+		return err
+	}
+	c.Storage = store
+	c.updateWindowTitle()
+	return nil
+}
+
+// updateWindowTitle sets the window title with the active profile name.
+func (c *AppController) updateWindowTitle() {
+	if c.ProfileIndex.Active == "default" {
+		c.Window.SetTitle(WindowTitle)
+	} else {
+		c.Window.SetTitle(fmt.Sprintf("%s — %s", WindowTitle, c.ProfileIndex.Active))
+	}
 }
 
 // --- Variable Operations ---
@@ -185,7 +240,7 @@ func (c *AppController) DuplicateVariable(name string) {
 	c.ShowFormView("", copyName, v.Value, v.Type, v.Description)
 }
 
-// OpenStorageFolder opens the vars.json folder in the system file explorer.
+// OpenStorageFolder opens the active profile's storage folder in the system file explorer.
 func (c *AppController) OpenStorageFolder() {
 	path, err := storage.GetStoragePath()
 	if err != nil {

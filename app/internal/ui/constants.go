@@ -3,7 +3,7 @@ package ui
 // App metadata
 const (
 	AppName    = "HedgeBuddy"
-	AppVersion = "0.8.0"
+	AppVersion = "0.8.5"
 
 	WindowTitle  = "HedgeBuddy"
 	WindowWidth  = 1024

@@ -16,29 +16,53 @@ from .exceptions import (
 _NO_DEFAULT = object()
 
 
+def _get_base_dir() -> Path:
+    """Get the platform-specific HedgeBuddy data directory.
+    
+    Returns:
+        Path: Absolute path to the HedgeBuddy data directory
+    """
+    if sys.platform == "win32":
+        app_data = os.environ.get("APPDATA")
+        if not app_data:
+            raise StorageNotFoundError("APPDATA environment variable not found")
+        return Path(app_data) / "hedgebuddy"
+    elif sys.platform == "darwin":
+        return Path.home() / "Library" / "Application Support" / "hedgebuddy"
+    else:
+        return Path.home() / ".local" / "share" / "hedgebuddy"
+
+
 def get_storage_path() -> Path:
-    """Get the platform-specific path to the vars.json file.
+    """Get the platform-specific path to the active profile's vars.json file.
+    
+    Reads profiles.json to determine the active profile, then resolves
+    to profiles/{active}/vars.json.
     
     Returns:
         Path: Absolute path to vars.json
         
     Platform-specific locations:
-        - Windows: %APPDATA%\\hedgebuddy\\vars.json
-        - macOS: ~/Library/Application Support/hedgebuddy/vars.json
-        - Linux: ~/.local/share/hedgebuddy/vars.json (future support)
+        - Windows: %APPDATA%\\hedgebuddy\\profiles\\{active}\\vars.json
+        - macOS: ~/Library/Application Support/hedgebuddy/profiles/{active}/vars.json
+        - Linux: ~/.local/share/hedgebuddy/profiles/{active}/vars.json (future support)
     """
-    if sys.platform == "win32":
-        # Windows: %APPDATA%\hedgebuddy\vars.json
-        app_data = os.environ.get("APPDATA")
-        if not app_data:
-            raise StorageNotFoundError("APPDATA environment variable not found")
-        return Path(app_data) / "hedgebuddy" / "vars.json"
-    elif sys.platform == "darwin":
-        # macOS: ~/Library/Application Support/hedgebuddy/vars.json
-        return Path.home() / "Library" / "Application Support" / "hedgebuddy" / "vars.json"
-    else:
-        # Linux/Unix: ~/.local/share/hedgebuddy/vars.json (not officially supported yet)
-        return Path.home() / ".local" / "share" / "hedgebuddy" / "vars.json"
+    base = _get_base_dir()
+    profiles_index = base / "profiles.json"
+    
+    if profiles_index.exists():
+        try:
+            with open(profiles_index, "r", encoding="utf-8") as f:
+                index = json.load(f)
+            active = index.get("active", "default")
+            return base / "profiles" / active / "vars.json"
+        except (json.JSONDecodeError, KeyError, TypeError):
+            # Corrupted profiles.json — fall back to default profile
+            return base / "profiles" / "default" / "vars.json"
+    
+    # No profiles.json yet — the GUI app hasn't run migration.
+    # Try the legacy flat path for initial bootstrapping.
+    return base / "vars.json"
 
 
 def _load_variables() -> dict[str, Any]:

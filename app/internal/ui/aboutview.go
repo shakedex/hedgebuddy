@@ -100,10 +100,10 @@ func NewAboutView(ctrl *AppController) fyne.CanvasObject {
 
 	scrollable := container.NewVScroll(container.NewPadded(content))
 
-	cancelBtn := widget.NewButtonWithIcon("Cancel", theme.NavigateBackIcon(), func() {
+	backBtn := widget.NewButtonWithIcon("Back", theme.NavigateBackIcon(), func() {
 		ctrl.ShowListView()
 	})
-	footer := FooterBar([]fyne.CanvasObject{cancelBtn}, nil)
+	footer := FooterBar([]fyne.CanvasObject{backBtn}, nil)
 
 	return container.NewBorder(nil, footer, nil, nil, scrollable)
 }

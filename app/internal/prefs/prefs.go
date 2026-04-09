@@ -13,13 +13,13 @@ type Prefs struct {
 	PythonCheckDismissed bool `json:"python_check_dismissed"`
 }
 
-// path returns the absolute path to prefs.json (same directory as vars.json).
+// path returns the absolute path to prefs.json (same base directory as profiles).
 func path() (string, error) {
-	sp, err := storage.GetStoragePath()
+	base, err := storage.GetBaseDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(filepath.Dir(sp), "prefs.json"), nil
+	return filepath.Join(base, "prefs.json"), nil
 }
 
 // Load reads prefs.json. If the file does not exist a zero-value Prefs is

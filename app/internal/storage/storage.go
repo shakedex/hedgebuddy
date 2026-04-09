@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"runtime"
 
+	"app/internal/profile"
+
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 )
@@ -43,8 +45,52 @@ func (e *DuplicateKeyError) Error() string {
 	return fmt.Sprintf("variable '%s' already exists", e.Key)
 }
 
-// GetStoragePath returns the platform-specific path to vars.json
+// GetStoragePath returns the vars.json path for the active profile.
+// It reads profiles.json to determine the active profile, then resolves
+// to profiles/{active}/vars.json.
 func GetStoragePath() (string, error) {
+	idx, err := profile.LoadIndex()
+	if err != nil {
+		return "", &StorageError{
+			Operation: "get storage path",
+			Err:       err,
+		}
+	}
+	// Before migration, profiles.json won't exist yet — fall through to base dir
+	if idx == nil {
+		return getLegacyStoragePath()
+	}
+	p, err := profile.ProfileVarsPath(idx.Active)
+	if err != nil {
+		return "", &StorageError{
+			Operation: "get storage path",
+			Err:       err,
+		}
+	}
+	return p, nil
+}
+
+// GetStoragePathForProfile returns the vars.json path for a specific profile.
+func GetStoragePathForProfile(profileName string) (string, error) {
+	p, err := profile.ProfileVarsPath(profileName)
+	if err != nil {
+		return "", &StorageError{
+			Operation: "get storage path",
+			Err:       err,
+		}
+	}
+	return p, nil
+}
+
+// GetBaseDir returns the platform-specific HedgeBuddy data directory.
+// This is used by other packages that need the base directory (e.g., prefs).
+func GetBaseDir() (string, error) {
+	return profile.GetBaseDir()
+}
+
+// getLegacyStoragePath returns the old-style flat vars.json path (pre-profiles).
+// Only used during migration before profiles.json exists.
+func getLegacyStoragePath() (string, error) {
 	var basePath string
 
 	switch runtime.GOOS {
