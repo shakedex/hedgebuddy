@@ -60,6 +60,16 @@ Click folder icon → Save JSON file as backup.
 
 Click import icon → Select JSON file → Variables are added.
 
+## Profiles
+
+- Use the **profile dropdown** in the main toolbar to switch active profile instantly.
+- Click the **gear button** to open profile management.
+- In profile management, you can create, rename, duplicate, delete, and import profiles.
+
+### Import as Profile
+
+Use **Profile Manager** (gear button in the top toolbar) → **Import as Profile** to create a brand-new profile from a JSON template.
+
 **Format:**
 
 ```json
@@ -80,8 +90,8 @@ Click import icon → Select JSON file → Variables are added.
 
 **Location:**
 
-- Windows: `%APPDATA%\hedgebuddy\vars.json`
-- macOS: `~/Library/Application Support/hedgebuddy/vars.json`
+- Windows: `%APPDATA%\HedgeBuddy\profiles.json` and `%APPDATA%\HedgeBuddy\profiles\<active>\vars.json`
+- macOS: `~/Library/Application Support/HedgeBuddy/profiles.json` and `~/Library/Application Support/HedgeBuddy/profiles/<active>/vars.json`
 
 ---
 
@@ -124,10 +134,12 @@ Check file exists:
 
 ```bash
 # Windows
-cat $env:APPDATA\hedgebuddy\vars.json
+cat $env:APPDATA\HedgeBuddy\profiles.json
+cat $env:APPDATA\HedgeBuddy\profiles\default\vars.json
 
 # macOS
-cat ~/Library/Application\ Support/hedgebuddy/vars.json
+cat ~/Library/Application\ Support/HedgeBuddy/profiles.json
+cat ~/Library/Application\ Support/HedgeBuddy/profiles/default/vars.json
 ```
 
 ---

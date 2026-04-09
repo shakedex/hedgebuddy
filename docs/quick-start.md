@@ -40,6 +40,8 @@ pip install --user hedgebuddy
    - **Type:** String (or Path/URL)
 4. Click **Save**
 
+Optional: use the **profile dropdown** in the top toolbar to switch between profiles (for example, different clients or environments), and the **gear button** to manage profiles.
+
 ---
 
 ## 4. Use in Scripts
@@ -72,8 +74,8 @@ if hedgebuddy.exists("S3_BUCKET"):
 
 ## Storage Location
 
-- **Windows:** `%APPDATA%\hedgebuddy\vars.json`
-- **macOS:** `~/Library/Application Support/hedgebuddy/vars.json`
+- **Windows:** `%APPDATA%\HedgeBuddy\profiles\<active>\vars.json`
+- **macOS:** `~/Library/Application Support/HedgeBuddy/profiles/<active>/vars.json`
 
 ---
 

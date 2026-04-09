@@ -6,6 +6,20 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.8.5] - 2026-04-09
+
+### Profiles (Desktop App + Python Library)
+
+- Added **profile-based storage** with active profile switching in the desktop app toolbar
+- Added **Profile Manager** (gear button) with create, rename, duplicate, delete, and import-as-profile actions
+- Added migration from legacy single `vars.json` layout to profile layout:
+  - `%APPDATA%\HedgeBuddy\profiles.json` + `%APPDATA%\HedgeBuddy\profiles\<name>\vars.json` (Windows)
+  - `~/Library/Application Support/HedgeBuddy/profiles.json` + `~/Library/Application Support/HedgeBuddy/profiles/<name>/vars.json` (macOS)
+- Updated Python library storage discovery to load from the **active profile** via `profiles.json` (no public API changes)
+- Updated documentation across root/docs/app/python-lib pages to reflect profile workflows and new storage paths
+
+---
+
 ## [0.8.0] - 2026-04-09
 
 ### Desktop App — UI/UX Overhaul

@@ -125,8 +125,10 @@ except hedgebuddy.StorageCorruptedError as e:
 
 **Location:**
 
-- Windows: `%APPDATA%\hedgebuddy\vars.json`
-- macOS: `~/Library/Application Support/hedgebuddy/vars.json`
+- Windows: `%APPDATA%\HedgeBuddy\profiles\<active>\vars.json`
+- macOS: `~/Library/Application Support/HedgeBuddy/profiles/<active>/vars.json`
+
+The library automatically resolves the **active profile** from `profiles.json`.
 
 **Format:**
 

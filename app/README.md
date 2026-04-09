@@ -59,18 +59,13 @@ go build -o hedgebuddy .
 
 ## Features
 
-- **CRUD**: Add, edit, delete environment variables
-- **Variable Types**: String, Path, URL, Secret
-- **Secret Masking**: Secret values shown as `••••••••` with click-to-reveal
+- **Profiles**: Switch active profile from toolbar dropdown and manage profiles via gear button
 - **Search & Filter**: Real-time filtering by name, value, description, or type
 - **Copy to Clipboard**: One-click copy of any variable value
 - **Duplicate**: Clone a variable with `_COPY` suffix for quick creation
 - **Import**: Load variables from JSON template files (file dialog + drag-and-drop)
 - **Export**: Save variables as JSON template or `.env` file format
-- **Open Folder**: Quick access to `vars.json` in system file explorer
-- **Keyboard Shortcuts**: Ctrl+N (new), Ctrl+F (search), Delete (remove)
-- **Custom Dark Theme**: Consistent with HedgeBuddy brand colors
-- **Backward Compatible**: Reads existing `vars.json` with legacy `"secure"` type (migrates to `"secret"`)
+- **Open Folder**: Quick access to active profile storage in system file explorer
 
 ## Architecture
 
@@ -97,9 +92,14 @@ Each UI view is a standalone module returning a `fyne.CanvasObject`. Only `app.g
 
 ## Storage
 
-Variables are stored in a platform-specific JSON file:
+Variables are stored per profile in a platform-specific directory:
 
-- **Windows**: `%APPDATA%\HedgeBuddy\vars.json`
-- **macOS**: `~/Library/Application Support/HedgeBuddy/vars.json`
+- **Windows**: `%APPDATA%\HedgeBuddy\profiles\<active>\vars.json`
+- **macOS**: `~/Library/Application Support/HedgeBuddy/profiles/<active>/vars.json`
+
+Active profile metadata is stored in:
+
+- **Windows**: `%APPDATA%\HedgeBuddy\profiles.json`
+- **macOS**: `~/Library/Application Support/HedgeBuddy/profiles.json`
 
 The Python library (`hedgebuddy`) reads from the same file.

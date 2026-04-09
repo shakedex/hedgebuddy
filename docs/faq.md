@@ -21,7 +21,7 @@ HedgeBuddy: ✅ Local storage, ✅ Beautiful GUI, ✅ Easy to manage
 
 ### Is it secure?
 
-Current version stores all variables as **plaintext** in `vars.json`. Future version will use OS keychain for `Secure` type.
+Current version stores all variables as **plaintext** in profile `vars.json` files. Future version will use OS keychain for `Secure` type.
 
 ### Linux support?
 
@@ -110,14 +110,18 @@ Edit → Change name → Save. Update your scripts to use new name.
 
 ### How to backup variables?
 
-Export from app, or copy `vars.json`:
+Export from app, or copy a profile file:
 
-- Windows: `%APPDATA%\hedgebuddy\vars.json`
-- macOS: `~/Library/Application Support/hedgebuddy/vars.json`
+- Windows: `%APPDATA%\HedgeBuddy\profiles\<profile-name>\vars.json`
+- macOS: `~/Library/Application Support/HedgeBuddy/profiles/<profile-name>/vars.json`
 
 ### Different variables per project?
 
-Not yet. Use prefixes: `PROJECT1_API_KEY`, `PROJECT2_API_KEY`
+Yes — use **Profiles** in the desktop app.
+
+- Switch profiles from the top toolbar dropdown
+- Manage/create/duplicate/import profiles from the gear button
+- Keep one profile per client/project/environment
 
 ---
 

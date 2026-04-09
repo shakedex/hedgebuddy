@@ -64,16 +64,16 @@ if hedgebuddy.exists("PREMIUM_FEATURES"):
 │   Desktop App   │ ← User manages variables via GUI
 └────────┬────────┘
          ↓ Writes to
-┌─────────────────┐
-│   vars.json     │ ← Local storage (AppData / Library)
-└────────┬────────┘
+┌───────────────────────────────┐
+│ profiles.json + profiles/*    │ ← Local storage (AppData / Library)
+└───────────────┬───────────────┘
          ↓ Reads from
 ┌─────────────────┐
 │ Python Library  │ ← Scripts call hedgebuddy.var()
 └─────────────────┘
 ```
 
-**Storage:** `%APPDATA%\hedgebuddy\vars.json` (Windows) · `~/Library/Application Support/hedgebuddy/vars.json` (macOS)
+**Storage:** `%APPDATA%\HedgeBuddy\profiles\<active>\vars.json` (Windows) · `~/Library/Application Support/HedgeBuddy/profiles/<active>/vars.json` (macOS)
 
 ---
 

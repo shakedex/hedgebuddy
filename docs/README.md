@@ -74,11 +74,10 @@ if hedgebuddy.exists("PREMIUM_FEATURES"):
 └────────┬────────┘
          │
          ↓ Writes to
-┌─────────────────┐
-│   vars.json     │ ← Local storage (no system pollution)
-│  (AppData/      │
-│   Library)      │
-└────────┬────────┘
+┌───────────────────────────────┐
+│ profiles.json + profiles/*    │ ← Local storage (no system pollution)
+│  (AppData/Library)            │
+└───────────────┬───────────────┘
          │
          ↓ Reads from
 ┌─────────────────┐
@@ -89,8 +88,8 @@ if hedgebuddy.exists("PREMIUM_FEATURES"):
 
 **Storage Locations:**
 
-- **Windows**: `%APPDATA%\hedgebuddy\vars.json`
-- **macOS**: `~/Library/Application Support/hedgebuddy/vars.json`
+- **Windows**: `%APPDATA%\HedgeBuddy\profiles\<active>\vars.json`
+- **macOS**: `~/Library/Application Support/HedgeBuddy/profiles/<active>/vars.json`
 
 ---
 

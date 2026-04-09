@@ -51,14 +51,16 @@ hedgebuddy.log_warning("Warning")
 
 ```python
 hedgebuddy.VariableNotFoundError   # Variable missing (no default)
-hedgebuddy.StorageNotFoundError    # vars.json not found
+hedgebuddy.StorageNotFoundError    # active profile vars.json not found
 hedgebuddy.StorageCorruptedError   # Invalid JSON
 ```
 
 ## Storage
 
-- **Windows:** `%APPDATA%\hedgebuddy\vars.json`
-- **macOS:** `~/Library/Application Support/hedgebuddy/vars.json`
+- **Windows:** `%APPDATA%\HedgeBuddy\profiles\<active>\vars.json`
+- **macOS:** `~/Library/Application Support/HedgeBuddy/profiles/<active>/vars.json`
+
+The library resolves the active profile from `profiles.json` automatically.
 
 ## Desktop App
 
