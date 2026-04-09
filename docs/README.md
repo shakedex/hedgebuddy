@@ -85,7 +85,7 @@ That's it! No system environment pollution, no complex setup.
 ```
 ┌─────────────────┐
 │   Desktop App   │ ← User manages variables via GUI
-│   (Go + Wails)  │
+│   (Go + Fyne)   │
 └────────┬────────┘
          │
          ↓ Writes to

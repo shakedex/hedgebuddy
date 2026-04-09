@@ -17,8 +17,8 @@ pytest
 ### Desktop App
 
 ```bash
-cd hedgebuddy-wails
-wails dev
+cd app
+go run .
 ```
 
 ---
@@ -52,7 +52,7 @@ wails dev
 
 - **Python:** PEP 8, type hints, docstrings
 - **Go:** Standard conventions (`gofmt`)
-- **TypeScript/Svelte:** Follow existing patterns
+- **Go:** Standard conventions (`gofmt`), idiomatic Fyne patterns
 
 ---
 

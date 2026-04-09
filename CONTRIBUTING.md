@@ -12,11 +12,11 @@ pip install -e .
 pytest  # run tests
 ```
 
-### Desktop App (Wails)
+### Desktop App (Fyne)
 
 ```bash
-cd hedgebuddy-wails
-wails dev  # hot-reload dev mode
+cd app
+go run .  # run the app
 ```
 
 ## How to Contribute

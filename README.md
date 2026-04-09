@@ -86,7 +86,7 @@ That's it! No system environment pollution, no complex setup.
 📖 **[Full Documentation](https://shakedex.github.io/hedgebuddy/)**
 
 - [Python Library](python-lib/README.md)
-- [Desktop App](hedgebuddy-wails/README.md)
+- [Desktop App](app/README.md)
 - [Examples](python-lib/examples/)
 
 ---
@@ -98,7 +98,7 @@ That's it! No system environment pollution, no complex setup.
 cd python-lib && pip install -e . && pytest
 
 # Desktop app
-cd hedgebuddy-wails && wails dev
+cd app && go run .
 ```
 
 ---

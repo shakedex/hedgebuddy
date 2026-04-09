@@ -6,6 +6,30 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.8.0] - 2026-04-09
+
+### Desktop App — UI/UX Overhaul
+
+- **Native OS file dialogs** — replaced Fyne's built-in file picker with [`zenity`](https://github.com/ncruces/zenity), giving users the real Windows/macOS file browser with favorites, network drives, and keyboard navigation everywhere (Browse path, Import, Export JSON, Export .env)
+- **Consistent navigation** — all sub-views (New Variable, Edit Variable, Import, Export, About) now follow the same layout: page title in header, **Cancel** (bottom-left) + primary action (bottom-right); no duplicate Back buttons
+- **Removed brand row from list header** — logo and app title dropped from the top of the variable list to reclaim vertical space; window title bar identifies the app
+- **Compact single-row toolbar** — New / Import / Export action buttons on the left; Reload / Open Folder / About icon buttons on the right; status text inline
+- **Search clear button** — ✕ button beside the search field clears the query instantly
+- **Icon-action widget** (`iconAction`) — custom hover-aware icon button replacing `widget.Button` for card actions:
+  - Hover highlight for all actions (semi-transparent white bg)
+  - **Delete shows red background on hover only** — no persistent red tint at rest
+  - Tooltips rendered as canvas overlays on hover ("Copy value", "Reveal value", "Edit", "Duplicate", "Delete", "Reload variables", "Open storage folder", "About HedgeBuddy")
+- **Reveal (eye) button** — moved to left-most action slot; **only shown on secret-type variables**; hidden entirely for string/path/url
+- **Distinct icons for Copy vs Duplicate** — Copy value uses `ContentCopyIcon`; Duplicate uses `ContentPasteIcon`
+- **Muted text contrast improved** — `ColorTextMuted` brightened from `#5C5C68` to `#8888A0` (~WCAG AA) so descriptions and captions are readable
+- **`[string]` type badge visible** — badge color changed from near-invisible muted to `ColorTextSecond` (`#A0A0AC`)
+- **Scrollbar more visible** — width increased (4→6 small, 8→10 normal) and color changed to `ColorTextMuted`
+- **Import empty state** — replaced hedgehog logo with upload icon; content is now true center-center (not top-biased); clearer instructional copy
+- **About page** — removed redundant "About" header; content is clean scrollable centered layout with Cancel footer
+- **`EmptyState` helper refactored** — accepts an optional `fyne.Resource` icon (pass `nil` for hedgehog); uses `container.NewCenter` for true vertical centering
+
+---
+
 ## [0.7.0] - 2026-04-08
 
 ### Desktop App — Migrated from Wails to Fyne
