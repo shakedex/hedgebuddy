@@ -33,6 +33,8 @@ HedgeBuddy makes Python automation scripts easy to configure for **DIT/Data Wran
 pip install --user hedgebuddy
 ```
 
+Reminder: you dont have to manually install the pip Library, this action can be doen automatically using the Dekstop App.
+
 Download the desktop app from [Releases](https://github.com/shakedex/hedgebuddy/releases).
 
 ### Use in Scripts

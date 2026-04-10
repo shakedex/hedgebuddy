@@ -166,8 +166,6 @@ jobs:
           body: |
             ## HedgeBuddy v${{ steps.get_version.outputs.version }}
 
-            Cross-platform environment variable manager for Hedge.co Python scripts.
-
             ### Downloads
             - **Windows (x64)**: `HedgeBuddy.exe`
             - **macOS (Apple Silicon)**: `HedgeBuddy-macOS-arm64.dmg`
