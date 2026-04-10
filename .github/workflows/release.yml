@@ -29,7 +29,7 @@ jobs:
     if: github.event_name == 'workflow_dispatch' && github.event.inputs.create_tag == 'true'
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -50,14 +50,14 @@ jobs:
         working-directory: ./app
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Verify version sync
         working-directory: ${{ github.workspace }}
         run: python scripts/sync_version.py --check
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: "1.25"
 
@@ -68,7 +68,7 @@ jobs:
         run: fyne package -os windows -icon icon.png -name HedgeBuddy
 
       - name: Upload Windows artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: HedgeBuddy-Windows
           path: app/HedgeBuddy.exe
@@ -83,14 +83,14 @@ jobs:
         working-directory: ./app
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Verify version sync
         working-directory: ${{ github.workspace }}
         run: python3 scripts/sync_version.py --check
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: "1.25"
 
@@ -121,7 +121,7 @@ jobs:
             "dmg_temp/"
 
       - name: Upload macOS artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: HedgeBuddy-macOS-ARM64
           path: app/HedgeBuddy-macOS-arm64.dmg
@@ -133,16 +133,16 @@ jobs:
     if: always() && needs.build-windows.result == 'success' && needs.build-macos.result == 'success'
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Download Windows artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: HedgeBuddy-Windows
           path: ./artifacts/windows
 
       - name: Download macOS artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: HedgeBuddy-macOS-ARM64
           path: ./artifacts/macos
