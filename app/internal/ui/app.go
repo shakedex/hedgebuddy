@@ -13,6 +13,7 @@ import (
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+	fynetooltip "github.com/dweymouth/fyne-tooltip"
 
 	"app/internal/profile"
 	"app/internal/storage"
@@ -25,6 +26,7 @@ type AppController struct {
 	Window       fyne.Window
 	Storage      *storage.Storage
 	ProfileIndex *profile.ProfileIndex
+	ContentRoot  *fyne.Container
 
 	// StatusText is the mutable text element displayed in the header's right area.
 	// When idle it shows "Variable Manager"; on action it briefly shows a status message.
@@ -38,10 +40,13 @@ func NewAppController(fyneApp fyne.App, window fyne.Window) *AppController {
 	statusText.Alignment = fyne.TextAlignTrailing
 
 	ctrl := &AppController{
-		App:        fyneApp,
-		Window:     window,
-		StatusText: statusText,
+		App:         fyneApp,
+		Window:      window,
+		StatusText:  statusText,
+		ContentRoot: container.NewMax(),
 	}
+
+	window.SetContent(fynetooltip.AddWindowToolTipLayer(ctrl.ContentRoot, window.Canvas()))
 
 	// Run profile migration before loading storage
 	if err := profile.Migrate(); err != nil {
@@ -108,30 +113,35 @@ func (c *AppController) wrapView(content fyne.CanvasObject) fyne.CanvasObject {
 	return container.NewPadded(content)
 }
 
+func (c *AppController) setMainContent(content fyne.CanvasObject) {
+	c.ContentRoot.Objects = []fyne.CanvasObject{c.wrapView(content)}
+	c.ContentRoot.Refresh()
+}
+
 // --- Navigation ---
 
 func (c *AppController) ShowListView() {
-	c.Window.SetContent(c.wrapView(NewListView(c)))
+	c.setMainContent(NewListView(c))
 }
 
 func (c *AppController) ShowFormView(editingName, prefillName, prefillValue, prefillType, prefillDesc string) {
-	c.Window.SetContent(c.wrapView(NewFormView(c, editingName, prefillName, prefillValue, prefillType, prefillDesc)))
+	c.setMainContent(NewFormView(c, editingName, prefillName, prefillValue, prefillType, prefillDesc))
 }
 
 func (c *AppController) ShowImportView() {
-	c.Window.SetContent(c.wrapView(NewImportView(c)))
+	c.setMainContent(NewImportView(c))
 }
 
 func (c *AppController) ShowExportView() {
-	c.Window.SetContent(c.wrapView(NewExportView(c)))
+	c.setMainContent(NewExportView(c))
 }
 
 func (c *AppController) ShowAboutView() {
-	c.Window.SetContent(c.wrapView(NewAboutView(c)))
+	c.setMainContent(NewAboutView(c))
 }
 
 func (c *AppController) ShowProfileView() {
-	c.Window.SetContent(c.wrapView(NewProfileView(c)))
+	c.setMainContent(NewProfileView(c))
 }
 
 // SwitchProfile saves current storage, switches active profile, and reloads.

@@ -5,17 +5,22 @@ Usage:
     python scripts/sync_version.py              # Print current version
     python scripts/sync_version.py --set 0.8.0  # Set version everywhere
     python scripts/sync_version.py --bump minor  # Bump and propagate
+    python scripts/sync_version.py --bump patch --skip-lock  # Bump without refreshing uv.lock
     python scripts/sync_version.py --check       # Verify all files match (CI)
 """
 
 import argparse
 import re
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 
 # Project root is one level up from this script
 ROOT = Path(__file__).resolve().parent.parent
 VERSION_FILE = ROOT / "VERSION"
+PYTHON_LIB_DIR = ROOT / "python-lib"
+UV_LOCK_FILE = PYTHON_LIB_DIR / "uv.lock"
 
 # Each target: (relative path, regex pattern to find, replacement template)
 # The regex must have a capture group around the version digits.
@@ -98,6 +103,25 @@ def propagate(version: str) -> None:
             print(f"  OK    {rel_path} -> {version}")
 
 
+def refresh_uv_lock() -> None:
+    """Regenerate python-lib/uv.lock using uv if both uv and uv.lock are present."""
+    if not UV_LOCK_FILE.exists():
+        print("  SKIP  python-lib/uv.lock (file not found)")
+        return
+
+    uv_cmd = shutil.which("uv")
+    if not uv_cmd:
+        print("  SKIP  python-lib/uv.lock (uv command not found)")
+        return
+
+    try:
+        subprocess.run([uv_cmd, "lock"], cwd=PYTHON_LIB_DIR, check=True)
+        print("  OK    python-lib/uv.lock refreshed via `uv lock`")
+    except subprocess.CalledProcessError as exc:
+        print(f"Error: `uv lock` failed with exit code {exc.returncode}", file=sys.stderr)
+        sys.exit(exc.returncode)
+
+
 def check(version: str) -> bool:
     """Verify all target files contain the expected version. Returns True if all match."""
     ok = True
@@ -129,6 +153,11 @@ def main() -> None:
     group.add_argument("--set", metavar="X.Y.Z", help="Set version to this value")
     group.add_argument("--bump", choices=["major", "minor", "patch"], help="Bump semver component")
     group.add_argument("--check", action="store_true", help="Verify all files match VERSION")
+    parser.add_argument(
+        "--skip-lock",
+        action="store_true",
+        help="Skip running `uv lock` after --set or --bump",
+    )
     args = parser.parse_args()
 
     if args.set:
@@ -136,12 +165,16 @@ def main() -> None:
         write_version(args.set)
         print(f"Version set to {args.set}")
         propagate(args.set)
+        if not args.skip_lock:
+            refresh_uv_lock()
     elif args.bump:
         current = read_version()
         new_version = bump(current, args.bump)
         write_version(new_version)
         print(f"Version bumped: {current} -> {new_version}")
         propagate(new_version)
+        if not args.skip_lock:
+            refresh_uv_lock()
     elif args.check:
         version = read_version()
         print(f"Checking all files match VERSION = {version}")

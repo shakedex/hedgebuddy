@@ -6,6 +6,7 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/widget"
+	ttwidget "github.com/dweymouth/fyne-tooltip/widget"
 )
 
 // --- Page Header ---
@@ -62,12 +63,16 @@ func MutedLabel(text string) *canvas.Text {
 // --- Tooltip Button ---
 
 // newTooltipButton creates an icon button that shows a tooltip on hover.
-func newTooltipButton(label string, icon fyne.Resource, tooltip string, tapped func()) *widget.Button {
-	btn := widget.NewButtonWithIcon(label, icon, tapped)
-	// Fyne does not have native tooltip support on buttons, so we embed
-	// the hint in the button via a toolbar-style approach. The button text
-	// serves as a basic fallback.
-	_ = tooltip // reserved for future Fyne tooltip support
+func newTooltipButton(label string, icon fyne.Resource, tooltip string, tapped func()) *ttwidget.Button {
+	btn := ttwidget.NewButtonWithIcon(label, icon, tapped)
+	btn.SetToolTip(tooltip)
+	return btn
+}
+
+// newIconTooltipButton creates an icon-only button with a tooltip.
+func newIconTooltipButton(icon fyne.Resource, tooltip string, tapped func()) *ttwidget.Button {
+	btn := ttwidget.NewButtonWithIcon("", icon, tapped)
+	btn.SetToolTip(tooltip)
 	return btn
 }
 

@@ -62,7 +62,7 @@ func NewProfileView(ctrl *AppController) fyne.CanvasObject {
 			descLabel.TextStyle = fyne.TextStyle{Italic: true}
 
 			// Action buttons
-			activateBtn := widget.NewButtonWithIcon("", theme.ConfirmIcon(), func() {
+			activateBtn := newIconTooltipButton(theme.ConfirmIcon(), "Activate profile", func() {
 				if err := ctrl.SwitchProfile(pName); err != nil {
 					dialog.ShowError(err, ctrl.Window)
 					return
@@ -74,20 +74,29 @@ func NewProfileView(ctrl *AppController) fyne.CanvasObject {
 				activateBtn.Disable()
 			}
 
-			editBtn := widget.NewButtonWithIcon("", theme.DocumentCreateIcon(), func() {
+			editBtn := newIconTooltipButton(theme.DocumentCreateIcon(), "Edit profile", func() {
 				showEditProfileDialog(ctrl, pName, meta, rebuild)
 			})
 
-			dupeBtn := widget.NewButtonWithIcon("", theme.ContentPasteIcon(), func() {
+			dupeBtn := newIconTooltipButton(theme.ContentPasteIcon(), "Duplicate profile", func() {
 				showDuplicateProfileDialog(ctrl, pName, rebuild)
 			})
 
-			deleteBtn := widget.NewButtonWithIcon("", theme.DeleteIcon(), func() {
+			deleteBtn := newIconTooltipButton(theme.DeleteIcon(), "Delete profile", func() {
 				showDeleteProfileDialog(ctrl, pName, rebuild)
 			})
 			deleteBtn.Importance = widget.DangerImportance
 			if pName == "default" || isActive {
 				deleteBtn.Disable()
+			}
+
+			if isActive {
+				activateBtn.SetToolTip("Active profile")
+			}
+			if pName == "default" {
+				deleteBtn.SetToolTip("Default profile cannot be deleted")
+			} else if isActive {
+				deleteBtn.SetToolTip("Active profile cannot be deleted")
 			}
 
 			topRow := container.NewHBox(nameLabel, badge, layout.NewSpacer(), countLabel, activateBtn, editBtn, dupeBtn, deleteBtn)

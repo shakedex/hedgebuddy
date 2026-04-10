@@ -1,6 +1,6 @@
 [project]
 name = "hedgebuddy"
-version = "0.8.7"
+version = "0.9.0"
 description = "Cross-platform environment variable management for Python scripts without system pollution"
 readme = "README.md"
 authors = [

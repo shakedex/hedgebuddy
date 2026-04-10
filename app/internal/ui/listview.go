@@ -10,6 +10,7 @@ import (
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+	ttwidget "github.com/dweymouth/fyne-tooltip/widget"
 
 	"app/internal/profile"
 	"app/internal/storage"
@@ -110,7 +111,7 @@ func buildListHeader(ctrl *AppController, searchEntry *widget.Entry, countLabel 
 	})
 	profileSelect.Selected = ctrl.ProfileIndex.Active
 
-	manageBtn := widget.NewButtonWithIcon("", theme.SettingsIcon(), func() {
+	manageBtn := newIconTooltipButton(theme.SettingsIcon(), "Manage profiles", func() {
 		ctrl.ShowProfileView()
 	})
 
@@ -148,7 +149,7 @@ func buildListHeader(ctrl *AppController, searchEntry *widget.Entry, countLabel 
 	actionRow := container.NewBorder(nil, nil, leftSide, rightSide)
 
 	// Row 2: Search with clear button
-	clearBtn := widget.NewButtonWithIcon("", theme.CancelIcon(), func() {
+	clearBtn := newIconTooltipButton(theme.CancelIcon(), "Clear search", func() {
 		searchEntry.SetText("")
 	})
 	searchRow := container.NewBorder(nil, nil, nil, clearBtn, searchEntry)
@@ -179,11 +180,11 @@ func createVariableCardTemplate() fyne.CanvasObject {
 	descLabel.TextStyle = fyne.TextStyle{Italic: true}
 
 	// Distinct icons: reveal (secrets only), copy, edit, duplicate, delete
-	revealBtn := widget.NewButtonWithIcon("", theme.VisibilityIcon(), nil)
-	copyBtn := widget.NewButtonWithIcon("", theme.ContentCopyIcon(), nil)
-	editBtn := widget.NewButtonWithIcon("", theme.DocumentCreateIcon(), nil)
-	dupeBtn := widget.NewButtonWithIcon("", theme.ContentPasteIcon(), nil)
-	deleteBtn := widget.NewButtonWithIcon("", theme.DeleteIcon(), nil)
+	revealBtn := newIconTooltipButton(theme.VisibilityIcon(), "Reveal secret value", nil)
+	copyBtn := newIconTooltipButton(theme.ContentCopyIcon(), "Copy value", nil)
+	editBtn := newIconTooltipButton(theme.DocumentCreateIcon(), "Edit variable", nil)
+	dupeBtn := newIconTooltipButton(theme.ContentPasteIcon(), "Duplicate variable", nil)
+	deleteBtn := newIconTooltipButton(theme.DeleteIcon(), "Delete variable", nil)
 	deleteBtn.Importance = widget.DangerImportance
 
 	topRow := container.NewHBox(nameLabel, typeBadge, layout.NewSpacer(), revealBtn, copyBtn, editBtn, dupeBtn, deleteBtn)
@@ -216,11 +217,11 @@ func updateVariableCard(obj fyne.CanvasObject, name string, v storage.Variable, 
 
 	nameLabel := topRow.Objects[0].(*canvas.Text)
 	typeBadge := topRow.Objects[1].(*canvas.Text)
-	revealBtn := topRow.Objects[3].(*widget.Button)
-	copyBtn := topRow.Objects[4].(*widget.Button)
-	editBtn := topRow.Objects[5].(*widget.Button)
-	dupeBtn := topRow.Objects[6].(*widget.Button)
-	deleteBtn := topRow.Objects[7].(*widget.Button)
+	revealBtn := topRow.Objects[3].(*ttwidget.Button)
+	copyBtn := topRow.Objects[4].(*ttwidget.Button)
+	editBtn := topRow.Objects[5].(*ttwidget.Button)
+	dupeBtn := topRow.Objects[6].(*ttwidget.Button)
+	deleteBtn := topRow.Objects[7].(*ttwidget.Button)
 	valueLabel := infoCol.Objects[1].(*canvas.Text)
 	descLabel := infoCol.Objects[2].(*canvas.Text)
 
@@ -250,8 +251,10 @@ func updateVariableCard(obj fyne.CanvasObject, name string, v storage.Variable, 
 		revealBtn.Show()
 		if isRevealed {
 			revealBtn.SetIcon(theme.VisibilityOffIcon())
+			revealBtn.SetToolTip("Hide secret value")
 		} else {
 			revealBtn.SetIcon(theme.VisibilityIcon())
+			revealBtn.SetToolTip("Reveal secret value")
 		}
 	} else {
 		revealBtn.Hide()
