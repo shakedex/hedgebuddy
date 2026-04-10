@@ -25,10 +25,10 @@ go run .
 
 ## Ways to Contribute
 
-- 🐛 **Report bugs** - [Open an issue](https://github.com/shakedex/hedgebuddy/issues)
-- 💡 **Suggest features** - [Start a discussion](https://github.com/shakedex/hedgebuddy/discussions)
-- 📖 **Improve docs** - Fix typos, add examples
-- 🔧 **Submit code** - Fork → Branch → PR
+- **Report bugs** — [Open an issue](https://github.com/shakedex/hedgebuddy/issues)
+- **Suggest features** — [Start a discussion](https://github.com/shakedex/hedgebuddy/discussions)
+- **Improve docs** — Fix typos, add examples
+- **Submit code** — Fork, branch, PR
 
 ---
 

@@ -30,7 +30,7 @@ HedgeBuddy makes Python automation scripts easy to configure for **filmmaking DI
 
 ## Why HedgeBuddy?
 
-**Localized Enviroment** - Variables stored locally, never touch system environment  
+**Localized Environment** - Variables stored locally, never touch system environment  
 **Cross-Platform** - Windows and macOS  
 **Simple Usage in Scripts** - Just `hedgebuddy.var("NAME")`
 
@@ -95,11 +95,11 @@ if hedgebuddy.exists("PREMIUM_FEATURES"):
 
 ## Next Steps
 
-- [Installation Guide](installation.md) - Detailed setup instructions
-- [Python Library Guide](python-library.md) - Complete API reference
-- [Desktop App Guide](desktop-app.md) - How to use the GUI
-- [Examples](examples.md) - Real-world usage patterns
-- [FAQ & Troubleshooting](faq.md) - Common questions
+- [Quick Start](quick-start.md) - Get up and running
+- [Python Library](python-library.md) - API reference
+- [Desktop App](desktop-app.md) - GUI guide
+- [Examples](examples.md) - Real-world usage
+- [FAQ](faq.md) - Troubleshooting
 
 ---
 
@@ -112,8 +112,4 @@ if hedgebuddy.exists("PREMIUM_FEATURES"):
 
 ---
 
-## Disclaimer
-
-?> **Independent Project**: HedgeBuddy is an independent, open-source project and is **NOT affiliated with, endorsed by, or officially associated with Hedge (hedge.co)** or its parent company. This software is created for the filmmaking community and users of Hedge.co applications, but is a third-party tool provided "as is" without warranty. Use at your own risk.
-
----
+?> HedgeBuddy is an independent, open-source project — not affiliated with Hedge (hedge.co). See [DISCLAIMER](https://github.com/shakedex/hedgebuddy/blob/master/DISCLAIMER).

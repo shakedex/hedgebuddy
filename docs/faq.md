@@ -13,11 +13,7 @@ A tool for configuring Python scripts without hardcoding values or polluting sys
 
 ### Why not just use environment variables?
 
-- ❌ Require system-level changes
-- ❌ Hard to clean up
-- ❌ Not user-friendly
-
-HedgeBuddy: ✅ Local storage, ✅ Beautiful GUI, ✅ Easy to manage
+System env vars require OS-level changes, are hard to clean up, and aren't user-friendly. HedgeBuddy stores everything locally with a GUI — no system pollution.
 
 ### Is it secure?
 
@@ -96,8 +92,8 @@ Path doesn't exist yet. Create the directory first, or ignore the warning (app s
 URL must start with `http://` or `https://`:
 
 ```text
-❌ api.example.com
-✅ https://api.example.com
+Bad:  api.example.com
+Good: https://api.example.com
 ```
 
 ---

@@ -6,6 +6,24 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.8.7] - 2026-04-10
+
+### Patch
+
+- Fixed Fyne `DoAndWait` issue with status text updates
+- Bumped version to 0.8.7 across all relevant files
+
+---
+
+## [0.8.6] - 2026-04-10
+
+### Patch
+
+- Fixed formatting issues with `.json` files
+- Bumped version to 0.8.6 across all relevant files
+
+---
+
 ## [0.8.5] - 2026-04-09
 
 ### Profiles (Desktop App + Python Library)

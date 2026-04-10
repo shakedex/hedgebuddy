@@ -33,7 +33,7 @@ HedgeBuddy makes Python automation scripts easy to configure for **DIT/Data Wran
 pip install --user hedgebuddy
 ```
 
-Reminder: you dont have to manually install the pip Library, this action can be doen automatically using the Dekstop App.
+The desktop app can also install the library for you automatically on first launch.
 
 Download the desktop app from [Releases](https://github.com/shakedex/hedgebuddy/releases).
 
@@ -57,7 +57,7 @@ if hedgebuddy.exists("PREMIUM_FEATURES"):
 
 ## Key Features
 
-**Localized Enviroment** - Variables stored locally, never touch system environment  
+**Localized Environment** - Variables stored locally, never touch system environment  
 **Cross-Platform** - Windows and macOS  
 **Simple Usage in Scripts** - Just `hedgebuddy.var("NAME")`  
 
@@ -111,6 +111,4 @@ cd app && go run .
 
 ---
 
-## Disclaimer
-
-HedgeBuddy is an independent, open-source project. NOT affiliated with Hedge (hedge.co). MIT License.
+HedgeBuddy is an independent, open-source project — not affiliated with Hedge (hedge.co). [MIT License](LICENSE).

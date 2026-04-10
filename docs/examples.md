@@ -10,7 +10,7 @@ These are complete, production-ready scripts for DIT/data wrangling workflows. E
 
 ### OffShoot Slack Notifier
 
-Send beautifully formatted Slack notifications when OffShoot transfers complete.
+Send formatted Slack notifications when OffShoot transfers complete.
 
 **Location:** [`examples/scripts/offshoot-slack-notifier/`](https://github.com/shakedex/hedgebuddy/tree/master/examples/scripts/offshoot-slack-notifier)
 
@@ -97,11 +97,9 @@ Debug tool for capturing and inspecting event payloads from Hedge apps.
 
 ---
 
-## 💡 Pro Tip: Include JSON Templates
+## Tip: Include JSON Templates
 
-**Always include a `.json` import template with your scripts!**
-
-This makes setup trivial for end-users:
+Include a `.json` import template with your scripts so users can import and fill in values instead of creating variables manually:
 
 ```json
 {
@@ -120,18 +118,11 @@ This makes setup trivial for end-users:
 }
 ```
 
-**Benefits:**
-
-- Users just import and fill in values
-- No manual variable creation
-- Fewer support questions
-- Professional user experience
-
 ---
 
 ## Developer Library Examples
 
-These examples demonstrate HedgeBuddy's Python library features. Perfect for learning the API.
+These examples demonstrate HedgeBuddy's Python library features.
 
 **Location:** [`python-lib/examples/`](https://github.com/shakedex/hedgebuddy/tree/master/python-lib/examples)
 
@@ -242,7 +233,7 @@ def main():
         api_key = hedgebuddy.var("API_KEY")
         output_path = Path(hedgebuddy.var("OUTPUT_PATH"))
     except hedgebuddy.VariableNotFoundError as e:
-        print(f"❌ Missing required variable: {e.variable_name}")
+        print(f"Missing required variable: {e.variable_name}")
         print("Please configure it using the HedgeBuddy desktop app")
         return
 
@@ -263,87 +254,8 @@ if __name__ == "__main__":
 
 ---
 
-## Common Patterns
-
-### Pattern 1: Conditional Features
-
-Enable features based on configuration:
-
-```python
-import hedgebuddy
-
-# Core functionality (always runs)
-data = fetch_data()
-result = process_data(data)
-
-# Optional S3 upload
-if hedgebuddy.exists("S3_BUCKET"):
-    upload_to_s3(result, hedgebuddy.var("S3_BUCKET"))
-
-# Optional email notification
-if hedgebuddy.exists("NOTIFICATION_EMAIL"):
-    send_email(hedgebuddy.var("NOTIFICATION_EMAIL"), result)
-
-# Optional premium features
-if hedgebuddy.exists("PREMIUM_API_KEY"):
-    enhanced_result = apply_premium_features(result)
-```
-
-### Pattern 2: Configuration Objects
-
-Group related configuration:
-
-```python
-import hedgebuddy
-from dataclasses import dataclass
-
-@dataclass
-class Config:
-    api_key: str
-    api_url: str = "https://api.example.com"
-    timeout: int = 30
-    debug: bool = False
-
-def load_config() -> Config:
-    return Config(
-        api_key=hedgebuddy.var("API_KEY"),
-        api_url=hedgebuddy.var("API_URL", "https://api.example.com"),
-        timeout=int(hedgebuddy.var("TIMEOUT", "30")),
-        debug=hedgebuddy.var("DEBUG", "false") == "true"
-    )
-
-config = load_config()
-```
-
-### Pattern 3: Environment-Specific Configuration
-
-Different settings for dev/staging/prod:
-
-```python
-import hedgebuddy
-
-# Determine environment
-env = hedgebuddy.var("ENVIRONMENT", "production")
-
-# Load environment-specific config
-if env == "development":
-    api_url = hedgebuddy.var("DEV_API_URL", "http://localhost:8000")
-    debug = True
-elif env == "staging":
-    api_url = hedgebuddy.var("STAGING_API_URL")
-    debug = False
-else:  # production
-    api_url = hedgebuddy.var("PROD_API_URL")
-    debug = False
-
-print(f"Running in {env} mode")
-print(f"API URL: {api_url}")
-```
-
----
-
 ## Next Steps
 
-- [Python Library Guide](python-library.md) - Complete API reference
-- [Desktop App Guide](desktop-app.md) - How to configure variables
-- [FAQ](faq.md) - Common questions and troubleshooting
+- [Python Library](python-library.md) - API reference
+- [Desktop App](desktop-app.md) - Managing variables
+- [FAQ](faq.md) - Troubleshooting
