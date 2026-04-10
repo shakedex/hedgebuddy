@@ -45,6 +45,7 @@ func NewListView(ctrl *AppController) fyne.CanvasObject {
 			})
 		},
 	)
+	list.HideSeparators = true
 
 	searchEntry.OnChanged = func(query string) {
 		keys = ctrl.Storage.GetSortedKeys()
@@ -191,8 +192,10 @@ func createVariableCardTemplate() fyne.CanvasObject {
 	// Type-colored accent bar on left (wider for visual impact)
 	accent := canvas.NewRectangle(ColorAccentBlue)
 	accent.SetMinSize(fyne.NewSize(4, 0))
+	scrollbarLane := canvas.NewRectangle(ColorBgPrimary)
+	scrollbarLane.SetMinSize(fyne.NewSize(16, 0))
 
-	card := container.NewBorder(nil, nil, accent, nil, container.NewPadded(infoCol))
+	card := container.NewBorder(nil, nil, accent, scrollbarLane, container.NewPadded(infoCol))
 	bg := canvas.NewRectangle(ColorBgCard)
 	return container.NewStack(bg, card)
 }
