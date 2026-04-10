@@ -19,6 +19,9 @@ HedgeBuddy makes Python automation scripts easy to configure for **DIT/Data Wran
 1. **Python Library** (`hedgebuddy`) - Simple API for reading variables in scripts
 2. **Desktop GUI App** - Native app for managing variables (Windows & macOS)
 
+<p align="center">
+  <img src="docs/app-main-view.png" alt="HedgeBuddy App" width="800" />
+</p>
 ---
 
 ## Quick Start
@@ -108,4 +111,3 @@ cd app && go run .
 ## Disclaimer
 
 HedgeBuddy is an independent, open-source project. NOT affiliated with Hedge (hedge.co). MIT License.
-

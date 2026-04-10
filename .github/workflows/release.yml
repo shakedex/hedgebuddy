@@ -177,7 +177,7 @@ jobs:
             **Windows**
             1. Download `HedgeBuddy.exe`
             2. Run the executable (no installation needed)
-            3. Variables stored at: `%APPDATA%\HedgeBuddy\vars.json`
+            3. Variables stored at: `%APPDATA%\HedgeBuddy\<profile>\vars.json`
 
             **macOS**
             1. Download and open `HedgeBuddy-macOS-arm64.dmg`
@@ -187,7 +187,7 @@ jobs:
                xattr -cr /Applications/HedgeBuddy.app
                ```
             4. Open HedgeBuddy from Applications
-            5. Variables stored at: `~/Library/Application Support/HedgeBuddy/vars.json`
+            5. Variables stored at: `~/Library/Application Support/HedgeBuddy/<profile>/vars.json`
 
             ### Python Library
             Install companion library: `pip install hedgebuddy`
