@@ -145,24 +145,26 @@ func showPipProgressDialog(w fyne.Window, label, title string, run func(*entryWr
 		writer := &entryWriter{entry: logEntry}
 		err := run(writer)
 
-		// Stop the spinner — keep the log visible for review.
-		progress.Hide()
+		fyne.Do(func() {
+			// Stop the spinner — keep the log visible for review.
+			progress.Hide()
 
-		if err != nil {
-			statusLabel.Text = "Installation failed"
-			statusLabel.Color = ColorAccentRed
-			statusLabel.Refresh()
+			if err != nil {
+				statusLabel.Text = "Installation failed"
+				statusLabel.Color = ColorAccentRed
+				statusLabel.Refresh()
 
-			hint := MutedLabel(fmt.Sprintf("You can also run manually: %s -m pip install hedgebuddy", executable))
-			content.Add(hint)
-		} else {
-			statusLabel.Text = "✓ Installed successfully"
-			statusLabel.Color = ColorSuccess
-			statusLabel.Refresh()
-		}
+				hint := MutedLabel(fmt.Sprintf("You can also run manually: %s -m pip install hedgebuddy", executable))
+				content.Add(hint)
+			} else {
+				statusLabel.Text = "✓ Installed successfully"
+				statusLabel.Color = ColorSuccess
+				statusLabel.Refresh()
+			}
 
-		closeBtn := widget.NewButton("Close", func() { d.Hide() })
-		d.SetButtons([]fyne.CanvasObject{layout.NewSpacer(), closeBtn})
+			closeBtn := widget.NewButton("Close", func() { d.Hide() })
+			d.SetButtons([]fyne.CanvasObject{layout.NewSpacer(), closeBtn})
+		})
 	}()
 }
 
@@ -179,14 +181,19 @@ func dismissPythonCheck() {
 type entryWriter struct {
 	mu    sync.Mutex
 	entry *widget.Entry
+	buf   string
 }
 
 func (ew *entryWriter) Write(p []byte) (int, error) {
 	ew.mu.Lock()
-	defer ew.mu.Unlock()
-	ew.entry.SetText(ew.entry.Text + string(p))
-	// auto-scroll to bottom
-	ew.entry.CursorRow = len(ew.entry.Text)
-	ew.entry.Refresh()
+	ew.buf += string(p)
+	text := ew.buf
+	ew.mu.Unlock()
+	fyne.Do(func() {
+		ew.entry.SetText(text)
+		// auto-scroll to bottom
+		ew.entry.CursorRow = len(text)
+		ew.entry.Refresh()
+	})
 	return len(p), nil
 }
