@@ -22,6 +22,7 @@ HedgeBuddy makes Python automation scripts easy to configure for **DIT/Data Wran
 <p align="center">
   <img src="docs/app-main-view.png" alt="HedgeBuddy App" width="800" />
 </p>
+
 ---
 
 ## Quick Start
