@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/shakedex/hedgebuddy/updater/internal/download"
-	"github.com/shakedex/hedgebuddy/updater/internal/github"
+	releases "github.com/shakedex/hedgebuddy/updater/internal/github"
 	"github.com/shakedex/hedgebuddy/updater/internal/install"
 )
 

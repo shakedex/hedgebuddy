@@ -97,6 +97,7 @@ func launchUpdater(app, version string) {
 		systray.Quit()
 	}
 }
+
 // running Quills binary (as installed by the HedgeBuddy Suite installer).
 // Falls back silently if the binary is not present (standalone Quills install).
 func launchHedgeBuddy() {

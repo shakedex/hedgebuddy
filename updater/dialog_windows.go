@@ -13,10 +13,10 @@ var (
 )
 
 const (
-	mbOKCancel    = 0x00000001
+	mbOKCancel     = 0x00000001
 	mbIconQuestion = 0x00000020
 	mbIconError    = 0x00000010
-	idOK          = 1
+	idOK           = 1
 )
 
 func confirm(message string) bool {
