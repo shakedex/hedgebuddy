@@ -41,6 +41,7 @@ jobs:
         uses: actions/setup-go@v6
         with:
           go-version: "1.25"
+          cache-dependency-path: updater/go.mod
 
       - name: Build Windows updater
         working-directory: updater
@@ -66,22 +67,23 @@ jobs:
           CGO_ENABLED: "0"
         run: go build -ldflags "-s -w" -o ../artifacts/updater-amd64 .
 
-      - name: Create universal macOS updater
-        run: |
-          brew install --quiet llvm || true
-          lipo -create -output artifacts/updater-macos artifacts/updater-arm64 artifacts/updater-amd64
-
       - name: Upload Windows updater
         uses: actions/upload-artifact@v7
         with:
           name: Updater-Windows
           path: artifacts/updater.exe
 
-      - name: Upload macOS updater
+      - name: Upload macOS arm64 updater
         uses: actions/upload-artifact@v7
         with:
-          name: Updater-macOS
-          path: artifacts/updater-macos
+          name: Updater-macOS-arm64
+          path: artifacts/updater-arm64
+
+      - name: Upload macOS amd64 updater
+        uses: actions/upload-artifact@v7
+        with:
+          name: Updater-macOS-amd64
+          path: artifacts/updater-amd64
 
   # ------------------------------------------------------------------
   # Build Windows installer
@@ -179,14 +181,19 @@ jobs:
             --dir artifacts/
           chmod +x artifacts/quills
 
-      - name: Download macOS updater artifact
+      - name: Download macOS updater artifacts
         uses: actions/download-artifact@v8
         with:
-          name: Updater-macOS
-          path: artifacts/
+          pattern: Updater-macOS-*
+          path: artifacts/updater-parts/
+          merge-multiple: true
 
-      - name: Mark updater executable
-        run: chmod +x artifacts/updater-macos
+      - name: Create universal macOS updater
+        run: |
+          lipo -create -output artifacts/updater-macos \
+            artifacts/updater-parts/updater-arm64 \
+            artifacts/updater-parts/updater-amd64
+          chmod +x artifacts/updater-macos
 
       - name: Build suite .pkg
         working-directory: scripts/installer/macos

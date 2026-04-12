@@ -60,6 +60,7 @@ jobs:
         uses: actions/setup-go@v6
         with:
           go-version: "1.25"
+          cache-dependency-path: app/go.mod
 
       - name: Install Fyne CLI
         run: go install fyne.io/tools/cmd/fyne@latest
@@ -93,6 +94,7 @@ jobs:
         uses: actions/setup-go@v6
         with:
           go-version: "1.25"
+          cache-dependency-path: app/go.mod
 
       - name: Install Fyne CLI
         run: go install fyne.io/tools/cmd/fyne@latest
