@@ -57,6 +57,7 @@ Var StartAtLogin
 ; ---------------------------------------------------------------------------
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_DIRECTORY
+!insertmacro MUI_PAGE_COMPONENTS
 
 Page custom StartAtLoginPage StartAtLoginPageLeave
 
@@ -92,18 +93,14 @@ Function StartAtLoginPageLeave
 FunctionEnd
 
 ; ---------------------------------------------------------------------------
-; Install section
+; Install sections (component-based)
 ; ---------------------------------------------------------------------------
-Section "Install"
+
+; Core: always installed (updater + icon + uninstaller + registry)
+Section "-Core" SEC_CORE
   SetOutPath "$INSTDIR"
 
-  ; HedgeBuddy desktop app
-  File "/oname=HedgeBuddy.exe" "${HB_EXE}"
-
-  ; Quills automation engine
-  File "/oname=quills.exe" "${QUILLS_EXE}"
-
-  ; Updater agent
+  ; Updater agent (always installed)
   File "/oname=updater.exe" "${UPDATER_EXE}"
 
   ; Icon for shortcuts
@@ -112,19 +109,13 @@ Section "Install"
   ; Write uninstaller
   WriteUninstaller "$INSTDIR\Uninstall.exe"
 
-  ; Start Menu shortcuts
+  ; Start Menu folder + uninstall shortcut
   CreateDirectory "$SMPROGRAMS\HedgeBuddy"
-  CreateShortCut "$SMPROGRAMS\HedgeBuddy\HedgeBuddy.lnk" \
-    "$INSTDIR\HedgeBuddy.exe" "" "$INSTDIR\hedgebuddy.ico"
-  CreateShortCut "$SMPROGRAMS\HedgeBuddy\Quills Dashboard.lnk" \
-    "$INSTDIR\quills.exe" "-no-browser" "$INSTDIR\hedgebuddy.ico"
   CreateShortCut "$SMPROGRAMS\HedgeBuddy\Uninstall.lnk" \
     "$INSTDIR\Uninstall.exe"
 
   ; Registry: install location
   WriteRegStr HKCU "Software\HedgeBuddy" "InstallDir" "$INSTDIR"
-  WriteRegStr HKCU "Software\HedgeBuddy" "VersionHB" "${VERSION_HB}"
-  WriteRegStr HKCU "Software\HedgeBuddy" "VersionQuills" "${VERSION_QUILLS}"
 
   ; Registry: Add/Remove Programs
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\HedgeBuddy" \
@@ -149,6 +140,28 @@ Section "Install"
   IntFmt $0 "0x%08X" $0
   WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\HedgeBuddy" \
     "EstimatedSize" "$0"
+SectionEnd
+
+; HedgeBuddy desktop app (selected by default)
+Section "HedgeBuddy (Variable Manager)" SEC_HEDGEBUDDY
+  SetOutPath "$INSTDIR"
+  File "/oname=HedgeBuddy.exe" "${HB_EXE}"
+
+  CreateShortCut "$SMPROGRAMS\HedgeBuddy\HedgeBuddy.lnk" \
+    "$INSTDIR\HedgeBuddy.exe" "" "$INSTDIR\hedgebuddy.ico"
+
+  WriteRegStr HKCU "Software\HedgeBuddy" "VersionHB" "${VERSION_HB}"
+SectionEnd
+
+; Quills automation engine (selected by default)
+Section "Quills (Automation Engine)" SEC_QUILLS
+  SetOutPath "$INSTDIR"
+  File "/oname=quills.exe" "${QUILLS_EXE}"
+
+  CreateShortCut "$SMPROGRAMS\HedgeBuddy\Quills Dashboard.lnk" \
+    "$INSTDIR\quills.exe" "-no-browser" "$INSTDIR\hedgebuddy.ico"
+
+  WriteRegStr HKCU "Software\HedgeBuddy" "VersionQuills" "${VERSION_QUILLS}"
 
   ; Auto-start Quills at login (if user opted in)
   ${NSD_GetState} $StartAtLogin $0
@@ -157,6 +170,12 @@ Section "Install"
       "$\"$INSTDIR\quills.exe$\" -no-browser"
   ${EndIf}
 SectionEnd
+
+; Component descriptions shown in the installer
+!insertmacro MUI_FUNCTION_DESCRIPTION_BEGIN
+  !insertmacro MUI_DESCRIPTION_TEXT ${SEC_HEDGEBUDDY} "Desktop app for managing environment variables used by Hedge scripts."
+  !insertmacro MUI_DESCRIPTION_TEXT ${SEC_QUILLS} "Background automation engine — runs workflows, schedules tasks, and powers the Quills dashboard."
+!insertmacro MUI_FUNCTION_DESCRIPTION_END
 
 ; ---------------------------------------------------------------------------
 ; Uninstall section

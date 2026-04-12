@@ -64,6 +64,15 @@ func launchUpdater(app, version string) {
 	}
 	installDir := filepath.Dir(exe)
 
+	// Map display name back to updater --app flag.
+	appFlag := app
+	switch app {
+	case "Quills":
+		appFlag = "quills"
+	case "HedgeBuddy":
+		appFlag = "hedgebuddy"
+	}
+
 	var updaterName string
 	if runtime.GOOS == "windows" {
 		updaterName = "updater.exe"
@@ -80,7 +89,7 @@ func launchUpdater(app, version string) {
 
 	pid := os.Getpid()
 	cmd := exec.Command(updaterPath,
-		"--app", app,
+		"--app", appFlag,
 		"--version", version,
 		"--caller-pid", fmt.Sprintf("%d", pid),
 		"--install-dir", installDir,
@@ -93,7 +102,7 @@ func launchUpdater(app, version string) {
 
 	// For a Quills self-update the updater will kill this process.
 	// For a HedgeBuddy update we just let the updater handle it.
-	if app == "quills" {
+	if appFlag == "quills" {
 		systray.Quit()
 	}
 }

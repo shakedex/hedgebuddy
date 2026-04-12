@@ -112,20 +112,51 @@ func (m *Manager) onReady() {
 		}
 	}()
 
+	// Track update state for the click handler.
+	type updateState struct {
+		app     string // "quills" or "hedgebuddy"
+		version string
+	}
+	var pendingUpdate *updateState
+
 	go func() {
 		for range mUpdates.ClickedCh {
-			go m.runUpdateCheck(mUpdates)
+			if pendingUpdate != nil {
+				// User clicked while "Update Available" — launch updater.
+				launchUpdater(pendingUpdate.app, pendingUpdate.version)
+			} else {
+				// Manual check — show a popup with the result.
+				go func() {
+					mUpdates.SetTitle("Checking for updates…")
+					app, ver := m.checkForUpdate()
+					if app != "" {
+						pendingUpdate = &updateState{app: app, version: ver}
+						mUpdates.SetTitle("Update Available — " + app + " v" + ver)
+						showUpdatePopup(app, ver)
+					} else {
+						mUpdates.SetTitle("Check for Updates")
+						showUpToDatePopup()
+					}
+				}()
+			}
 		}
 	}()
 
 	// Background update check: first run after 2 min, then every 24h.
+	// Only changes the menu text passively — no popup.
 	go func() {
 		time.Sleep(2 * time.Minute)
-		m.runUpdateCheck(mUpdates)
+		if app, ver := m.checkForUpdate(); app != "" {
+			pendingUpdate = &updateState{app: app, version: ver}
+			mUpdates.SetTitle("Update Available — " + app + " v" + ver)
+		}
 		ticker := time.NewTicker(24 * time.Hour)
 		defer ticker.Stop()
 		for range ticker.C {
-			m.runUpdateCheck(mUpdates)
+			if app, ver := m.checkForUpdate(); app != "" {
+				pendingUpdate = &updateState{app: app, version: ver}
+				mUpdates.SetTitle("Update Available — " + app + " v" + ver)
+			}
 		}
 	}()
 
@@ -170,42 +201,25 @@ func (m *Manager) onExit() {
 	}
 }
 
-// runUpdateCheck fetches GitHub releases and updates the menu item accordingly.
-func (m *Manager) runUpdateCheck(item *systray.MenuItem) {
-	item.SetTitle("Checking for updates…")
-
+// checkForUpdate queries GitHub for newer Quills/HedgeBuddy releases.
+// Returns (app, version) if an update is available, or ("", "") if up to date.
+func (m *Manager) checkForUpdate() (app string, ver string) {
 	quillsLatest, quillsOutdated, qErr := updatecheck.CheckQuillsUpdate(version.Version)
-	hbLatest, hbOutdated, hbErr := updatecheck.CheckHedgeBuddyUpdate("")
-
 	if qErr != nil {
 		log.Printf("[tray] Update check (quills): %v", qErr)
 	}
+	if quillsOutdated {
+		return "Quills", quillsLatest
+	}
+
+	// HedgeBuddy check skipped when we don't know the installed version.
+	hbLatest, hbOutdated, hbErr := updatecheck.CheckHedgeBuddyUpdate("")
 	if hbErr != nil {
 		log.Printf("[tray] Update check (hedgebuddy): %v", hbErr)
 	}
-
-	switch {
-	case quillsOutdated:
-		item.SetTitle("Update Available — Quills v" + quillsLatest)
-		item.SetTooltip("Click to update Quills to v" + quillsLatest)
-		// Rewire click to launch updater for Quills.
-		go func() {
-			for range item.ClickedCh {
-				launchUpdater("quills", quillsLatest)
-				return // handled; outer loop re-registers on next check
-			}
-		}()
-	case hbOutdated:
-		item.SetTitle("Update Available — HedgeBuddy v" + hbLatest)
-		item.SetTooltip("Click to update HedgeBuddy to v" + hbLatest)
-		go func() {
-			for range item.ClickedCh {
-				launchUpdater("hedgebuddy", hbLatest)
-				return
-			}
-		}()
-	default:
-		item.SetTitle("Check for Updates")
-		item.SetTooltip("Check for a newer version of Quills or HedgeBuddy")
+	if hbOutdated {
+		return "HedgeBuddy", hbLatest
 	}
+
+	return "", ""
 }
