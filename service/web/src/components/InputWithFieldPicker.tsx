@@ -5,7 +5,7 @@ import { Badge } from '#/components/ui/badge'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '#/components/ui/select'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '#/components/ui/tooltip'
+import { Tooltip, TooltipContent, TooltipTrigger } from '#/components/ui/tooltip'
 import { FolderOpen, X } from 'lucide-react'
 import { FileBrowserDialog } from './FileBrowserDialog'
 import { previewTemplate } from '#/lib/format'
@@ -133,16 +133,14 @@ export function InputWithFieldPicker({
               )}
             </button>
             {isPath && (
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button variant="outline" size="sm" className="shrink-0 px-2" onClick={() => setBrowserOpen(true)}>
-                      <FolderOpen className="size-3.5" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>Browse filesystem</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="outline" size="sm" className="shrink-0 px-2" onClick={() => setBrowserOpen(true)}>
+                    <FolderOpen className="size-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Browse filesystem</TooltipContent>
+              </Tooltip>
             )}
           </div>
         ) : (
@@ -159,16 +157,14 @@ export function InputWithFieldPicker({
               placeholder={isPath ? 'C:\\path\\to\\folder or click browse...' : 'Type or drag a field here...'}
             />
             {isPath && (
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button variant="outline" size="sm" className="shrink-0 px-2" onClick={() => setBrowserOpen(true)}>
-                      <FolderOpen className="size-3.5" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>Browse filesystem</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="outline" size="sm" className="shrink-0 px-2" onClick={() => setBrowserOpen(true)}>
+                    <FolderOpen className="size-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Browse filesystem</TooltipContent>
+              </Tooltip>
             )}
           </div>
         )}

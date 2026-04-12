@@ -70,7 +70,7 @@
     {
       "label": "dev:service",
       "type": "shell",
-      "command": "go run . -no-browser",
+      "command": "$env:PATH = 'C:\\msys64\\ucrt64\\bin;' + $env:PATH; $env:CGO_ENABLED = '1'; go run . -no-browser",
       "options": {
         "cwd": "${workspaceFolder}/service"
       },
@@ -84,7 +84,7 @@
     {
       "label": "build:service",
       "type": "shell",
-      "command": "go build -o bin\\quills.exe .",
+      "command": "$env:PATH = 'C:\\msys64\\ucrt64\\bin;' + $env:PATH; $env:CGO_ENABLED = '1'; go build -o bin\\quills.exe .",
       "options": {
         "cwd": "${workspaceFolder}/service"
       },
@@ -97,7 +97,7 @@
     {
       "label": "vet:service",
       "type": "shell",
-      "command": "go vet ./...",
+      "command": "$env:PATH = 'C:\\msys64\\ucrt64\\bin;' + $env:PATH; $env:CGO_ENABLED = '1'; go vet ./...",
       "options": {
         "cwd": "${workspaceFolder}/service"
       },

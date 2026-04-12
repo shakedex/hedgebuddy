@@ -1,0 +1,267 @@
+name: Release Quills Service
+
+on:
+  push:
+    tags:
+      - "quills-v*.*.*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version number (e.g., 0.9.0)"
+        required: true
+        default: "0.9.0"
+      create_tag:
+        description: "Create git tag for this version?"
+        required: true
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  GO_VERSION: "1.25"
+
+jobs:
+  # ------------------------------------------------------------------
+  # Optional: create a tag from workflow_dispatch
+  # ------------------------------------------------------------------
+  create-tag:
+    name: Create Version Tag
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.create_tag == 'true'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Create and push tag
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git tag -a "quills-v${{ github.event.inputs.version }}" \
+            -m "Quills v${{ github.event.inputs.version }}"
+          git push origin "quills-v${{ github.event.inputs.version }}"
+
+  # ------------------------------------------------------------------
+  # Build the web UI (shared by both platform builds)
+  # ------------------------------------------------------------------
+  build-web:
+    name: Build Web UI
+    runs-on: ubuntu-latest
+    needs: [create-tag]
+    if: always() && (needs.create-tag.result == 'success' || needs.create-tag.result == 'skipped')
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        working-directory: service/web
+        run: bun install --frozen-lockfile
+
+      - name: Build web UI
+        working-directory: service/web
+        run: bun run build
+
+      - name: Upload web dist
+        uses: actions/upload-artifact@v7
+        with:
+          name: web-dist
+          path: service/web/dist/
+
+  # ------------------------------------------------------------------
+  # Build Windows installer
+  # ------------------------------------------------------------------
+  build-windows:
+    name: Build Windows Installer
+    runs-on: windows-latest
+    needs: [build-web]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Download web dist
+        uses: actions/download-artifact@v8
+        with:
+          name: web-dist
+          path: service/web/dist
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Get version
+        id: version
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "version=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            TAG="${GITHUB_REF#refs/tags/quills-v}"
+            echo "version=${TAG}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build Quills binary
+        working-directory: service
+        env:
+          CGO_ENABLED: "1"
+        run: |
+          go build -ldflags "-H windowsgui" -o bin\quills.exe .
+
+      - name: Install NSIS
+        shell: powershell
+        run: choco install nsis -y
+
+      - name: Build installer
+        working-directory: service/installer/windows
+        shell: cmd
+        run: |
+          "C:\Program Files (x86)\NSIS\makensis.exe" /DVERSION=${{ steps.version.outputs.version }} /DEXE_PATH=..\..\bin\quills.exe quills.nsi
+
+      - name: Upload Windows installer
+        uses: actions/upload-artifact@v7
+        with:
+          name: Quills-Windows-Installer
+          path: service/installer/windows/Quills-${{ steps.version.outputs.version }}-Setup.exe
+
+  # ------------------------------------------------------------------
+  # Build macOS .pkg installer (universal binary)
+  # ------------------------------------------------------------------
+  build-macos:
+    name: Build macOS Installer
+    runs-on: macos-14
+    needs: [build-web]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Download web dist
+        uses: actions/download-artifact@v8
+        with:
+          name: web-dist
+          path: service/web/dist
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Get version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "version=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            TAG="${GITHUB_REF#refs/tags/quills-v}"
+            echo "version=${TAG}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build arm64 binary
+        working-directory: service
+        env:
+          CGO_ENABLED: "1"
+          GOARCH: arm64
+        run: go build -o bin/quills-arm64 .
+
+      - name: Build amd64 binary
+        working-directory: service
+        env:
+          CGO_ENABLED: "1"
+          GOARCH: amd64
+        run: go build -o bin/quills-amd64 .
+
+      - name: Create universal binary
+        working-directory: service
+        run: lipo -create -output bin/quills bin/quills-arm64 bin/quills-amd64
+
+      - name: Build .pkg installer
+        working-directory: service/installer/macos
+        run: |
+          chmod +x build-pkg.sh postinstall
+          ./build-pkg.sh "${{ steps.version.outputs.version }}" ../../bin/quills
+
+      - name: Upload macOS installer
+        uses: actions/upload-artifact@v7
+        with:
+          name: Quills-macOS-Installer
+          path: service/installer/macos/Quills-${{ steps.version.outputs.version }}.pkg
+
+  # ------------------------------------------------------------------
+  # Create GitHub Release
+  # ------------------------------------------------------------------
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: [build-windows, build-macos]
+    if: always() && needs.build-windows.result == 'success' && needs.build-macos.result == 'success'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Download Windows installer
+        uses: actions/download-artifact@v8
+        with:
+          name: Quills-Windows-Installer
+          path: ./artifacts/windows
+
+      - name: Download macOS installer
+        uses: actions/download-artifact@v8
+        with:
+          name: Quills-macOS-Installer
+          path: ./artifacts/macos
+
+      - name: Get version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "version=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
+            echo "tag=quills-v${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=${GITHUB_REF#refs/tags/quills-v}" >> "$GITHUB_OUTPUT"
+            echo "tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: Quills v${{ steps.version.outputs.version }}
+          body: |
+            ## Quills v${{ steps.version.outputs.version }}
+
+            Quills is the Hedge automation engine — it runs in the background and processes events from Hedge ecosystem apps.
+
+            ### Downloads
+            - **Windows**: `Quills-${{ steps.version.outputs.version }}-Setup.exe` (NSIS installer)
+            - **macOS (Universal)**: `Quills-${{ steps.version.outputs.version }}.pkg` (Apple Silicon + Intel)
+
+            ### Installation
+
+            **Windows**
+            1. Download and run `Quills-${{ steps.version.outputs.version }}-Setup.exe`
+            2. Choose whether to start Quills at login during installation
+            3. Quills appears in the system tray — right-click for options
+            4. Click "Open Dashboard" or visit `http://localhost:12345`
+
+            **macOS**
+            1. Download and open `Quills-${{ steps.version.outputs.version }}.pkg`
+            2. **Unsigned app:** Right-click the .pkg → Open, then confirm
+            3. The installer places `quills` in `/usr/local/bin/` and sets up auto-start
+            4. Quills appears in the menu bar — click for options
+            5. Visit `http://localhost:12345` for the dashboard
+
+            ### Managing Auto-Start
+            Right-click the Quills tray icon → toggle **"Start at Login"** on or off at any time.
+          files: |
+            ./artifacts/windows/Quills-${{ steps.version.outputs.version }}-Setup.exe
+            ./artifacts/macos/Quills-${{ steps.version.outputs.version }}.pkg
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -191,14 +191,23 @@ func (s *Server) handleRunWorkflow(w http.ResponseWriter, r *http.Request) {
 // --- Run history ---
 
 func (s *Server) handleGetRuns(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+
 	limit := 50
-	if l := r.URL.Query().Get("limit"); l != "" {
-		if n, err := strconv.Atoi(l); err == nil && n > 0 && n <= 200 {
+	if l := q.Get("limit"); l != "" {
+		if n, err := strconv.Atoi(l); err == nil && n > 0 && n <= 500 {
 			limit = n
 		}
 	}
 
-	runs, err := s.store.RecentRuns(limit)
+	offset := 0
+	if v := q.Get("offset"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+			offset = n
+		}
+	}
+
+	runs, err := s.store.QueryRuns(limit, offset)
 	if err != nil {
 		jsonError(w, "failed to fetch runs", http.StatusInternalServerError)
 		return
@@ -206,7 +215,29 @@ func (s *Server) handleGetRuns(w http.ResponseWriter, r *http.Request) {
 	if runs == nil {
 		runs = []storage.WorkflowRun{}
 	}
-	jsonOK(w, runs)
+
+	total, err := s.store.CountRuns()
+	if err != nil {
+		jsonError(w, "failed to count runs", http.StatusInternalServerError)
+		return
+	}
+
+	jsonOK(w, storage.RunsPage{
+		Runs:   runs,
+		Total:  total,
+		Limit:  limit,
+		Offset: offset,
+	})
+}
+
+func (s *Server) handleClearRuns(w http.ResponseWriter, r *http.Request) {
+	deleted, err := s.store.ClearRuns()
+	if err != nil {
+		jsonError(w, "failed to clear runs", http.StatusInternalServerError)
+		return
+	}
+	log.Printf("[server] Cleared %d run(s)", deleted)
+	jsonOK(w, map[string]any{"status": "cleared", "deleted": deleted})
 }
 
 func (s *Server) handleGetWorkflowRuns(w http.ResponseWriter, r *http.Request) {

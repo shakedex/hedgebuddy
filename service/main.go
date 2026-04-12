@@ -27,6 +27,7 @@ const defaultPort = 12345
 func main() {
 	port := flag.Int("port", defaultPort, "HTTP server port")
 	noBrowser := flag.Bool("no-browser", false, "Don't open browser on start")
+	noTray := flag.Bool("no-tray", false, "Run without system tray (headless mode)")
 	flag.Parse()
 
 	// 1. Load event schema registry (embedded in binary).
@@ -91,26 +92,39 @@ func main() {
 		log.Println("No embedded web build — run 'cd service/web && bun run build' then rebuild Go")
 	}
 
-	// 8. Create and start HTTP server.
+	// 8. Create HTTP server.
 	srv := server.New(eng, store, workflows, registry, quillLib, *port, webFS)
 
-	// Open browser unless disabled.
-	if !*noBrowser {
-		tray.OpenDashboard(*port)
-	}
+	if *noTray {
+		// Headless mode: no system tray, just HTTP server.
+		if !*noBrowser {
+			tray.OpenDashboard(*port)
+		}
 
-	// Handle graceful shutdown.
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-	go func() {
-		<-sigCh
-		fmt.Println("\nShutting down Quills service...")
-		store.Close()
-		os.Exit(0)
-	}()
+		// Handle graceful shutdown.
+		sigCh := make(chan os.Signal, 1)
+		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+		go func() {
+			<-sigCh
+			fmt.Println("\nShutting down Quills service...")
+			store.Close()
+			os.Exit(0)
+		}()
 
-	// Start server (blocks).
-	if err := srv.Start(); err != nil {
-		log.Fatalf("Server error: %v", err)
+		// Start server (blocks).
+		if err := srv.Start(); err != nil {
+			log.Fatalf("Server error: %v", err)
+		}
+	} else {
+		// Tray mode (default): system tray owns the main loop.
+		mgr := tray.NewManager(*port, eng, store.BaseDir(), *noBrowser, func() {
+			if err := srv.Start(); err != nil {
+				log.Printf("Server error: %v", err)
+			}
+		}, func() {
+			store.Close()
+			os.Exit(0)
+		})
+		mgr.Run() // blocks
 	}
 }

@@ -46,6 +46,7 @@ func New(eng *engine.Engine, store *storage.Store, wf *storage.WorkflowStore, re
 func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/events", s.handlePostEvent)
 	s.mux.HandleFunc("GET /api/events", s.handleGetEvents)
+	s.mux.HandleFunc("DELETE /api/events", s.handleClearEvents)
 	s.mux.HandleFunc("GET /api/workflows", s.handleListWorkflows)
 	s.mux.HandleFunc("POST /api/workflows", s.handleCreateWorkflow)
 	s.mux.HandleFunc("GET /api/workflows/{id}", s.handleGetWorkflow)
@@ -59,10 +60,15 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("DELETE /api/quills/{id}", s.handleUninstallQuill)
 	s.mux.HandleFunc("POST /api/workflows/{id}/run", s.handleRunWorkflow)
 	s.mux.HandleFunc("GET /api/runs", s.handleGetRuns)
+	s.mux.HandleFunc("DELETE /api/runs", s.handleClearRuns)
 	s.mux.HandleFunc("GET /api/workflows/{id}/runs", s.handleGetWorkflowRuns)
 	s.mux.HandleFunc("GET /api/actions", s.handleGetActions)
 	s.mux.HandleFunc("GET /api/health", s.handleHealth)
+	s.mux.HandleFunc("GET /api/engaged", s.handleGetEngaged)
+	s.mux.HandleFunc("PUT /api/engaged", s.handleSetEngaged)
 	s.mux.HandleFunc("GET /api/download/inject.py", s.handleDownloadInjectPy)
+	s.mux.HandleFunc("GET /api/download/scripts", s.handleListScripts)
+	s.mux.HandleFunc("GET /api/download/scripts/{filename}", s.handleDownloadScript)
 	s.mux.HandleFunc("GET /api/browse", s.handleBrowse)
 
 	// Serve React SPA for all non-API routes.
@@ -171,6 +177,16 @@ func (s *Server) handleGetEvents(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (s *Server) handleClearEvents(w http.ResponseWriter, r *http.Request) {
+	deleted, err := s.store.ClearEvents()
+	if err != nil {
+		jsonError(w, "failed to clear events", http.StatusInternalServerError)
+		return
+	}
+	log.Printf("[server] Cleared %d event(s)", deleted)
+	jsonOK(w, map[string]any{"status": "cleared", "deleted": deleted})
+}
+
 // --- Workflow handlers ---
 
 func (s *Server) handleListWorkflows(w http.ResponseWriter, r *http.Request) {
@@ -252,7 +268,29 @@ func (s *Server) handleGetActions(w http.ResponseWriter, r *http.Request) {
 // --- Health ---
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
-	jsonOK(w, map[string]string{"status": "ok"})
+	jsonOK(w, map[string]any{
+		"status":  "ok",
+		"engaged": s.engine.Engaged(),
+	})
+}
+
+// --- Engaged toggle ---
+
+func (s *Server) handleGetEngaged(w http.ResponseWriter, r *http.Request) {
+	jsonOK(w, map[string]bool{"engaged": s.engine.Engaged()})
+}
+
+func (s *Server) handleSetEngaged(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxBodySize)
+	var body struct {
+		Engaged bool `json:"engaged"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		jsonError(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+	s.engine.SetEngaged(body.Engaged)
+	jsonOK(w, map[string]bool{"engaged": s.engine.Engaged()})
 }
 
 // --- SPA handler ---

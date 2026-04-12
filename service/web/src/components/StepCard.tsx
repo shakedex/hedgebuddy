@@ -5,7 +5,7 @@ import { Button } from '#/components/ui/button'
 import { Badge } from '#/components/ui/badge'
 import { Label } from '#/components/ui/label'
 import {
-  Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
+  Tooltip, TooltipContent, TooltipTrigger,
 } from '#/components/ui/tooltip'
 import { InputWithFieldPicker } from './InputWithFieldPicker'
 import { StepAdder } from './StepAdder'
@@ -68,10 +68,10 @@ export function StepCard({
 
   return (
     <div
-      className={`rounded-lg border bg-card transition-all ${
-        isDragging ? 'opacity-50 border-primary'
+      className={`rounded-lg border bg-card transition-all duration-150 ${
+        isDragging ? 'opacity-50 scale-[1.02] border-primary shadow-lg'
           : isDragOver ? 'border-primary/50 ring-1 ring-primary/30'
-          : 'border-border'
+          : 'border-border hover:shadow-sm'
       }`}
       draggable
       onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; onDragStart() }}
@@ -118,22 +118,20 @@ export function StepCard({
               <Label className="text-xs">Mode</Label>
               <div className="flex flex-wrap gap-1.5">
                 {Object.entries(modes!).map(([key, mode]) => (
-                  <TooltipProvider key={key}>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant={selectedMode === key ? 'default' : 'outline'}
-                          size="xs"
-                          onClick={() => handleModeChange(key)}
-                        >
-                          {mode.label}
-                        </Button>
-                      </TooltipTrigger>
-                      {mode.description && (
-                        <TooltipContent>{mode.description}</TooltipContent>
-                      )}
-                    </Tooltip>
-                  </TooltipProvider>
+                  <Tooltip key={key}>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant={selectedMode === key ? 'default' : 'outline'}
+                        size="xs"
+                        onClick={() => handleModeChange(key)}
+                      >
+                        {mode.label}
+                      </Button>
+                    </TooltipTrigger>
+                    {mode.description && (
+                      <TooltipContent>{mode.description}</TooltipContent>
+                    )}
+                  </Tooltip>
                 ))}
               </div>
             </div>
@@ -153,14 +151,12 @@ export function StepCard({
                     {def.required && <span className="text-destructive ml-0.5">*</span>}
                   </Label>
                   {def.description && (
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger>
-                          <Info className="size-3 text-muted-foreground" />
-                        </TooltipTrigger>
-                        <TooltipContent className="max-w-xs">{def.description}</TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger>
+                        <Info className="size-3 text-muted-foreground" />
+                      </TooltipTrigger>
+                      <TooltipContent className="max-w-xs">{def.description}</TooltipContent>
+                    </Tooltip>
                   )}
                 </div>
                 <InputWithFieldPicker

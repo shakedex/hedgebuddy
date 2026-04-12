@@ -53,6 +53,9 @@ export function fetchEventsPage(query: EventsQuery = {}): Promise<EventsPage> {
   return request<EventsPage>(`/events${qs ? '?' + qs : ''}`)
 }
 
+export const clearEvents = () =>
+  request<{ status: string; deleted: number }>('/events', { method: 'DELETE' })
+
 export async function fetchEvents(limit = 50): Promise<EventRecord[]> {
   const page = await fetchEventsPage({ limit })
   return page.events ?? []
@@ -136,7 +139,29 @@ export const fetchActions = () =>
 // --- Health ---
 
 export const fetchHealth = () =>
-  request<{ status: string }>('/health')
+  request<{ status: string; engaged: boolean }>('/health')
+
+// --- Engaged toggle ---
+
+export const fetchEngaged = () =>
+  request<{ engaged: boolean }>('/engaged')
+
+export const setEngaged = (engaged: boolean) =>
+  request<{ engaged: boolean }>('/engaged', {
+    method: 'PUT',
+    body: JSON.stringify({ engaged }),
+  })
+
+// --- Inject Scripts ---
+
+export interface InjectScript {
+  filename: string
+  app: string
+  event: string
+}
+
+export const fetchInjectScripts = () =>
+  request<InjectScript[]>('/download/scripts')
 
 // --- Workflow Run ---
 
@@ -156,8 +181,33 @@ export interface WorkflowRun {
   steps_log?: string
 }
 
-export const fetchRuns = (limit = 50) =>
-  request<WorkflowRun[]>(`/runs?limit=${limit}`)
+export interface RunsPage {
+  runs: WorkflowRun[]
+  total: number
+  limit: number
+  offset: number
+}
+
+export interface RunsQuery {
+  limit?: number
+  offset?: number
+}
+
+export function fetchRunsPage(query: RunsQuery = {}): Promise<RunsPage> {
+  const params = new URLSearchParams()
+  if (query.limit) params.set('limit', String(query.limit))
+  if (query.offset) params.set('offset', String(query.offset))
+  const qs = params.toString()
+  return request<RunsPage>(`/runs${qs ? '?' + qs : ''}`)
+}
+
+export const fetchRuns = async (limit = 50): Promise<WorkflowRun[]> => {
+  const page = await fetchRunsPage({ limit })
+  return page.runs ?? []
+}
+
+export const clearRuns = () =>
+  request<{ status: string; deleted: number }>('/runs', { method: 'DELETE' })
 
 export const fetchWorkflowRuns = (workflowId: string) =>
   request<WorkflowRun[]>(`/workflows/${workflowId}/runs`)

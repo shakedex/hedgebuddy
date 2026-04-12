@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -63,10 +64,21 @@ func New() (*Store, error) {
 	}
 
 	dbPath := filepath.Join(dir, "events.db")
-	db, err := sql.Open("sqlite", dbPath)
+
+	// Build DSN with pragmas so every connection inherits them.
+	dsn := "file:" + url.PathEscape(dbPath) +
+		"?_pragma=journal_mode(WAL)" +
+		"&_pragma=busy_timeout(5000)" +
+		"&_pragma=synchronous(NORMAL)"
+
+	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("opening database: %w", err)
 	}
+
+	// SQLite supports only one concurrent writer.  Limiting the pool
+	// to a single connection avoids SQLITE_BUSY on parallel inserts.
+	db.SetMaxOpenConns(1)
 
 	s := &Store{db: db, baseDir: dir}
 	if err := s.migrate(); err != nil {
@@ -305,4 +317,59 @@ func (s *Store) RunsForWorkflow(workflowID string, limit int) ([]WorkflowRun, er
 		runs = append(runs, r)
 	}
 	return runs, rows.Err()
+}
+
+// ClearEvents deletes all stored events. Returns the number of rows deleted.
+func (s *Store) ClearEvents() (int64, error) {
+	res, err := s.db.Exec(`DELETE FROM events`)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}
+
+// ClearRuns deletes all stored workflow runs. Returns the number of rows deleted.
+func (s *Store) ClearRuns() (int64, error) {
+	res, err := s.db.Exec(`DELETE FROM workflow_runs`)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}
+
+// RunsPage is a paginated response containing runs and the total count.
+type RunsPage struct {
+	Runs   []WorkflowRun `json:"runs"`
+	Total  int           `json:"total"`
+	Limit  int           `json:"limit"`
+	Offset int           `json:"offset"`
+}
+
+// QueryRuns returns runs with pagination.
+func (s *Store) QueryRuns(limit, offset int) ([]WorkflowRun, error) {
+	rows, err := s.db.Query(
+		`SELECT id, workflow_id, workflow_name, status, COALESCE(error,''), started_at, COALESCE(finished_at,''), COALESCE(steps_log,'')
+		 FROM workflow_runs ORDER BY id DESC LIMIT ? OFFSET ?`, limit, offset,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var runs []WorkflowRun
+	for rows.Next() {
+		var r WorkflowRun
+		if err := rows.Scan(&r.ID, &r.WorkflowID, &r.WorkflowName, &r.Status, &r.Error, &r.StartedAt, &r.FinishedAt, &r.StepsLog); err != nil {
+			return nil, err
+		}
+		runs = append(runs, r)
+	}
+	return runs, rows.Err()
+}
+
+// CountRuns returns the total number of workflow runs.
+func (s *Store) CountRuns() (int, error) {
+	var count int
+	err := s.db.QueryRow(`SELECT COUNT(*) FROM workflow_runs`).Scan(&count)
+	return count, err
 }

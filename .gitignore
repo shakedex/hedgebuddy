@@ -3,7 +3,7 @@
 /go-app/*.exe
 /go-app/vendor/
 *.exe
-
+bin/
 # Python
 **/__pycache__/
 /python-lib/*.egg-info/

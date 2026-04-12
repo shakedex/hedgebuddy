@@ -6,9 +6,11 @@ import (
 	"log"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/shakedex/hedgebuddy/service/internal/actions"
+	"github.com/shakedex/hedgebuddy/service/internal/diskinv"
 	"github.com/shakedex/hedgebuddy/service/internal/quills"
 	"github.com/shakedex/hedgebuddy/service/internal/runner"
 	"github.com/shakedex/hedgebuddy/service/internal/schema"
@@ -22,31 +24,115 @@ type Engine struct {
 	workflows *storage.WorkflowStore
 	actions   *actions.Registry
 	quills    *quills.Library
+
+	diskMu     sync.RWMutex
+	knownDisks map[string]bool // drives present at service startup
+
+	engagedMu sync.RWMutex
+	engaged   bool // when false, events are stored but workflows are not executed
 }
 
 // New creates a new engine.
 func New(reg *schema.Registry, store *storage.Store, wf *storage.WorkflowStore, ar *actions.Registry, lib *quills.Library) *Engine {
+	snap := diskinv.Snapshot()
+	log.Printf("[engine] Disk inventory: %d volume(s) at startup", len(snap))
+	for d := range snap {
+		log.Printf("[engine]   %s", d)
+	}
 	return &Engine{
-		registry:  reg,
-		store:     store,
-		workflows: wf,
-		actions:   ar,
-		quills:    lib,
+		registry:   reg,
+		store:      store,
+		workflows:  wf,
+		actions:    ar,
+		quills:     lib,
+		knownDisks: snap,
+		engaged:    true,
 	}
 }
 
-// IncomingEvent is the envelope from inject.py.
+// Engaged returns whether the engine is actively executing workflows.
+func (e *Engine) Engaged() bool {
+	e.engagedMu.RLock()
+	defer e.engagedMu.RUnlock()
+	return e.engaged
+}
+
+// SetEngaged toggles the execution mode. When disengaged, events are still
+// stored but no workflows are triggered (maintenance / dry-run mode).
+func (e *Engine) SetEngaged(on bool) {
+	e.engagedMu.Lock()
+	e.engaged = on
+	e.engagedMu.Unlock()
+	if on {
+		log.Println("[engine] Quills ENGAGED — workflows will execute")
+	} else {
+		log.Println("[engine] Quills DISENGAGED — maintenance mode, events stored only")
+	}
+}
+
+// IncomingEvent is the envelope from inject.py (or per-event scripts).
 type IncomingEvent struct {
 	Payload    map[string]any `json:"payload"`
 	ReceivedAt string         `json:"received_at"`
+	App        string         `json:"app,omitempty"`   // explicit app id from per-event scripts
+	Event      string         `json:"event,omitempty"` // explicit event name from per-event scripts
 }
 
 // ProcessEvent handles a new event: detect type, store, match workflows, execute chains.
 func (e *Engine) ProcessEvent(evt IncomingEvent) error {
-	appID, eventName, detected := e.registry.DetectEvent(evt.Payload)
-	if !detected {
-		appID = "unknown"
-		eventName = "unknown"
+	var appID, eventName string
+
+	// Per-event scripts provide explicit app/event identity.
+	// Fall back to payload-based detection for the legacy universal inject.py.
+	if evt.App != "" && evt.Event != "" {
+		appID = evt.App
+		eventName = evt.Event
+	} else {
+		var detected bool
+		appID, eventName, detected = e.registry.DetectEvent(evt.Payload)
+		if !detected {
+			appID = "unknown"
+			eventName = "unknown"
+		}
+	}
+
+	// --- DiskAdded / DiskRemoved tracking ---
+	if appID == "offshoot" {
+		switch eventName {
+		case "DiskAdded":
+			// DiskAdded uses deviceName (Windows: "F:\") or rootFilePath (macOS: "/Volumes/X").
+			deviceName, _ := evt.Payload["DiskAdded_deviceName"].(string)
+			if deviceName == "" {
+				deviceName, _ = evt.Payload["DiskAdded_rootFilePath"].(string)
+			}
+			norm := strings.ToUpper(strings.TrimSpace(deviceName))
+			if norm != "" {
+				e.diskMu.RLock()
+				preExisting := e.knownDisks[norm]
+				e.diskMu.RUnlock()
+				if preExisting {
+					log.Printf("[engine] DiskAdded suppressed: %s (pre-existing)", norm)
+					return nil
+				}
+				// Genuine hot-plug — remember it.
+				e.diskMu.Lock()
+				e.knownDisks[norm] = true
+				e.diskMu.Unlock()
+			}
+		case "DiskRemoved":
+			// DiskRemoved uses rootFilePath (Windows: "F:\", macOS: "/Volumes/X").
+			deviceName, _ := evt.Payload["DiskRemoved_rootFilePath"].(string)
+			if deviceName == "" {
+				deviceName, _ = evt.Payload["DiskRemoved_deviceName"].(string)
+			}
+			norm := strings.ToUpper(strings.TrimSpace(deviceName))
+			if norm != "" {
+				e.diskMu.Lock()
+				delete(e.knownDisks, norm)
+				e.diskMu.Unlock()
+				log.Printf("[engine] Disk removed from inventory: %s", norm)
+			}
+		}
 	}
 
 	// Store the event.
@@ -68,6 +154,12 @@ func (e *Engine) ProcessEvent(evt IncomingEvent) error {
 	}
 
 	log.Printf("[engine] Event #%d: app=%s event=%s", eventID, appID, eventName)
+
+	// If disengaged (maintenance mode), store the event but skip workflow execution.
+	if !e.Engaged() {
+		log.Printf("[engine] Disengaged — skipping workflow matching for event #%d", eventID)
+		return nil
+	}
 
 	// Find matching workflows.
 	matches := e.workflows.MatchingWorkflows(appID, eventName, evt.Payload)

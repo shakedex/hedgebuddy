@@ -4,7 +4,6 @@ import {
   ScrollText,
   GitBranch,
   Settings,
-  Activity,
   Package,
   History,
 } from 'lucide-react'
@@ -25,14 +24,18 @@ export function RootLayout() {
   return (
     <div className="flex h-screen overflow-hidden bg-background">
       {/* Sidebar */}
-      <aside className="flex w-56 shrink-0 flex-col border-r border-border bg-sidebar">
-        <div className="flex items-center gap-2 border-b border-border px-4 py-4">
-          <Activity className="h-5 w-5 text-(--lagoon)" />
-          <span className="text-lg font-bold tracking-tight text-sidebar-foreground">
+      <aside className="flex w-56 shrink-0 flex-col border-r border-sidebar-border bg-sidebar">
+        <div className="flex items-center gap-2.5 border-b border-sidebar-border px-4 py-4">
+          <img
+            src="/logo192.png"
+            alt="Quills"
+            className="size-7 rounded-md"
+          />
+          <span className="text-xl font-bold tracking-tight text-sidebar-foreground">
             Quills
           </span>
         </div>
-        <nav className="flex-1 space-y-1 p-2">
+        <nav className="flex-1 space-y-0.5 p-2">
           {navItems.map(({ to, label, icon: Icon }) => {
             const active =
               to === '/' ? pathname === '/' : pathname.startsWith(to)
@@ -41,20 +44,22 @@ export function RootLayout() {
                 key={to}
                 to={to}
                 className={cn(
-                  'flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors',
+                  'group flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-all duration-150',
                   active
-                    ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-                    : 'text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-foreground',
+                    ? 'bg-sidebar-accent text-sidebar-accent-foreground border-l-[3px] border-(--lagoon) pl-2.5'
+                    : 'text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-foreground hover:translate-x-0.5',
                 )}
               >
-                <Icon className="h-4 w-4" />
+                <Icon className={cn('h-4 w-4 transition-colors', active && 'text-(--lagoon)')} />
                 {label}
               </Link>
             )
           })}
         </nav>
-        <div className="border-t border-border px-4 py-3 text-xs text-muted-foreground">
-          Quills &middot; HedgeBuddy
+        <div className="border-t border-sidebar-border px-4 py-3">
+          <span className="inline-flex items-center rounded-full border border-(--chip-line) bg-(--chip-bg) px-2 py-0.5 text-[10px] text-muted-foreground">
+            Quills &middot; HedgeBuddy
+          </span>
         </div>
       </aside>
 
