@@ -57,6 +57,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
+      - name: Verify version sync
+        run: python3 scripts/sync_quills_version.py --check
+
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
 
@@ -75,10 +78,10 @@ jobs:
           path: service/web/dist/
 
   # ------------------------------------------------------------------
-  # Build Windows installer
+  # Build Windows binary
   # ------------------------------------------------------------------
   build-windows:
-    name: Build Windows Installer
+    name: Build Windows Binary
     runs-on: windows-latest
     needs: [build-web]
     steps:
@@ -114,27 +117,17 @@ jobs:
         run: |
           go build -ldflags "-H windowsgui" -o bin\quills.exe .
 
-      - name: Install NSIS
-        shell: powershell
-        run: choco install nsis -y
-
-      - name: Build installer
-        working-directory: service/installer/windows
-        shell: cmd
-        run: |
-          "C:\Program Files (x86)\NSIS\makensis.exe" /DVERSION=${{ steps.version.outputs.version }} /DEXE_PATH=..\..\bin\quills.exe quills.nsi
-
-      - name: Upload Windows installer
+      - name: Upload Windows binary
         uses: actions/upload-artifact@v7
         with:
-          name: Quills-Windows-Installer
-          path: service/installer/windows/Quills-${{ steps.version.outputs.version }}-Setup.exe
+          name: Quills-Windows
+          path: service/bin/quills.exe
 
   # ------------------------------------------------------------------
-  # Build macOS .pkg installer (universal binary)
+  # Build macOS universal binary
   # ------------------------------------------------------------------
   build-macos:
-    name: Build macOS Installer
+    name: Build macOS Binary
     runs-on: macos-14
     needs: [build-web]
     steps:
@@ -180,17 +173,11 @@ jobs:
         working-directory: service
         run: lipo -create -output bin/quills bin/quills-arm64 bin/quills-amd64
 
-      - name: Build .pkg installer
-        working-directory: service/installer/macos
-        run: |
-          chmod +x build-pkg.sh postinstall
-          ./build-pkg.sh "${{ steps.version.outputs.version }}" ../../bin/quills
-
-      - name: Upload macOS installer
+      - name: Upload macOS binary
         uses: actions/upload-artifact@v7
         with:
-          name: Quills-macOS-Installer
-          path: service/installer/macos/Quills-${{ steps.version.outputs.version }}.pkg
+          name: Quills-macOS
+          path: service/bin/quills
 
   # ------------------------------------------------------------------
   # Create GitHub Release
@@ -204,16 +191,16 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
-      - name: Download Windows installer
+      - name: Download Windows binary
         uses: actions/download-artifact@v8
         with:
-          name: Quills-Windows-Installer
+          name: Quills-Windows
           path: ./artifacts/windows
 
-      - name: Download macOS installer
+      - name: Download macOS binary
         uses: actions/download-artifact@v8
         with:
-          name: Quills-macOS-Installer
+          name: Quills-macOS
           path: ./artifacts/macos
 
       - name: Get version
@@ -237,30 +224,16 @@ jobs:
 
             Quills is the Hedge automation engine — it runs in the background and processes events from Hedge ecosystem apps.
 
-            ### Downloads
-            - **Windows**: `Quills-${{ steps.version.outputs.version }}-Setup.exe` (NSIS installer)
-            - **macOS (Universal)**: `Quills-${{ steps.version.outputs.version }}.pkg` (Apple Silicon + Intel)
+            > **Looking for an easy install?** Use the [HedgeBuddy Suite installer](../../releases) which bundles HedgeBuddy and Quills together.
 
-            ### Installation
+            ### Standalone Binaries
+            - **Windows**: `quills.exe`
+            - **macOS (Universal)**: `quills` (Apple Silicon + Intel)
 
-            **Windows**
-            1. Download and run `Quills-${{ steps.version.outputs.version }}-Setup.exe`
-            2. Choose whether to start Quills at login during installation
-            3. Quills appears in the system tray — right-click for options
-            4. Click "Open Dashboard" or visit `http://localhost:12345`
-
-            **macOS**
-            1. Download and open `Quills-${{ steps.version.outputs.version }}.pkg`
-            2. **Unsigned app:** Right-click the .pkg → Open, then confirm
-            3. The installer places `quills` in `/usr/local/bin/` and sets up auto-start
-            4. Quills appears in the menu bar — click for options
-            5. Visit `http://localhost:12345` for the dashboard
-
-            ### Managing Auto-Start
-            Right-click the Quills tray icon → toggle **"Start at Login"** on or off at any time.
+            These are raw binaries for advanced users or automated deployments.
           files: |
-            ./artifacts/windows/Quills-${{ steps.version.outputs.version }}-Setup.exe
-            ./artifacts/macos/Quills-${{ steps.version.outputs.version }}.pkg
+            ./artifacts/windows/quills.exe
+            ./artifacts/macos/quills
           draft: false
           prerelease: false
         env:

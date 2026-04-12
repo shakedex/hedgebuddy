@@ -13,6 +13,7 @@ import (
 	"github.com/shakedex/hedgebuddy/service/internal/quills"
 	"github.com/shakedex/hedgebuddy/service/internal/schema"
 	"github.com/shakedex/hedgebuddy/service/internal/storage"
+	"github.com/shakedex/hedgebuddy/service/internal/version"
 )
 
 // Server is the HTTP server for the Quills service.
@@ -64,6 +65,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/workflows/{id}/runs", s.handleGetWorkflowRuns)
 	s.mux.HandleFunc("GET /api/actions", s.handleGetActions)
 	s.mux.HandleFunc("GET /api/health", s.handleHealth)
+	s.mux.HandleFunc("GET /api/version", s.handleVersion)
 	s.mux.HandleFunc("GET /api/engaged", s.handleGetEngaged)
 	s.mux.HandleFunc("PUT /api/engaged", s.handleSetEngaged)
 	s.mux.HandleFunc("GET /api/download/inject.py", s.handleDownloadInjectPy)
@@ -272,6 +274,10 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		"status":  "ok",
 		"engaged": s.engine.Engaged(),
 	})
+}
+
+func (s *Server) handleVersion(w http.ResponseWriter, r *http.Request) {
+	jsonOK(w, map[string]string{"version": version.Version})
 }
 
 // --- Engaged toggle ---

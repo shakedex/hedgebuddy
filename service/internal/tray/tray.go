@@ -3,7 +3,9 @@ package tray
 import (
 	"fmt"
 	"log"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 )
 
@@ -45,5 +47,35 @@ func OpenFileExplorer(path string) {
 
 	if err := cmd.Start(); err != nil {
 		log.Printf("[tray] Failed to open file explorer at %s: %v", path, err)
+	}
+}
+
+// launchHedgeBuddy launches HedgeBuddy.exe from the same directory as the
+// running Quills binary (as installed by the HedgeBuddy Suite installer).
+// Falls back silently if the binary is not present (standalone Quills install).
+func launchHedgeBuddy() {
+	exe, err := os.Executable()
+	if err != nil {
+		log.Printf("[tray] launchHedgeBuddy: could not resolve own path: %v", err)
+		return
+	}
+
+	var hbName string
+	if runtime.GOOS == "windows" {
+		hbName = "HedgeBuddy.exe"
+	} else {
+		hbName = "HedgeBuddy"
+	}
+
+	hbPath := filepath.Join(filepath.Dir(exe), hbName)
+	if _, err := os.Stat(hbPath); err != nil {
+		log.Printf("[tray] HedgeBuddy not found at %s — skipping launch", hbPath)
+		return
+	}
+
+	cmd := exec.Command(hbPath)
+	cmd.Dir = filepath.Dir(hbPath)
+	if err := cmd.Start(); err != nil {
+		log.Printf("[tray] Failed to launch HedgeBuddy: %v", err)
 	}
 }

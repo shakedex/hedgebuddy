@@ -57,6 +57,7 @@ func (m *Manager) onReady() {
 
 	// Build menu items.
 	mDashboard := systray.AddMenuItem("Open Dashboard", "Open the Quills web UI")
+	mHedgeBuddy := systray.AddMenuItem("Launch HedgeBuddy", "Open the HedgeBuddy variable manager")
 	systray.AddSeparator()
 	mPause := systray.AddMenuItem("Pause Engine", "Pause workflow execution")
 	mLogs := systray.AddMenuItem("View Logs", "Open the Quills data directory")
@@ -78,6 +79,12 @@ func (m *Manager) onReady() {
 	go func() {
 		for range mDashboard.ClickedCh {
 			OpenDashboard(m.port)
+		}
+	}()
+
+	go func() {
+		for range mHedgeBuddy.ClickedCh {
+			launchHedgeBuddy()
 		}
 	}()
 
