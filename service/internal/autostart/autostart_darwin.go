@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 )
 
-const plistName = "co.hedge.quills.plist"
+const plistName = "io.github.shakedex.quills.plist"
 
 func plistPath() string {
 	home, _ := os.UserHomeDir()
@@ -32,7 +32,7 @@ func enable(exePath string) error {
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>co.hedge.quills</string>
+    <string>io.github.shakedex.quills</string>
     <key>ProgramArguments</key>
     <array>
         <string>%s</string>

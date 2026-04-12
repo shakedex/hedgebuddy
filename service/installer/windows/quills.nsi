@@ -103,7 +103,7 @@ Section "Install"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\Quills" \
     "DisplayVersion" "${VERSION}"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\Quills" \
-    "Publisher" "Hedge"
+    "Publisher" "shakedex"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\Quills" \
     "UninstallString" "$\"$INSTDIR\Uninstall.exe$\""
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\Quills" \

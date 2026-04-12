@@ -13,7 +13,7 @@ VERSION="${1:?Usage: build-pkg.sh <version> <binary-path>}"
 BINARY="${2:?Usage: build-pkg.sh <version> <binary-path>}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 STAGING="$(mktemp -d)"
-PKG_ID="co.hedge.quills"
+PKG_ID="io.github.shakedex.quills"
 OUTPUT="Quills-${VERSION}.pkg"
 
 echo "==> Building Quills ${VERSION} macOS installer"
@@ -27,7 +27,7 @@ chmod 755 "${STAGING}/usr/local/bin/quills"
 
 # Stage the LaunchAgent plist (installed by postinstall script).
 mkdir -p "${STAGING}/usr/local/share/quills"
-cp "${SCRIPT_DIR}/co.hedge.quills.plist" "${STAGING}/usr/local/share/quills/"
+cp "${SCRIPT_DIR}/io.github.shakedex.quills.plist" "${STAGING}/usr/local/share/quills/"
 
 # Stage the postinstall script.
 SCRIPTS="$(mktemp -d)"

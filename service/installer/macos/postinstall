@@ -2,7 +2,7 @@
 # postinstall — Runs after pkgbuild installs Quills.
 # Copies the LaunchAgent plist to the installing user's home.
 
-PLIST_SRC="/usr/local/share/quills/co.hedge.quills.plist"
+PLIST_SRC="/usr/local/share/quills/io.github.shakedex.quills.plist"
 TARGET_DIR="$HOME/Library/LaunchAgents"
 
 # If running as root (installer runs as root), resolve the real user.
@@ -11,12 +11,12 @@ if [ "$EUID" -eq 0 ] && [ -n "$USER" ]; then
 fi
 
 mkdir -p "$TARGET_DIR"
-cp "$PLIST_SRC" "$TARGET_DIR/co.hedge.quills.plist"
-chmod 644 "$TARGET_DIR/co.hedge.quills.plist"
+cp "$PLIST_SRC" "$TARGET_DIR/io.github.shakedex.quills.plist"
+  chmod 644 "$TARGET_DIR/io.github.shakedex.quills.plist"
 
 # Load the agent for the current user (non-fatal if it fails).
-if command -v launchctl &>/dev/null; then
-    launchctl load "$TARGET_DIR/co.hedge.quills.plist" 2>/dev/null || true
+  if command -v launchctl &>/dev/null; then
+    launchctl load "$TARGET_DIR/io.github.shakedex.quills.plist" 2>/dev/null || true
 fi
 
 exit 0
