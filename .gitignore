@@ -4,6 +4,7 @@
 /go-app/vendor/
 *.exe
 bin/
+/build/
 # Python
 **/__pycache__/
 /python-lib/*.egg-info/

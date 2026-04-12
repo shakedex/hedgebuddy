@@ -3,6 +3,10 @@ package ui
 import (
 	"fmt"
 	"net/url"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
@@ -70,9 +74,12 @@ func showAppUpdateDialog(w fyne.Window, latestVersion string) {
 
 	d := dialog.NewCustomWithoutButtons("Update Available", content, w)
 
-	downloadBtn := widget.NewButton("Download", func() {
-		u, _ := url.Parse(releasesURL)
-		_ = fyne.CurrentApp().OpenURL(u)
+	downloadBtn := widget.NewButton("Install Update", func() {
+		d.Hide()
+		if launched := tryLaunchUpdater(latestVersion); !launched {
+			// Fallback: open releases page if updater not found.
+			_ = fyne.CurrentApp().OpenURL(urlParse(releasesURL))
+		}
 	})
 	downloadBtn.Importance = widget.HighImportance
 
@@ -121,4 +128,49 @@ func showUpgradingDialog(w fyne.Window, executable string) {
 	showPipProgressDialog(w, "Upgrading hedgebuddy…", "Upgrading", func(writer *entryWriter) error {
 		return pythoncheck.Upgrade(executable, writer)
 	}, executable)
+}
+
+// tryLaunchUpdater spawns the updater binary co-located with HedgeBuddy.
+// Returns true if the updater was launched successfully (HedgeBuddy should
+// quit so the updater can replace the binary). Returns false if the updater
+// is not present (standalone install — caller falls back to browser).
+func tryLaunchUpdater(latestVersion string) bool {
+	exe, err := os.Executable()
+	if err != nil {
+		return false
+	}
+	installDir := filepath.Dir(exe)
+
+	var updaterName string
+	if runtime.GOOS == "windows" {
+		updaterName = "updater.exe"
+	} else {
+		updaterName = "updater"
+	}
+
+	updaterPath := filepath.Join(installDir, updaterName)
+	if _, err := os.Stat(updaterPath); err != nil {
+		return false
+	}
+
+	pid := os.Getpid()
+	cmd := exec.Command(updaterPath,
+		"--app", "hedgebuddy",
+		"--version", latestVersion,
+		"--caller-pid", fmt.Sprintf("%d", pid),
+		"--install-dir", installDir,
+	)
+	if err := cmd.Start(); err != nil {
+		return false
+	}
+
+	// Quit so the updater can replace our binary.
+	fyne.CurrentApp().Quit()
+	return true
+}
+
+// urlParse is a helper that silently ignores parse errors (used for known-good URLs).
+func urlParse(raw string) *url.URL {
+	u, _ := url.Parse(raw)
+	return u
 }

@@ -175,6 +175,45 @@
       }
     },
     {
+      "label": "build:updater",
+      "type": "shell",
+      "command": "go build -o updater.exe .",
+      "options": {
+        "cwd": "${workspaceFolder}/updater"
+      },
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "vet:updater",
+      "type": "shell",
+      "command": "go vet ./...",
+      "options": {
+        "cwd": "${workspaceFolder}/updater"
+      },
+      "group": "test",
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "build:suite",
+      "type": "shell",
+      "command": "$env:PATH = 'C:\\msys64\\ucrt64\\bin;' + $env:PATH; $env:CGO_ENABLED = '1'; New-Item -ItemType Directory -Force -Path build | Out-Null; Write-Host '==> Building HedgeBuddy...'; Push-Location app; go build -o ..\\build\\HedgeBuddy.exe .; Pop-Location; Write-Host '==> Building Quills...'; Push-Location service; go build -ldflags '-H windowsgui' -o ..\\build\\quills.exe .; Pop-Location; Write-Host '==> Building Updater...'; Push-Location updater; go build -o ..\\build\\updater.exe .; Pop-Location; Write-Host '==> All binaries in build/'; Get-ChildItem build",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    },
+    {
       "label": "dev:full-stack",
       "dependsOrder": "parallel",
       "dependsOn": [

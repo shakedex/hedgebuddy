@@ -25,6 +25,9 @@
 !ifndef QUILLS_EXE
   !define QUILLS_EXE "quills.exe"
 !endif
+!ifndef UPDATER_EXE
+  !define UPDATER_EXE "updater.exe"
+!endif
 
 ; ---------------------------------------------------------------------------
 ; Installer metadata
@@ -97,8 +100,11 @@ Section "Install"
   ; HedgeBuddy desktop app
   File "/oname=HedgeBuddy.exe" "${HB_EXE}"
 
-  ; Quills automation engine (installed alongside HedgeBuddy)
+  ; Quills automation engine
   File "/oname=quills.exe" "${QUILLS_EXE}"
+
+  ; Updater agent
+  File "/oname=updater.exe" "${UPDATER_EXE}"
 
   ; Icon for shortcuts
   File "/oname=hedgebuddy.ico" "${ICON_PATH}"
@@ -162,6 +168,7 @@ Section "Uninstall"
   ; Remove files
   Delete "$INSTDIR\HedgeBuddy.exe"
   Delete "$INSTDIR\quills.exe"
+  Delete "$INSTDIR\updater.exe"
   Delete "$INSTDIR\hedgebuddy.ico"
   Delete "$INSTDIR\Uninstall.exe"
   RMDir "$INSTDIR"

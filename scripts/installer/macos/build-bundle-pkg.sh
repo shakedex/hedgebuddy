@@ -9,10 +9,11 @@
 
 set -euo pipefail
 
-VERSION_HB="${1:?Usage: build-bundle-pkg.sh <hb_version> <quills_version> <HedgeBuddy.app> <quills>}"
-VERSION_QUILLS="${2:?Usage: build-bundle-pkg.sh <hb_version> <quills_version> <HedgeBuddy.app> <quills>}"
-HB_APP="${3:?Usage: build-bundle-pkg.sh <hb_version> <quills_version> <HedgeBuddy.app> <quills>}"
-QUILLS_BIN="${4:?Usage: build-bundle-pkg.sh <hb_version> <quills_version> <HedgeBuddy.app> <quills>}"
+VERSION_HB="${1:?Usage: build-bundle-pkg.sh <hb_version> <quills_version> <HedgeBuddy.app> <quills> <updater>}"
+VERSION_QUILLS="${2:?Usage: build-bundle-pkg.sh <hb_version> <quills_version> <HedgeBuddy.app> <quills> <updater>}"
+HB_APP="${3:?Usage: build-bundle-pkg.sh <hb_version> <quills_version> <HedgeBuddy.app> <quills> <updater>}"
+QUILLS_BIN="${4:?Usage: build-bundle-pkg.sh <hb_version> <quills_version> <HedgeBuddy.app> <quills> <updater>}"
+UPDATER_BIN="${5:?Usage: build-bundle-pkg.sh <hb_version> <quills_version> <HedgeBuddy.app> <quills> <updater>}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 STAGING="$(mktemp -d)"
 PKG_ID="io.github.shakedex.hedgebuddy-suite"
@@ -21,6 +22,7 @@ OUTPUT="HedgeBuddy-Suite-v${VERSION_HB}-quills-v${VERSION_QUILLS}.pkg"
 echo "==> Building HedgeBuddy Suite macOS installer"
 echo "    HedgeBuddy: ${HB_APP}"
 echo "    Quills:     ${QUILLS_BIN}"
+echo "    Updater:    ${UPDATER_BIN}"
 echo "    Staging:    ${STAGING}"
 
 # Stage HedgeBuddy.app to ~/Applications (no password prompt).
@@ -31,6 +33,10 @@ cp -r "${HB_APP}" "${STAGING}/Users/Shared/Applications/HedgeBuddy.app"
 mkdir -p "${STAGING}/usr/local/bin"
 cp "${QUILLS_BIN}" "${STAGING}/usr/local/bin/quills"
 chmod 755 "${STAGING}/usr/local/bin/quills"
+
+# Stage Updater binary.
+cp "${UPDATER_BIN}" "${STAGING}/usr/local/bin/updater"
+chmod 755 "${STAGING}/usr/local/bin/updater"
 
 # Stage the Quills LaunchAgent plist (postinstall copies to user's ~/Library/LaunchAgents).
 mkdir -p "${STAGING}/usr/local/share/quills"

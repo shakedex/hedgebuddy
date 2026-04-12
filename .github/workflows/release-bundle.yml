@@ -28,11 +28,68 @@ env:
 jobs:
 
   # ------------------------------------------------------------------
+  # Build updater agent (pure Go — cross-compile from Linux, no CGO)
+  # ------------------------------------------------------------------
+  build-updater:
+    name: Build Updater Agent
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: "1.25"
+
+      - name: Build Windows updater
+        working-directory: updater
+        env:
+          GOOS: windows
+          GOARCH: amd64
+          CGO_ENABLED: "0"
+        run: go build -ldflags "-s -w" -o ../artifacts/updater.exe .
+
+      - name: Build macOS arm64 updater
+        working-directory: updater
+        env:
+          GOOS: darwin
+          GOARCH: arm64
+          CGO_ENABLED: "0"
+        run: go build -ldflags "-s -w" -o ../artifacts/updater-arm64 .
+
+      - name: Build macOS amd64 updater
+        working-directory: updater
+        env:
+          GOOS: darwin
+          GOARCH: amd64
+          CGO_ENABLED: "0"
+        run: go build -ldflags "-s -w" -o ../artifacts/updater-amd64 .
+
+      - name: Create universal macOS updater
+        run: |
+          brew install --quiet llvm || true
+          lipo -create -output artifacts/updater-macos artifacts/updater-arm64 artifacts/updater-amd64
+
+      - name: Upload Windows updater
+        uses: actions/upload-artifact@v7
+        with:
+          name: Updater-Windows
+          path: artifacts/updater.exe
+
+      - name: Upload macOS updater
+        uses: actions/upload-artifact@v7
+        with:
+          name: Updater-macOS
+          path: artifacts/updater-macos
+
+  # ------------------------------------------------------------------
   # Build Windows installer
   # ------------------------------------------------------------------
   build-windows-installer:
     name: Build Windows Installer
     runs-on: windows-latest
+    needs: [build-updater]
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -58,6 +115,12 @@ jobs:
             --pattern "quills.exe" \
             --dir artifacts/
 
+      - name: Download updater.exe artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: Updater-Windows
+          path: artifacts/
+
       - name: Install NSIS
         shell: powershell
         run: choco install nsis -y
@@ -70,6 +133,7 @@ jobs:
             /DVERSION_QUILLS=${{ env.VERSION_QUILLS }} ^
             /DHB_EXE=%CD%\artifacts\HedgeBuddy.exe ^
             /DQUILLS_EXE=%CD%\artifacts\quills.exe ^
+            /DUPDATER_EXE=%CD%\artifacts\updater.exe ^
             scripts\installer\windows\suite.nsi
 
       - name: Upload Windows installer
@@ -84,6 +148,7 @@ jobs:
   build-macos-installer:
     name: Build macOS Installer
     runs-on: macos-14
+    needs: [build-updater]
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -114,6 +179,15 @@ jobs:
             --dir artifacts/
           chmod +x artifacts/quills
 
+      - name: Download macOS updater artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: Updater-macOS
+          path: artifacts/
+
+      - name: Mark updater executable
+        run: chmod +x artifacts/updater-macos
+
       - name: Build suite .pkg
         working-directory: scripts/installer/macos
         run: |
@@ -122,7 +196,8 @@ jobs:
             "${{ env.VERSION_HB }}" \
             "${{ env.VERSION_QUILLS }}" \
             "../../../artifacts/HedgeBuddy.app" \
-            "../../../artifacts/quills"
+            "../../../artifacts/quills" \
+            "../../../artifacts/updater-macos"
           mv HedgeBuddy-Suite-v${{ env.VERSION_HB }}-quills-v${{ env.VERSION_QUILLS }}.pkg \
             ../../../artifacts/
 

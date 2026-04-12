@@ -6,6 +6,26 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.9.1] - 2026-04-12
+
+### Added
+
+- **HedgeBuddy Suite installer** — unified NSIS (Windows) and `.pkg` (macOS) installer that bundles HedgeBuddy, Quills, and the new Updater agent together
+- **Updater agent** (`updater/`) — standalone Go binary that downloads, confirms, and in-place replaces app binaries; native dialog prompts on Windows (MessageBox) and macOS (osascript)
+- **In-app update flow** — "Download" button in the HedgeBuddy update dialog now launches the updater agent directly; falls back to browser for standalone installs without the suite
+- **Quills version infrastructure** — `service/VERSION` as source of truth, `service/internal/version` Go package, `GET /api/version` endpoint, and `scripts/sync_quills_version.py` for syncing
+- **Quills update checking** — `service/internal/updatecheck` package checks GitHub Releases for newer Quills and HedgeBuddy versions using filtered tag patterns
+- **Dynamic tray "Check for Updates"** — Quills tray item auto-checks on startup (2 min delay) and every 24h; text changes to "Update Available — Quills vX.Y.Z" when outdated; click launches updater
+- **"Launch HedgeBuddy" tray item** — Quills system tray can launch co-located HedgeBuddy binary (suite installs both to same directory)
+- **`build:suite` task** — VS Code task that builds all three binaries (HedgeBuddy, Quills, Updater) into a local `build/` folder for testing
+- **`release-bundle.yml` workflow** — manually triggered GitHub Actions workflow that downloads released binaries and packages them into platform installers; no rebuilding
+
+### Changed
+
+- **`release-quills.yml`** — simplified to binary-only releases (raw `.exe` + universal macOS binary); NSIS and `.pkg` packaging moved to the suite workflow
+
+---
+
 ## [0.8.7] - 2026-04-10
 
 ### Patch

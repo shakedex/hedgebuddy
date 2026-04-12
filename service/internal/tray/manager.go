@@ -4,10 +4,13 @@ import (
 	"log"
 	"os"
 	"runtime"
+	"time"
 
 	"fyne.io/systray"
 	"github.com/shakedex/hedgebuddy/service/internal/autostart"
 	"github.com/shakedex/hedgebuddy/service/internal/engine"
+	"github.com/shakedex/hedgebuddy/service/internal/updatecheck"
+	"github.com/shakedex/hedgebuddy/service/internal/version"
 )
 
 const releasesURL = "https://github.com/shakedex/hedgebuddy/releases"
@@ -61,7 +64,7 @@ func (m *Manager) onReady() {
 	systray.AddSeparator()
 	mPause := systray.AddMenuItem("Pause Engine", "Pause workflow execution")
 	mLogs := systray.AddMenuItem("View Logs", "Open the Quills data directory")
-	mUpdates := systray.AddMenuItem("Check for Updates", "Open the releases page")
+	mUpdates := systray.AddMenuItem("Check for Updates", "Check for a newer version of Quills or HedgeBuddy")
 	systray.AddSeparator()
 	mStartup := systray.AddMenuItemCheckbox("Start at Login", "Launch Quills when you log in", autostart.IsEnabled())
 	systray.AddSeparator()
@@ -111,7 +114,18 @@ func (m *Manager) onReady() {
 
 	go func() {
 		for range mUpdates.ClickedCh {
-			OpenURL(releasesURL)
+			go m.runUpdateCheck(mUpdates)
+		}
+	}()
+
+	// Background update check: first run after 2 min, then every 24h.
+	go func() {
+		time.Sleep(2 * time.Minute)
+		m.runUpdateCheck(mUpdates)
+		ticker := time.NewTicker(24 * time.Hour)
+		defer ticker.Stop()
+		for range ticker.C {
+			m.runUpdateCheck(mUpdates)
 		}
 	}()
 
@@ -153,5 +167,45 @@ func (m *Manager) onExit() {
 	log.Println("[tray] Shutting down from system tray...")
 	if m.onQuit != nil {
 		m.onQuit()
+	}
+}
+
+// runUpdateCheck fetches GitHub releases and updates the menu item accordingly.
+func (m *Manager) runUpdateCheck(item *systray.MenuItem) {
+	item.SetTitle("Checking for updates…")
+
+	quillsLatest, quillsOutdated, qErr := updatecheck.CheckQuillsUpdate(version.Version)
+	hbLatest, hbOutdated, hbErr := updatecheck.CheckHedgeBuddyUpdate("")
+
+	if qErr != nil {
+		log.Printf("[tray] Update check (quills): %v", qErr)
+	}
+	if hbErr != nil {
+		log.Printf("[tray] Update check (hedgebuddy): %v", hbErr)
+	}
+
+	switch {
+	case quillsOutdated:
+		item.SetTitle("Update Available — Quills v" + quillsLatest)
+		item.SetTooltip("Click to update Quills to v" + quillsLatest)
+		// Rewire click to launch updater for Quills.
+		go func() {
+			for range item.ClickedCh {
+				launchUpdater("quills", quillsLatest)
+				return // handled; outer loop re-registers on next check
+			}
+		}()
+	case hbOutdated:
+		item.SetTitle("Update Available — HedgeBuddy v" + hbLatest)
+		item.SetTooltip("Click to update HedgeBuddy to v" + hbLatest)
+		go func() {
+			for range item.ClickedCh {
+				launchUpdater("hedgebuddy", hbLatest)
+				return
+			}
+		}()
+	default:
+		item.SetTitle("Check for Updates")
+		item.SetTooltip("Check for a newer version of Quills or HedgeBuddy")
 	}
 }
