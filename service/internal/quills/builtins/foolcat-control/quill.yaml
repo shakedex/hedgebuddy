@@ -1,0 +1,53 @@
+id: foolcat-control
+name: FoolCat Control
+version: 1.0.0
+description: Control the FoolCat application
+author: HedgeBuddy
+category: foolcat
+icon: cat
+
+inputs:
+  - name: source
+    type: path
+    required: true
+    label: Source Folder
+    description: Source folder path for the report
+    for_modes: [create]
+  - name: destination
+    type: path
+    required: true
+    label: Destination Folder
+    description: Destination folder path for the report
+    for_modes: [create]
+  - name: name
+    type: string
+    required: false
+    label: Report Name
+    description: Name of the report
+    for_modes: [create]
+  - name: description
+    type: string
+    required: false
+    label: Report Description
+    description: Description of the report
+    for_modes: [create]
+
+compatible_triggers:
+  - FoolCatStarted
+  - ReportCreated
+
+modes:
+  open:
+    label: Open
+    description: Open or focus FoolCat
+    steps:
+      - action: foolcat.open
+  create:
+    label: Create Report
+    description: Create a report in FoolCat
+    steps:
+      - action: foolcat.create
+        source: "{{inputs.source}}"
+        destination: "{{inputs.destination}}"
+        name: "{{inputs.name}}"
+        description: "{{inputs.description}}"

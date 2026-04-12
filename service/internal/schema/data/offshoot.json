@@ -1,0 +1,235 @@
+{
+  "app": "offshoot",
+  "display_name": "OffShoot",
+  "url_scheme": "offshoot",
+  "events": {
+    "OffShootStarted": {
+      "display_name": "OffShoot Started",
+      "description": "Fires once when launching OffShoot",
+      "fields": {}
+    },
+    "DiskAdded": {
+      "display_name": "Disk Added",
+      "description": "Fires when a new disk is mounted (including virtual drives, network mounts, disk images)",
+      "fields": {
+        "allowed": {
+          "type": "boolean",
+          "description": "Whether the disk is allowed"
+        },
+        "availableDiskSpace": {
+          "type": "number",
+          "unit": "bytes",
+          "description": "Available space on the disk in bytes"
+        },
+        "deviceName": {
+          "type": "string",
+          "description": "System device name (e.g. disk11s1)"
+        },
+        "diskSize": {
+          "type": "number",
+          "unit": "bytes",
+          "description": "Total disk size in bytes"
+        },
+        "hidden": {
+          "type": "boolean",
+          "description": "Whether the disk is hidden"
+        },
+        "modelName": {
+          "type": "string",
+          "description": "Hardware model name"
+        },
+        "mountedAt": {
+          "type": "timestamp",
+          "format": "YYYYMMDDHHMMSS",
+          "description": "When the disk was mounted"
+        },
+        "protocolName": {
+          "type": "string",
+          "description": "Connection protocol (e.g. USB, Thunderbolt)"
+        },
+        "rootFilePath": {
+          "type": "path",
+          "description": "Mount point path"
+        },
+        "title": {
+          "type": "string",
+          "description": "Volume display name"
+        },
+        "volumeKind": {
+          "type": "string",
+          "description": "Filesystem type (e.g. exfat, apfs, hfs)"
+        }
+      }
+    },
+    "DiskRemoved": {
+      "display_name": "Disk Removed",
+      "description": "Fires when a disk is disconnected",
+      "fields": {
+        "rootFilePath": {
+          "type": "path",
+          "description": "Mount point path of the removed disk"
+        },
+        "title": {
+          "type": "string",
+          "description": "Volume display name"
+        },
+        "unmountedAt": {
+          "type": "timestamp",
+          "format": "YYYYMMDDHHMMSS",
+          "description": "When the disk was unmounted"
+        }
+      }
+    },
+    "DiskBusy": {
+      "display_name": "Disk Busy",
+      "description": "Fires when a disk becomes busy (e.g. transfer starts)",
+      "fields": {
+        "rootFilePath": {
+          "type": "path",
+          "description": "Mount point path"
+        },
+        "title": {
+          "type": "string",
+          "description": "Volume display name"
+        }
+      }
+    },
+    "DiskIdle": {
+      "display_name": "Disk Idle",
+      "description": "Fires when a single disk becomes idle (no transfers running or queued)",
+      "fields": {
+        "diskType": {
+          "type": "enum",
+          "values": ["Source", "Destination"],
+          "description": "Whether this disk was a source or destination"
+        },
+        "hasFailedTransfers": {
+          "type": "enum",
+          "values": ["YES", "NO"],
+          "description": "Whether any transfers to/from this disk failed"
+        },
+        "rootFilePath": {
+          "type": "path",
+          "description": "Mount point path"
+        },
+        "title": {
+          "type": "string",
+          "description": "Volume display name"
+        }
+      }
+    },
+    "DisksIdle": {
+      "display_name": "All Disks Idle",
+      "description": "Fires when ALL disks become idle (all transfers finished)",
+      "fields": {}
+    },
+    "TransfersAdded": {
+      "display_name": "Transfers Added",
+      "description": "Fires when transfers are queued",
+      "fields": {
+        "transferType": {
+          "type": "string",
+          "description": "Type of transfer (e.g. Transfer)"
+        },
+        "addedAt": {
+          "type": "timestamp",
+          "format": "YYYYMMDDHHMMSS",
+          "description": "When the transfers were added"
+        },
+        "transferGroups": {
+          "type": "array",
+          "description": "Array of transfer groups, each containing source and destination info",
+          "items": {
+            "type": "object",
+            "fields": {
+              "id": { "type": "string" },
+              "sourceLabel": { "type": "string" },
+              "sourcePaths": { "type": "array", "items": { "type": "string" } },
+              "transfers": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "fields": {
+                    "destinationPath": { "type": "path" },
+                    "id": { "type": "string" },
+                    "sourceLabel": { "type": "string" },
+                    "sourcePaths": { "type": "array", "items": { "type": "string" } }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "FileCopyCompleted": {
+      "display_name": "File Copy Completed",
+      "description": "Fires when a single transfer completes (for all end states)",
+      "fields": {
+        "bytesCopied": {
+          "type": "number",
+          "unit": "bytes",
+          "description": "Total bytes copied"
+        },
+        "destinationPath": {
+          "type": "path",
+          "description": "Destination file/folder path"
+        },
+        "duration": {
+          "type": "number",
+          "unit": "seconds",
+          "description": "Transfer duration in seconds (6-digit precision)"
+        },
+        "mode": {
+          "type": "string",
+          "description": "Transfer mode (e.g. Backup)"
+        },
+        "verification_mode": {
+          "type": "string",
+          "description": "Verification mode used (e.g. Source & Destination)"
+        },
+        "presetName": {
+          "type": "string",
+          "description": "Name of the preset used"
+        },
+        "sourceInfo": {
+          "type": "object",
+          "description": "Source metadata (returned as JSON string)",
+          "fields": {
+            "Source Name": { "type": "string" },
+            "Location": { "type": "string" },
+            "Counter": { "type": "string" }
+          }
+        },
+        "sourcePaths": {
+          "type": "string",
+          "description": "Source volume path"
+        },
+        "startedAt": {
+          "type": "timestamp",
+          "format": "YYYYMMDDHHMMSS",
+          "description": "When the transfer started"
+        },
+        "state": {
+          "type": "enum",
+          "values": ["Success", "Failed", "Warnings", "Canceled", "Stopped"],
+          "description": "Transfer end state"
+        }
+      }
+    },
+    "VerificationIssue": {
+      "display_name": "Verification Issue",
+      "description": "Fires when a source integrity issue is detected (inconsistent read or MHL mismatch)",
+      "fields": {
+        "description": {
+          "type": "string",
+          "description": "Description of the verification issue"
+        },
+        "filePath": {
+          "type": "path",
+          "description": "Path to the file with the issue"
+        }
+      }
+    }
+  }
+}

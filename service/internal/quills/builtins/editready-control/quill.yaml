@@ -1,0 +1,52 @@
+id: editready-control
+name: EditReady Control
+version: 1.0.0
+description: Control the EditReady application
+author: HedgeBuddy
+category: editready
+icon: film
+
+inputs:
+  - name: sourcePath
+    type: path
+    required: true
+    label: Source Path
+    description: File or folder path to add
+    for_modes: [add, transcode]
+  - name: preset
+    type: string
+    required: false
+    label: Preset
+    description: Preset name, path, or UUID
+    for_modes: [transcode]
+  - name: destinationPath
+    type: path
+    required: false
+    label: Output Path
+    description: Output folder path
+    for_modes: [transcode]
+
+compatible_triggers:
+  - EditReadyStarted
+  - TranscodeCompleted
+
+modes:
+  open:
+    label: Open
+    description: Open or focus EditReady
+    steps:
+      - action: editready.open
+  add:
+    label: Add Clips
+    description: Add clips to EditReady
+    steps:
+      - action: editready.add
+        sourcePath: "{{inputs.sourcePath}}"
+  transcode:
+    label: Transcode
+    description: Start transcoding in EditReady
+    steps:
+      - action: editready.transcode
+        sourcePath: "{{inputs.sourcePath}}"
+        preset: "{{inputs.preset}}"
+        destinationPath: "{{inputs.destinationPath}}"

@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Quills</title>
+    <script>
+      // Restore theme before paint
+      ;(function () {
+        try {
+          var s = localStorage.getItem('theme') || 'dark'
+          var r = s === 'auto' ? (matchMedia('(prefers-color-scheme:dark)').matches ? 'dark' : 'light') : s
+          document.documentElement.classList.add(r)
+          document.documentElement.style.colorScheme = r
+        } catch (e) {}
+      })()
+    </script>
+  </head>
+  <body class="font-sans antialiased bg-background text-foreground">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

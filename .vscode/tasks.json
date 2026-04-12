@@ -1,0 +1,187 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "dev:web",
+      "type": "shell",
+      "command": "bun --bun run dev",
+      "options": {
+        "cwd": "${workspaceFolder}/service/web"
+      },
+      "isBackground": true,
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "build:web",
+      "type": "shell",
+      "command": "bun --bun run build",
+      "options": {
+        "cwd": "${workspaceFolder}/service/web"
+      },
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "test:web",
+      "type": "shell",
+      "command": "bun --bun run test",
+      "options": {
+        "cwd": "${workspaceFolder}/service/web"
+      },
+      "group": "test",
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "typecheck:web",
+      "type": "shell",
+      "command": "bun --bunx tsc --noEmit -p tsconfig.json",
+      "options": {
+        "cwd": "${workspaceFolder}/service/web"
+      },
+      "group": "test",
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "tsc:emit:web",
+      "type": "shell",
+      "command": "bun --bunx tsc --noEmit false --outDir .tsc-out -p tsconfig.json",
+      "options": {
+        "cwd": "${workspaceFolder}/service/web"
+      },
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "dev:service",
+      "type": "shell",
+      "command": "go run . -no-browser",
+      "options": {
+        "cwd": "${workspaceFolder}/service"
+      },
+      "isBackground": true,
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "build:service",
+      "type": "shell",
+      "command": "go build -o bin\\quills.exe .",
+      "options": {
+        "cwd": "${workspaceFolder}/service"
+      },
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "vet:service",
+      "type": "shell",
+      "command": "go vet ./...",
+      "options": {
+        "cwd": "${workspaceFolder}/service"
+      },
+      "group": "test",
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "run:service-binary",
+      "type": "shell",
+      "command": ".\\quills.exe",
+      "options": {
+        "cwd": "${workspaceFolder}/service/bin"
+      },
+      "isBackground": true,
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "test:python-lib",
+      "type": "shell",
+      "command": "& .\\.venv\\Scripts\\python.exe -m pytest -q",
+      "options": {
+        "cwd": "${workspaceFolder}/python-lib"
+      },
+      "group": "test",
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "install:python-lib-editable",
+      "type": "shell",
+      "command": "& .\\.venv\\Scripts\\python.exe -m pip install -e .[dev]",
+      "options": {
+        "cwd": "${workspaceFolder}/python-lib"
+      },
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "dev:app",
+      "type": "shell",
+      "command": "$env:PATH = 'C:\\msys64\\ucrt64\\bin;' + $env:PATH; $env:CGO_ENABLED = '1'; go run .",
+      "options": {
+        "cwd": "${workspaceFolder}/app"
+      },
+      "isBackground": true,
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "build:app",
+      "type": "shell",
+      "command": "$env:PATH = 'C:\\msys64\\ucrt64\\bin;' + $env:PATH; $env:CGO_ENABLED = '1'; go build -o hedgebuddy.exe .",
+      "options": {
+        "cwd": "${workspaceFolder}/app"
+      },
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "dev:full-stack",
+      "dependsOrder": "parallel",
+      "dependsOn": [
+        "dev:service",
+        "dev:web"
+      ],
+      "problemMatcher": []
+    }
+  ]
+}

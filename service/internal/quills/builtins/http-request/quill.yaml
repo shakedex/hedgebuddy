@@ -1,0 +1,44 @@
+id: http-request
+name: HTTP Request
+version: 1.0.0
+description: Send an HTTP request to any URL
+author: HedgeBuddy
+category: http
+icon: globe
+
+inputs:
+  - name: url
+    type: url
+    required: true
+    label: URL
+    description: Target URL to send the request to
+  - name: body
+    type: string
+    required: false
+    label: Request Body
+    description: "JSON request body (supports template variables)"
+    for_modes: [post]
+  - name: headers
+    type: string
+    required: false
+    label: Headers
+    description: "HTTP headers as JSON object"
+
+compatible_triggers: ["*"]
+
+modes:
+  post:
+    label: POST
+    description: Send an HTTP POST request
+    steps:
+      - action: http.post
+        url: "{{inputs.url}}"
+        body: "{{inputs.body}}"
+        headers: "{{inputs.headers}}"
+  get:
+    label: GET
+    description: Send an HTTP GET request
+    steps:
+      - action: http.get
+        url: "{{inputs.url}}"
+        headers: "{{inputs.headers}}"

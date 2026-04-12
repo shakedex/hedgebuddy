@@ -1,0 +1,35 @@
+{
+  "app": "foolcat",
+  "display_name": "FoolCat",
+  "url_scheme": "foolcat",
+  "events": {
+    "FoolCatStarted": {
+      "display_name": "FoolCat Started",
+      "description": "Fires once when launching FoolCat",
+      "fields": {}
+    },
+    "ReportCreated": {
+      "display_name": "Report Created",
+      "description": "Fires when a report has been created",
+      "fields": {
+        "status": {
+          "type": "enum",
+          "values": ["Success", "Failed"],
+          "description": "Report creation status"
+        },
+        "error": {
+          "type": "string",
+          "description": "Error message if failed, 'none' if successful"
+        },
+        "pdfPath": {
+          "type": "path",
+          "description": "Path to the generated PDF report"
+        },
+        "htmlPath": {
+          "type": "path",
+          "description": "Path to the generated HTML report"
+        }
+      }
+    }
+  }
+}

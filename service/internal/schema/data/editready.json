@@ -1,0 +1,35 @@
+{
+  "app": "editready",
+  "display_name": "EditReady",
+  "url_scheme": "editready",
+  "events": {
+    "EditReadyStarted": {
+      "display_name": "EditReady Started",
+      "description": "Fires once when launching EditReady",
+      "fields": {}
+    },
+    "FileConversionCompleted": {
+      "display_name": "File Conversion Completed",
+      "description": "Fires when a conversion has completed",
+      "fields": {
+        "destinationPath": {
+          "type": "path",
+          "description": "Path to the converted output file"
+        },
+        "status": {
+          "type": "enum",
+          "values": ["Success", "Failed"],
+          "description": "Conversion status"
+        },
+        "sourcePath": {
+          "type": "path",
+          "description": "Path to the source file"
+        },
+        "error": {
+          "type": "string",
+          "description": "Error message if failed, 'none' if successful"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,35 @@
+id: slack-notify
+name: Slack Notification
+version: 1.0.0
+description: Send a Slack message via incoming webhook when a workflow event occurs
+author: HedgeBuddy
+category: messaging
+icon: bell
+
+inputs:
+  - name: webhook_url
+    type: url
+    required: true
+    label: Webhook URL
+    description: Slack incoming webhook URL
+  - name: message
+    type: string
+    required: true
+    label: Message
+    description: The message text to send (supports {{event.*}} templates)
+    default: "{{event_name}} from {{app_id}}: {{event_summary}}"
+  - name: channel
+    type: string
+    required: false
+    label: Channel Override
+    description: Override the webhook's default channel (optional)
+
+compatible_triggers:
+  - "*"
+
+steps:
+  - action: http.post
+    url: "{{inputs.webhook_url}}"
+    body: >-
+      {"text":"{{inputs.message}}"{{#if inputs.channel}},"channel":"{{inputs.channel}}"{{/if}}}
+    content_type: application/json

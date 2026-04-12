@@ -1,0 +1,21 @@
+id: delay
+name: Delay / Wait
+version: 1.0.0
+description: Wait for a specified duration before continuing
+author: HedgeBuddy
+category: delay
+icon: timer
+
+inputs:
+  - name: duration
+    type: string
+    required: true
+    label: Duration
+    description: "Wait duration (e.g. 5s, 1m, 500ms)"
+    default: "5s"
+
+compatible_triggers: ["*"]
+
+steps:
+  - action: delay.wait
+    duration: "{{inputs.duration}}"

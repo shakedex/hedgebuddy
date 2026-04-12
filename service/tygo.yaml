@@ -1,0 +1,19 @@
+packages:
+  - path: "github.com/shakedex/hedgebuddy/service/internal/storage"
+    output_path: "web/src/lib/generated/storage.ts"
+    type_mappings:
+      time.Time: "string"
+      json.RawMessage: "Record<string, unknown>"
+
+  - path: "github.com/shakedex/hedgebuddy/service/internal/schema"
+    output_path: "web/src/lib/generated/schema.ts"
+
+  - path: "github.com/shakedex/hedgebuddy/service/internal/actions"
+    output_path: "web/src/lib/generated/actions.ts"
+    include_files:
+      - "meta.go"
+
+  - path: "github.com/shakedex/hedgebuddy/service/internal/quills"
+    output_path: "web/src/lib/generated/quills.ts"
+    include_files:
+      - "loader.go"
