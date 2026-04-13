@@ -3,25 +3,18 @@ import { useParams, useNavigate } from '@tanstack/react-router'
 import {
   fetchWorkflow, updateWorkflow, fetchSchemas, fetchQuills, fetchActions, runWorkflow,
 } from '#/lib/api'
-import type { Workflow, Step, StepInput, Condition, ActionMeta, Field, Quill } from '#/lib/api'
+import type { Workflow, Step, StepInput, Condition, ActionMeta, Field } from '#/lib/api'
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { Save, ArrowLeft, Plus, Zap, Play, AlertTriangle } from 'lucide-react'
+import { Save, ArrowLeft, Play } from 'lucide-react'
 import { Button } from '#/components/ui/button'
 import { Input } from '#/components/ui/input'
 import { Label } from '#/components/ui/label'
-import {
-  Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue,
-} from '#/components/ui/select'
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel,
-  AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
-  AlertDialogHeader, AlertDialogTitle,
-} from '#/components/ui/alert-dialog'
-import { StepAdder } from '#/components/StepAdder'
-import { StepCard } from '#/components/StepCard'
-import { ConditionRow } from '#/components/ConditionRow'
 import { FieldsSidebar } from '#/components/FieldsSidebar'
 import { WorkflowRunHistory } from '#/components/WorkflowRunHistory'
+import {
+  Alerts, TriggerSection, StepsSection, LeaveDialog,
+  deriveOutputAlias, validateWorkflow,
+} from '#/components/workflow-edit'
 
 // ─── Page ────────────────────────────────────────────────────────────────────
 
@@ -138,30 +131,10 @@ export function WorkflowEditPage() {
   }
 
   // ── Validation ──
-  const validate = useCallback((): string[] => {
-    const errs: string[] = []
-    if (!form.name?.trim()) errs.push('Workflow name is required')
-    if (!form.trigger?.app_id) errs.push('Trigger app is required')
-    if (!form.trigger?.event_type) errs.push('Trigger event is required')
-    const steps = form.steps ?? []
-    if (steps.length === 0) errs.push('At least one step is required')
-    for (let i = 0; i < steps.length; i++) {
-      const step = steps[i]
-      if (!step.quill_id) { errs.push(`Step ${i + 1}: no action selected`); continue }
-      const quill = getQuill(step.quill_id), action = getAction(step.quill_id)
-      const mode = step.mode ?? ''
-      // Filter inputs for the selected mode.
-      const quillInputs = (quill?.inputs ?? [])
-        .filter((inp) => !inp.for_modes?.length || (mode && inp.for_modes.includes(mode)))
-      const actionInputs = (!quill && action) ? (action.inputs ?? []) : []
-      const required = [...quillInputs, ...actionInputs].filter((inp) => inp.required)
-      for (const inp of required) {
-        const val = (step.inputs ?? []).find((si) => si.name === inp.name)?.value
-        if (!val?.trim()) errs.push(`Step ${i + 1} (${quill?.name ?? step.quill_id}): "${inp.name}" is required`)
-      }
-    }
-    return errs
-  }, [form, getQuill, getAction])
+  const validate = useCallback(
+    () => validateWorkflow(form, getQuill, getAction),
+    [form, getQuill, getAction],
+  )
 
   function guardedNavigate(to: () => void) {
     if (dirty) { setPendingNav(() => to); setShowLeaveDialog(true) } else to()
@@ -244,49 +217,26 @@ export function WorkflowEditPage() {
             onRemoveCondition={removeCondition}
           />
 
-          {/* Steps */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold">Steps</h2>
-              <StepAdder
-                quills={quillsList ?? []}
-                actionsByCategory={actionsByCategory}
-                onSelect={addStep}
-              />
-            </div>
-
-            {(form.steps ?? []).length === 0 ? (
-              <div className="rounded-lg border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
-                No steps yet. Add a step to define what happens when this workflow triggers.
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {(form.steps ?? []).map((step, i) => (
-                  <StepCard
-                    key={i}
-                    index={i}
-                    step={step}
-                    quill={getQuill(step.quill_id)}
-                    action={getAction(step.quill_id)}
-                    allActions={actionsList}
-                    onUpdate={(s) => updateStep(i, s)}
-                    onRemove={() => removeStep(i)}
-                    onSelectAction={(aid) => selectStepAction(i, aid)}
-                    quillsList={quillsList ?? []}
-                    actionsByCategory={actionsByCategory}
-                    isDragging={dragIdx === i}
-                    isDragOver={dragOverIdx === i}
-                    onDragStart={() => setDragIdx(i)}
-                    onDragOver={() => setDragOverIdx(i)}
-                    onDragEnd={() => {
-                      if (dragIdx !== null && dragOverIdx !== null && dragIdx !== dragOverIdx) moveStep(dragIdx, dragOverIdx)
-                      setDragIdx(null); setDragOverIdx(null)
-                    }}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
+          <StepsSection
+            steps={form.steps ?? []}
+            quillsList={quillsList ?? []}
+            actionsList={actionsList ?? []}
+            actionsByCategory={actionsByCategory}
+            dragIdx={dragIdx}
+            dragOverIdx={dragOverIdx}
+            getQuill={getQuill}
+            getAction={getAction}
+            onAddStep={addStep}
+            onUpdateStep={updateStep}
+            onRemoveStep={removeStep}
+            onSelectStepAction={selectStepAction}
+            onDragStart={setDragIdx}
+            onDragOver={setDragOverIdx}
+            onDragEnd={() => {
+              if (dragIdx !== null && dragOverIdx !== null && dragIdx !== dragOverIdx) moveStep(dragIdx, dragOverIdx)
+              setDragIdx(null); setDragOverIdx(null)
+            }}
+          />
 
           {/* Runs */}
           <WorkflowRunHistory workflowId={id} />
@@ -302,143 +252,12 @@ export function WorkflowEditPage() {
         />
       </div>
 
-      {/* Leave dialog */}
-      <AlertDialog open={showLeaveDialog} onOpenChange={setShowLeaveDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Unsaved changes</AlertDialogTitle>
-            <AlertDialogDescription>
-              You have unsaved changes. Are you sure you want to leave? Changes will be lost.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => { setShowLeaveDialog(false); setPendingNav(null) }}>Stay</AlertDialogCancel>
-            <AlertDialogAction onClick={() => { setShowLeaveDialog(false); setDirty(false); pendingNav?.(); setPendingNav(null) }}>Leave</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </div>
-  )
-}
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-/** Derive default output alias for a step — matches FieldsSidebar's logic. */
-function deriveOutputAlias(quillId: string, quill?: Quill, mode?: string): string {
-  if (quill) {
-    // Check mode-specific steps first, then top-level steps.
-    const modeSteps = mode ? quill.modes?.[mode]?.steps : undefined
-    const steps = modeSteps ?? quill.steps ?? []
-    if (steps.length > 0) {
-      const lastWithOutput = [...steps].reverse().find((s) => s.output)
-      if (lastWithOutput?.output) return lastWithOutput.output
-    }
-  }
-  const base = quillId.replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_|_$/g, '')
-  return mode ? `${base}_${mode}` : base
-}
-
-// ─── Sub-components ──────────────────────────────────────────────────────────
-
-function Alerts({ errors, saveError, testResult }: {
-  errors: string[]; saveError: string | null; testResult: { ok: boolean; msg: string } | null
-}) {
-  return (
-    <>
-      {errors.length > 0 && (
-        <div className="rounded-lg border border-destructive/50 bg-destructive/5 p-3 space-y-1">
-          <div className="flex items-center gap-2 text-sm font-medium text-destructive">
-            <AlertTriangle className="size-4" />Please fix before saving:
-          </div>
-          <ul className="list-disc list-inside text-xs text-destructive space-y-0.5">
-            {errors.map((e, i) => <li key={i}>{e}</li>)}
-          </ul>
-        </div>
-      )}
-      {saveError && (
-        <div className="rounded-lg border border-destructive/50 bg-destructive/5 p-3 text-xs text-destructive">
-          Save failed: {saveError}
-        </div>
-      )}
-      {testResult && (
-        <div className={`rounded-lg border p-3 text-xs ${
-          testResult.ok ? 'border-green-500/30 bg-green-500/5 text-green-400' : 'border-destructive/50 bg-destructive/5 text-destructive'
-        }`}>
-          {testResult.ok ? 'Test run started successfully.' : `Test run failed: ${testResult.msg}`}
-        </div>
-      )}
-    </>
-  )
-}
-
-function TriggerSection({ form, eventsByApp, eventOptions, eventFieldEntries, selectedEvent, onUpdate, onAddCondition, onUpdateCondition, onRemoveCondition }: {
-  form: Partial<Workflow>
-  eventsByApp: Record<string, { value: string; label: string; app: string; appDisplay: string }[]>
-  eventOptions: { value: string; label: string; app: string; appDisplay: string }[]
-  eventFieldEntries: [string, Field][]
-  selectedEvent?: { value: string; label: string; app: string; appDisplay: string }
-  onUpdate: <K extends keyof Workflow>(key: K, val: Workflow[K]) => void
-  onAddCondition: () => void
-  onUpdateCondition: (i: number, c: Condition) => void
-  onRemoveCondition: (i: number) => void
-}) {
-  return (
-    <div className="rounded-lg border border-border p-4 space-y-4">
-      <div className="flex items-center gap-2">
-        <Zap className="size-4 text-amber-500" /><h2 className="text-sm font-semibold">Trigger</h2>
-      </div>
-
-      <div className="space-y-1.5">
-        <Label className="text-xs text-muted-foreground">When this event fires</Label>
-        <Select
-          value={form.trigger?.event_type ?? ''}
-          onValueChange={(val) => {
-            const opt = eventOptions.find((o) => o.value === val)
-            onUpdate('trigger', {
-              ...form.trigger!,
-              event_type: val,
-              app_id: opt?.app ?? '',
-              conditions: form.trigger?.conditions ?? [],
-            })
-          }}
-        >
-          <SelectTrigger className="w-full"><SelectValue placeholder="Select event..." /></SelectTrigger>
-          <SelectContent>
-            {Object.entries(eventsByApp).map(([appName, opts]) => (
-              <SelectGroup key={appName}>
-                <SelectLabel>{appName}</SelectLabel>
-                {opts.map((opt) => (
-                  <SelectItem key={`${opt.app}/${opt.value}`} value={opt.value}>{opt.label}</SelectItem>
-                ))}
-              </SelectGroup>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      {/* Conditions */}
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <Label className="text-xs text-muted-foreground">Only if these conditions are met</Label>
-          <Button variant="outline" size="xs" onClick={onAddCondition}><Plus /> Add Condition</Button>
-        </div>
-        {(form.trigger?.conditions ?? []).length === 0 ? (
-          <p className="text-xs text-muted-foreground italic">No conditions — triggers on every event of this type</p>
-        ) : (
-          <div className="space-y-2">
-            {(form.trigger?.conditions ?? []).map((c, i) => (
-              <ConditionRow
-                key={i}
-                cond={c}
-                eventFields={eventFieldEntries}
-                eventType={selectedEvent?.value}
-                onChange={(nc) => onUpdateCondition(i, nc)}
-                onRemove={() => onRemoveCondition(i)}
-              />
-            ))}
-          </div>
-        )}
-      </div>
+      <LeaveDialog
+        open={showLeaveDialog}
+        onOpenChange={setShowLeaveDialog}
+        onStay={() => { setShowLeaveDialog(false); setPendingNav(null) }}
+        onLeave={() => { setShowLeaveDialog(false); setDirty(false); pendingNav?.(); setPendingNav(null) }}
+      />
     </div>
   )
 }
