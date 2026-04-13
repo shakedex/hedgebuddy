@@ -248,7 +248,7 @@ jobs:
           git push origin "suite-v${{ env.VERSION_HB }}" || echo "Tag already pushed, continuing"
 
       - name: Create Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: suite-v${{ env.VERSION_HB }}
           name: "HedgeBuddy Suite (HedgeBuddy v${{ env.VERSION_HB }} + Quills v${{ env.VERSION_QUILLS }})"
