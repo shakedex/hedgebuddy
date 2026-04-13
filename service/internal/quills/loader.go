@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -24,6 +25,36 @@ type Input struct {
 	Default     string   `yaml:"default"     json:"default,omitempty"`
 	Values      []string `yaml:"values"      json:"values,omitempty"`
 	ForModes    []string `yaml:"for_modes"   json:"for_modes,omitempty"`
+}
+
+// SettingDef describes a persistent quill-level configuration parameter.
+// Settings are configured once in the Quills management page and shared
+// across all workflows that use this quill.
+type SettingDef struct {
+	Name        string `yaml:"name"        json:"name"`
+	Type        string `yaml:"type"        json:"type"` // string, url, secure, number, boolean, enum
+	Required    bool   `yaml:"required"    json:"required"`
+	Label       string `yaml:"label"       json:"label"`
+	Description string `yaml:"description" json:"description"`
+	Default     string `yaml:"default"     json:"default,omitempty"`
+}
+
+// OptionDef describes how to fetch dynamic options for an input at form time.
+// The engine executes the specified action with saved settings and maps the
+// response into value/label pairs for the UI dropdown.
+type OptionDef struct {
+	Action     string         `yaml:"action"      json:"action"`      // e.g. "http.get"
+	Config     map[string]any `yaml:"config"      json:"config"`      // action config with {{settings.X}} templates
+	ItemsPath  string         `yaml:"items_path"  json:"items_path"`  // dot path to array in response (e.g. "body.items")
+	ValueField string         `yaml:"value_field" json:"value_field"` // field name for option value
+	LabelField string         `yaml:"label_field" json:"label_field"` // field name for option label
+}
+
+// TestConnectionDef describes how to validate that saved settings are correct.
+type TestConnectionDef struct {
+	Action       string         `yaml:"action"        json:"action"`
+	Config       map[string]any `yaml:"config"        json:"config"`
+	ExpectStatus int            `yaml:"expect_status" json:"expect_status,omitempty"` // default: 200
 }
 
 // ActionStep is a single action invocation within a quill.
@@ -54,6 +85,11 @@ type Quill struct {
 	CompatibleTriggers []string        `yaml:"compatible_triggers" json:"compatible_triggers"`
 	Modes              map[string]Mode `yaml:"modes"               json:"modes,omitempty"`
 	Steps              []ActionStep    `yaml:"steps"               json:"steps"`
+
+	// Dynamic quill support.
+	Settings       []SettingDef         `yaml:"settings"        json:"settings,omitempty"`
+	Options        map[string]OptionDef `yaml:"options"         json:"options,omitempty"`
+	TestConnection *TestConnectionDef   `yaml:"test_connection" json:"test_connection,omitempty"`
 
 	// Source indicates where this quill was loaded from.
 	Source string `yaml:"-" json:"source,omitempty"` // "builtin" or "installed"
@@ -223,12 +259,18 @@ func (lib *Library) Get(id string) (*Quill, bool) {
 	return q, ok
 }
 
-// List returns all loaded quills.
+// List returns all loaded quills, sorted by category then name.
 func (lib *Library) List() []*Quill {
 	result := make([]*Quill, 0, len(lib.quills))
 	for _, q := range lib.quills {
 		result = append(result, q)
 	}
+	sort.Slice(result, func(i, j int) bool {
+		if result[i].Category != result[j].Category {
+			return result[i].Category < result[j].Category
+		}
+		return result[i].Name < result[j].Name
+	})
 	return result
 }
 
@@ -264,6 +306,7 @@ func Validate(q *Quill) []string {
 		validTypes := map[string]bool{
 			"string": true, "url": true, "path": true,
 			"number": true, "boolean": true, "enum": true, "secure": true,
+			"dynamic": true,
 		}
 		if input.Type != "" && !validTypes[strings.ToLower(input.Type)] {
 			issues = append(issues, fmt.Sprintf("input %d: unknown type %q", i, input.Type))

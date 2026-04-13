@@ -17,6 +17,39 @@ export interface Input {
   for_modes: string[];
 }
 /**
+ * SettingDef describes a persistent quill-level configuration parameter.
+ * Settings are configured once in the Quills management page and shared
+ * across all workflows that use this quill.
+ */
+export interface SettingDef {
+  name: string;
+  type: string; // string, url, secure, number, boolean, enum
+  required: boolean;
+  label: string;
+  description: string;
+  default: string;
+}
+/**
+ * OptionDef describes how to fetch dynamic options for an input at form time.
+ * The engine executes the specified action with saved settings and maps the
+ * response into value/label pairs for the UI dropdown.
+ */
+export interface OptionDef {
+  action: string; // e.g. "http.get"
+  config: { [key: string]: any}; // action config with {{settings.X}} templates
+  items_path: string; // dot path to array in response (e.g. "body.items")
+  value_field: string; // field name for option value
+  label_field: string; // field name for option label
+}
+/**
+ * TestConnectionDef describes how to validate that saved settings are correct.
+ */
+export interface TestConnectionDef {
+  action: string;
+  config: { [key: string]: any};
+  expect_status: number /* int */; // default: 200
+}
+/**
  * ActionStep is a single action invocation within a quill.
  */
 export interface ActionStep {
@@ -46,6 +79,12 @@ export interface Quill {
   compatible_triggers: string[];
   modes: { [key: string]: Mode};
   steps: ActionStep[];
+  /**
+   * Dynamic quill support.
+   */
+  settings: SettingDef[];
+  options: { [key: string]: OptionDef};
+  test_connection?: TestConnectionDef;
   /**
    * Python quill fields.
    */

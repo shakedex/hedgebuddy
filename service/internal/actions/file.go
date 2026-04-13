@@ -1,6 +1,7 @@
 package actions
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -204,4 +205,56 @@ func (a *FileAppendAction) Execute(config map[string]any, ctx *Context) Result {
 		return Result{Error: fmt.Sprintf("file.append: %v", err), OK: false}
 	}
 	return Result{Output: map[string]any{"path": path}, OK: true}
+}
+
+// ── FileReadAction ──────────────────────────────────────────────────────────
+
+// FileReadAction reads a file's contents into the step output.
+// If the content is valid JSON, it's returned as a parsed object.
+type FileReadAction struct{}
+
+func (a *FileReadAction) Name() string { return "file.read" }
+
+func (a *FileReadAction) Execute(config map[string]any, ctx *Context) Result {
+	path, _ := config["path"].(string)
+	if path == "" {
+		return Result{Error: "file.read: path is required", OK: false}
+	}
+
+	maxSize := int64(10 << 20) // 10 MiB default
+	if ms, ok := config["max_size"].(float64); ok && ms > 0 {
+		maxSize = int64(ms)
+	}
+
+	f, err := os.Open(path)
+	if err != nil {
+		return Result{Error: fmt.Sprintf("file.read: %v", err), OK: false}
+	}
+	defer f.Close()
+
+	data, err := io.ReadAll(io.LimitReader(f, maxSize))
+	if err != nil {
+		return Result{Error: fmt.Sprintf("file.read: %v", err), OK: false}
+	}
+
+	// Try JSON parse; fall back to string.
+	var content any
+	if json.Valid(data) {
+		var parsed any
+		if err := json.Unmarshal(data, &parsed); err == nil {
+			content = parsed
+		} else {
+			content = string(data)
+		}
+	} else {
+		content = string(data)
+	}
+
+	return Result{
+		Output: map[string]any{
+			"content": content,
+			"size":    len(data),
+		},
+		OK: true,
+	}
 }

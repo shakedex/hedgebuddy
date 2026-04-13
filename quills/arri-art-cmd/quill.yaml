@@ -1,18 +1,20 @@
 id: arri-art-cmd
 name: ARRI ART-CMD
-version: 1.0.0
+version: 1.1.0
 description: Process ARRI camera footage using ART-CMD (verify, export, copy, process, mxf-recovery)
 author: HedgeBuddy
 category: media-processing
 icon: film
 
-inputs:
-  # ── Common inputs (all modes) ─────────────────────────────────
+settings:
   - name: art_cmd_path
     type: path
     required: true
     label: ART-CMD Path
-    description: Path to the art-cmd executable
+    description: Path to the art-cmd executable (configured once)
+
+inputs:
+  # ── Common inputs (all modes) ─────────────────────────────────
   - name: input
     type: path
     required: true
@@ -195,7 +197,7 @@ modes:
     description: Verify video frame checksums or compare two clips
     steps:
       - action: shell.exec
-        command: "{{inputs.art_cmd_path}}"
+        command: "{{settings.art_cmd_path}}"
         args:
           - verify
         flags:
@@ -217,7 +219,7 @@ modes:
     description: Export audio, metadata, and look files from clips
     steps:
       - action: shell.exec
-        command: "{{inputs.art_cmd_path}}"
+        command: "{{settings.art_cmd_path}}"
         args:
           - export
         flags:
@@ -240,7 +242,7 @@ modes:
     description: Copy ARRIRAW, ARRICORE, or ProRes clips (optionally trimmed) to MXF
     steps:
       - action: shell.exec
-        command: "{{inputs.art_cmd_path}}"
+        command: "{{settings.art_cmd_path}}"
         args:
           - copy
         flags:
@@ -259,7 +261,7 @@ modes:
     description: Decode and render ARRIRAW/ARRICORE/ProRes clips with color processing
     steps:
       - action: shell.exec
-        command: "{{inputs.art_cmd_path}}"
+        command: "{{settings.art_cmd_path}}"
         args:
           - process
         flags:
@@ -288,7 +290,7 @@ modes:
     description: Recover and rewrite damaged MXF files
     steps:
       - action: shell.exec
-        command: "{{inputs.art_cmd_path}}"
+        command: "{{settings.art_cmd_path}}"
         args:
           - mxf-recovery
         flags:

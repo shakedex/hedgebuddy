@@ -3,7 +3,7 @@ import { useParams, useNavigate } from '@tanstack/react-router'
 import {
   fetchWorkflow, updateWorkflow, fetchSchemas, fetchQuills, fetchActions, runWorkflow,
 } from '#/lib/api'
-import type { Workflow, Step, StepInput, Condition, ActionMeta, Field } from '#/lib/api'
+import type { Workflow, Step, StepInput, Condition, ActionMeta, Field, Quill } from '#/lib/api'
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Save, ArrowLeft, Plus, Zap, Play, AlertTriangle } from 'lucide-react'
 import { Button } from '#/components/ui/button'
@@ -111,7 +111,8 @@ export function WorkflowEditPage() {
     const hasModes = quill?.modes && Object.keys(quill.modes).length > 0
     if (quill && !hasModes) inputs = (quill.inputs ?? []).map((inp) => ({ name: inp.name, value: inp.default ?? '' }))
     else if (action) inputs = (action.inputs ?? []).map((inp) => ({ name: inp.name, value: inp.default ?? '' }))
-    updateStep(stepIdx, { quill_id: actionId, inputs })
+    const output_alias = deriveOutputAlias(actionId, quill)
+    updateStep(stepIdx, { quill_id: actionId, inputs, output_alias })
   }
   function addStep(actionId: string) {
     const quill = getQuill(actionId), action = getAction(actionId)
@@ -119,7 +120,8 @@ export function WorkflowEditPage() {
     const hasModes = quill?.modes && Object.keys(quill.modes).length > 0
     if (quill && !hasModes) inputs = (quill.inputs ?? []).map((inp) => ({ name: inp.name, value: inp.default ?? '' }))
     else if (action) inputs = (action.inputs ?? []).map((inp) => ({ name: inp.name, value: inp.default ?? '' }))
-    update('steps', [...(form.steps ?? []), { quill_id: actionId, inputs }])
+    const output_alias = deriveOutputAlias(actionId, quill)
+    update('steps', [...(form.steps ?? []), { quill_id: actionId, inputs, output_alias }])
   }
 
   // ── Conditions ──
@@ -266,6 +268,7 @@ export function WorkflowEditPage() {
                     step={step}
                     quill={getQuill(step.quill_id)}
                     action={getAction(step.quill_id)}
+                    allActions={actionsList}
                     onUpdate={(s) => updateStep(i, s)}
                     onRemove={() => removeStep(i)}
                     onSelectAction={(aid) => selectStepAction(i, aid)}
@@ -290,7 +293,13 @@ export function WorkflowEditPage() {
         </div>
 
         {/* Right: sidebar */}
-        <FieldsSidebar eventFields={eventFieldEntries} eventType={selectedEvent?.value} />
+        <FieldsSidebar
+          eventFields={eventFieldEntries}
+          eventType={selectedEvent?.value}
+          steps={form.steps}
+          quills={quillsList}
+          actions={actionsList}
+        />
       </div>
 
       {/* Leave dialog */}
@@ -310,6 +319,23 @@ export function WorkflowEditPage() {
       </AlertDialog>
     </div>
   )
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+/** Derive default output alias for a step — matches FieldsSidebar's logic. */
+function deriveOutputAlias(quillId: string, quill?: Quill, mode?: string): string {
+  if (quill) {
+    // Check mode-specific steps first, then top-level steps.
+    const modeSteps = mode ? quill.modes?.[mode]?.steps : undefined
+    const steps = modeSteps ?? quill.steps ?? []
+    if (steps.length > 0) {
+      const lastWithOutput = [...steps].reverse().find((s) => s.output)
+      if (lastWithOutput?.output) return lastWithOutput.output
+    }
+  }
+  const base = quillId.replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_|_$/g, '')
+  return mode ? `${base}_${mode}` : base
 }
 
 // ─── Sub-components ──────────────────────────────────────────────────────────

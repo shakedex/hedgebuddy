@@ -8,19 +8,22 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '#/components/ui/tooltip'
 import { FolderOpen, X } from 'lucide-react'
 import { FileBrowserDialog } from './FileBrowserDialog'
+import { DynamicSelect } from './DynamicSelect'
 import { previewTemplate } from '#/lib/format'
 import { parseSegments, templateLabel } from '#/lib/templates'
 
 /**
  * Smart input that renders {{...}} tokens as inline badges.
- * Supports drag-drop from sidebar, file browsing, and live preview.
+ * Supports drag-drop from sidebar, file browsing, live preview,
+ * and dynamic API-loaded dropdowns.
  */
 export function InputWithFieldPicker({
-  value, onChange, inputDef,
+  value, onChange, inputDef, quillId,
 }: {
   value: string
   onChange: (v: string) => void
   inputDef: { name: string; type: string; required?: boolean; values?: string[] }
+  quillId?: string
 }) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [browserOpen, setBrowserOpen] = useState(false)
@@ -30,6 +33,18 @@ export function InputWithFieldPicker({
   const preview = previewTemplate(value)
   const segments = useMemo(() => parseSegments(value), [value])
   const hasTemplates = segments.some((s) => s.type === 'template')
+
+  // Dynamic → API-powered searchable select
+  if (inputDef.type === 'dynamic' && quillId) {
+    return (
+      <DynamicSelect
+        quillId={quillId}
+        inputName={inputDef.name}
+        value={value}
+        onChange={onChange}
+      />
+    )
+  }
 
   // Enum → Select
   if (inputDef.values && inputDef.values.length > 0) {

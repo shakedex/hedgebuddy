@@ -1,8 +1,9 @@
-import { GripVertical, Trash2, Info } from 'lucide-react'
+import { GripVertical, Trash2, Info, Tag } from 'lucide-react'
 import type { Step, Quill, ActionMeta } from '#/lib/api'
 import { CATEGORY_LABELS } from '#/lib/constants'
 import { Button } from '#/components/ui/button'
 import { Badge } from '#/components/ui/badge'
+import { Input } from '#/components/ui/input'
 import { Label } from '#/components/ui/label'
 import {
   Tooltip, TooltipContent, TooltipTrigger,
@@ -15,6 +16,7 @@ interface StepCardProps {
   step: Step
   quill?: Quill
   action?: ActionMeta
+  allActions?: ActionMeta[]
   onUpdate: (s: Step) => void
   onRemove: () => void
   onSelectAction: (id: string) => void
@@ -28,7 +30,7 @@ interface StepCardProps {
 }
 
 export function StepCard({
-  index, step, quill, action,
+  index, step, quill, action, allActions,
   onUpdate, onRemove, onSelectAction,
   quillsList, actionsByCategory,
   isDragging, isDragOver, onDragStart, onDragOver, onDragEnd,
@@ -63,7 +65,11 @@ export function StepCard({
         name: inp.name,
         value: (step.inputs ?? []).find((i) => i.name === inp.name)?.value ?? inp.default ?? '',
       }))
-    onUpdate({ ...step, mode, inputs: modeInputs })
+    // Recalculate output_alias for the new mode.
+    const modeSteps = quill.modes?.[mode]?.steps ?? []
+    const lastWithOutput = [...modeSteps].reverse().find((s) => s.output)
+    const output_alias = lastWithOutput?.output ?? defaultOutputAlias({ ...step, mode })
+    onUpdate({ ...step, mode, inputs: modeInputs, output_alias })
   }
 
   return (
@@ -163,12 +169,37 @@ export function StepCard({
                   value={getInputValue(def.name)}
                   onChange={(v) => updateInput(def.name, v)}
                   inputDef={def}
+                  quillId={step.quill_id}
                 />
               </div>
             ))
           ) : !hasModes ? (
             <p className="text-xs text-muted-foreground italic">No configuration needed</p>
           ) : null}
+
+          {/* Output alias — only for actions that produce outputs */}
+          {step.quill_id && hasOutputs(step, quill, allActions ?? []) && (
+            <div className="mt-1 rounded-md bg-muted/40 border border-dashed border-border px-3 py-2.5 space-y-1.5">
+              <div className="flex items-center gap-1.5">
+                <Tag className="size-3 text-primary/70" />
+                <Label className="text-[11px] font-semibold text-primary/80 uppercase tracking-wider">Output as</Label>
+                <Tooltip>
+                  <TooltipTrigger>
+                    <Info className="size-3 text-muted-foreground" />
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-xs">
+                    Name used to reference this step's output in later steps, e.g. {'{{steps.<name>.body}}'}
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+              <Input
+                value={step.output_alias ?? ''}
+                onChange={(e) => onUpdate({ ...step, output_alias: e.target.value.replace(/[^a-zA-Z0-9_]/g, '') })}
+                placeholder={defaultOutputAlias(step)}
+                className="font-mono text-xs h-7 bg-background"
+              />
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -201,4 +232,26 @@ function buildInputDefs(quill: Quill | undefined, action: ActionMeta | undefined
     }))
   }
   return []
+}
+
+/** Check if a step's underlying action(s) declare any outputs. */
+function hasOutputs(step: Step, quill: Quill | undefined, allActions: ActionMeta[]): boolean {
+  if (quill) {
+    const mode = step.mode ?? ''
+    const modeSteps = mode ? quill.modes?.[mode]?.steps : undefined
+    const steps = modeSteps ?? quill.steps ?? []
+    for (const s of steps) {
+      const act = allActions.find((a) => a.name === s.action)
+      if (act && (act.outputs?.length ?? 0) > 0) return true
+    }
+    return false
+  }
+  const act = allActions.find((a) => a.name === step.quill_id)
+  return act != null && (act.outputs?.length ?? 0) > 0
+}
+
+/** Generate default output alias from quill ID. */
+function defaultOutputAlias(step: Step): string {
+  const base = step.quill_id.replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_|_$/g, '')
+  return step.mode ? `${base}_${step.mode}` : base
 }

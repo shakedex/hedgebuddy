@@ -1,7 +1,7 @@
 id: file-ops
 name: File Operations
-version: 1.0.0
-description: Move, copy, write, or append files
+version: 1.1.0
+description: Move, copy, read, write, or append files
 author: HedgeBuddy
 category: file
 icon: file
@@ -23,8 +23,8 @@ inputs:
     type: path
     required: true
     label: File Path
-    description: File path to write or append to
-    for_modes: [write, append]
+    description: File path to read, write, or append to
+    for_modes: [read, write, append]
   - name: content
     type: string
     required: true
@@ -49,6 +49,13 @@ modes:
       - action: file.copy
         source: "{{inputs.source}}"
         destination: "{{inputs.destination}}"
+  read:
+    label: Read
+    description: Read file contents (auto-parses JSON)
+    steps:
+      - action: file.read
+        path: "{{inputs.path}}"
+        output: file_content
   write:
     label: Write
     description: Write content to a file (overwrites existing)

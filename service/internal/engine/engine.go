@@ -227,6 +227,7 @@ func (e *Engine) executeWorkflow(wf storage.Workflow, payload map[string]any, ap
 	ctx := &actions.Context{
 		Event:     payload,
 		Inputs:    make(map[string]string),
+		Settings:  make(map[string]string),
 		Steps:     make(map[string]any),
 		AppID:     appID,
 		EventName: eventName,
@@ -238,6 +239,14 @@ func (e *Engine) executeWorkflow(wf storage.Workflow, payload map[string]any, ap
 		// Resolve step inputs into context.
 		for _, input := range step.Inputs {
 			ctx.Inputs[input.Name] = input.Value
+		}
+
+		// Load persistent quill settings for this step's quill.
+		if settings, err := e.store.GetQuillSettings(step.QuillID); err == nil {
+			ctx.Settings = settings
+		} else {
+			log.Printf("[engine] Warning: failed to load settings for quill %q: %v", step.QuillID, err)
+			ctx.Settings = make(map[string]string)
 		}
 
 		// Snapshot resolved inputs for logging.
@@ -271,6 +280,8 @@ func (e *Engine) executeWorkflow(wf storage.Workflow, payload map[string]any, ap
 				}
 
 				pyInput := runner.PythonInput{
+					Command:   "execute",
+					Settings:  ctx.Settings,
 					Event:     ctx.Event,
 					Inputs:    ctx.Inputs,
 					AppID:     ctx.AppID,
@@ -294,6 +305,9 @@ func (e *Engine) executeWorkflow(wf storage.Workflow, payload map[string]any, ap
 				}
 
 				stepKey := fmt.Sprintf("step_%d", i)
+				if step.OutputAlias != "" {
+					stepKey = step.OutputAlias
+				}
 				ctx.Steps[stepKey] = output.Output
 				stepsLog = append(stepsLog, stepLog{Step: i, Quill: step.QuillID, Status: "success", Inputs: resolvedInputs, Output: output.Output})
 				log.Printf("[engine] Step %d (%s) python succeeded", i, step.QuillID)
@@ -321,8 +335,17 @@ func (e *Engine) executeWorkflow(wf storage.Workflow, payload map[string]any, ap
 						failedAction = true
 						break
 					}
-					if qs.Output != "" {
-						ctx.Steps[qs.Output] = result.Output
+					outputKey := qs.Output
+					if outputKey == "" && step.OutputAlias != "" {
+						outputKey = step.OutputAlias
+					}
+					if outputKey != "" {
+						ctx.Steps[outputKey] = result.Output
+						// Also store under OutputAlias if it differs, so both
+						// the YAML-defined name and the user alias resolve.
+						if step.OutputAlias != "" && step.OutputAlias != outputKey {
+							ctx.Steps[step.OutputAlias] = result.Output
+						}
 					}
 					log.Printf("[engine] Step %d.%d (%s) succeeded", i, j, actionName)
 				}
@@ -361,6 +384,9 @@ func (e *Engine) executeWorkflow(wf storage.Workflow, payload map[string]any, ap
 			}
 
 			stepKey := fmt.Sprintf("step_%d", i)
+			if step.OutputAlias != "" {
+				stepKey = step.OutputAlias
+			}
 			ctx.Steps[stepKey] = result.Output
 			stepsLog = append(stepsLog, stepLog{Step: i, Quill: step.QuillID, Status: "success", Inputs: resolvedInputs, Output: result.Output})
 		}
@@ -372,8 +398,10 @@ func (e *Engine) executeWorkflow(wf storage.Workflow, payload map[string]any, ap
 	log.Printf("[engine] Workflow %q completed successfully", wf.Name)
 }
 
-// resolveTemplates replaces {{event.X}}, {{inputs.X}}, {{steps.X}}, and
-// {{app_id}}/{{event_name}} placeholders in a string.
+// resolveTemplates replaces {{event.X}}, {{inputs.X}}, {{settings.X}},
+// {{steps.X.Y.Z}}, and {{app_id}}/{{event_name}} placeholders in a string.
+// Supports deep dot-path traversal for structured step outputs
+// (e.g. {{steps.auth.body.token}}).
 func resolveTemplates(s string, ctx *actions.Context) string {
 	if !strings.Contains(s, "{{") {
 		return s
@@ -419,20 +447,21 @@ func resolveTemplates(s string, ctx *actions.Context) string {
 		result = strings.ReplaceAll(result, "{{event_summary}}", buildEventSummary(ctx.Event))
 	}
 
-	// Replace {{event.X}} with values from the event payload.
-	for key, val := range ctx.Event {
-		result = strings.ReplaceAll(result, "{{event."+key+"}}", fmt.Sprintf("%v", val))
-	}
+	// Replace {{event.X}} with values from the event payload (deep path).
+	result = resolvePathTemplates(result, "event", ctx.Event)
 
 	// Replace {{inputs.X}} with resolved inputs.
 	for key, val := range ctx.Inputs {
 		result = strings.ReplaceAll(result, "{{inputs."+key+"}}", val)
 	}
 
-	// Replace {{steps.X}} with outputs from previous steps.
-	for key, val := range ctx.Steps {
-		result = strings.ReplaceAll(result, "{{steps."+key+"}}", fmt.Sprintf("%v", val))
+	// Replace {{settings.X}} with persistent quill settings.
+	for key, val := range ctx.Settings {
+		result = strings.ReplaceAll(result, "{{settings."+key+"}}", val)
 	}
+
+	// Replace {{steps.X}} and {{steps.X.Y.Z}} with deep path resolution.
+	result = resolvePathTemplates(result, "steps", ctx.Steps)
 
 	// Handle nested patterns like {{event.{{inputs.SOURCE_FIELD}}}}.
 	// After the first pass, the inner template is resolved, e.g.:
@@ -443,6 +472,105 @@ func resolveTemplates(s string, ctx *actions.Context) string {
 	}
 
 	return result
+}
+
+// resolvePathTemplates finds all {{prefix.path.to.field}} placeholders and
+// resolves them by walking the given data using dot-separated path segments.
+// Supports nested maps, arrays (numeric indices), and stringified JSON.
+func resolvePathTemplates(s, prefix string, data map[string]any) string {
+	search := "{{" + prefix + "."
+	for {
+		start := strings.Index(s, search)
+		if start < 0 {
+			return s
+		}
+		end := strings.Index(s[start:], "}}")
+		if end < 0 {
+			return s
+		}
+		full := s[start : start+end+2]
+		path := s[start+len(search) : start+end] // e.g. "auth.body.token"
+		val := walkPath(data, path)
+		s = strings.Replace(s, full, stringifyValue(val), 1)
+	}
+}
+
+// stringifyValue converts a resolved template value to a string suitable for
+// injection into a template. Single-element arrays are unwrapped; multi-element
+// arrays and objects are JSON-encoded; everything else uses fmt.Sprintf.
+func stringifyValue(val any) string {
+	switch v := val.(type) {
+	case nil:
+		return ""
+	case string:
+		return v
+	case []any:
+		if len(v) == 1 {
+			return stringifyValue(v[0])
+		}
+		b, err := json.Marshal(v)
+		if err != nil {
+			return fmt.Sprintf("%v", v)
+		}
+		return string(b)
+	case map[string]any:
+		b, err := json.Marshal(v)
+		if err != nil {
+			return fmt.Sprintf("%v", v)
+		}
+		return string(b)
+	default:
+		return fmt.Sprintf("%v", v)
+	}
+}
+
+// walkPath traverses a nested map/slice structure using a dot-separated path.
+// Supports string keys for maps and numeric indices for slices.
+func walkPath(data any, path string) any {
+	segments := strings.Split(path, ".")
+	current := data
+	for _, seg := range segments {
+		if current == nil {
+			return ""
+		}
+		switch v := current.(type) {
+		case map[string]any:
+			current = v[seg]
+		case map[string]string:
+			return v[seg]
+		case []any:
+			idx := 0
+			if _, err := fmt.Sscanf(seg, "%d", &idx); err != nil || idx < 0 || idx >= len(v) {
+				return ""
+			}
+			current = v[idx]
+		default:
+			// If the current value is a string that looks like JSON, try parsing it.
+			if str, ok := current.(string); ok && len(str) > 0 && (str[0] == '{' || str[0] == '[') {
+				var parsed any
+				if json.Unmarshal([]byte(str), &parsed) == nil {
+					current = parsed
+					// Re-walk from this segment since we just parsed.
+					remaining := strings.Join(append([]string{seg}, segments[1:]...), ".")
+					_ = remaining
+					// Actually, let's walk one more level on the parsed value.
+					if m, ok := parsed.(map[string]any); ok {
+						current = m[seg]
+					} else {
+						return ""
+					}
+				} else {
+					return ""
+				}
+			} else {
+				return fmt.Sprintf("%v", current)
+			}
+		}
+	}
+	if current == nil {
+		return ""
+	}
+	return current
 }
 
 // resolveConfigTemplates resolves template strings in all config values.
@@ -506,9 +634,9 @@ func buildEventSummary(event map[string]any) string {
 		if prefix != "" {
 			display = strings.TrimPrefix(key, prefix)
 		}
-		s := fmt.Sprintf("%v", val)
-		if len(s) > 60 {
-			s = s[:57] + "..."
+		s := stringifyValue(val)
+		if len(s) > 120 {
+			s = s[:117] + "..."
 		}
 		parts = append(parts, display+"="+s)
 	}
@@ -518,6 +646,22 @@ func buildEventSummary(event map[string]any) string {
 // ActionsMeta returns metadata for all registered actions (used by the API).
 func (e *Engine) ActionsMeta() []actions.ActionMeta {
 	return e.actions.AllMeta()
+}
+
+// ExecuteAction runs a single action by name with the given config and context.
+// Used by the settings API for test_connection and load_options.
+func (e *Engine) ExecuteAction(actionName string, config map[string]any, ctx *actions.Context) (actions.Result, error) {
+	action, err := e.actions.Get(actionName)
+	if err != nil {
+		return actions.Result{}, err
+	}
+	resolved := resolveConfigTemplates(config, ctx)
+	return action.Execute(resolved, ctx), nil
+}
+
+// ResolveTemplateString resolves template placeholders in a string using the given context.
+func (e *Engine) ResolveTemplateString(s string, ctx *actions.Context) string {
+	return resolveTemplates(s, ctx)
 }
 
 // convertDateFormat translates a user-friendly date format string to Go's reference-time layout.

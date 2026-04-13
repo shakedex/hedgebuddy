@@ -1,17 +1,27 @@
 id: slack-notify
 name: Slack Notification
-version: 1.0.0
+version: 1.1.0
 description: Send a Slack message via incoming webhook when a workflow event occurs
 author: HedgeBuddy
 category: messaging
 icon: bell
 
-inputs:
+settings:
   - name: webhook_url
     type: url
     required: true
     label: Webhook URL
     description: Slack incoming webhook URL
+
+test_connection:
+  action: http.post
+  config:
+    url: "{{settings.webhook_url}}"
+    body:
+      text: "HedgeBuddy connection test — Slack webhook is working!"
+  expect_status: 200
+
+inputs:
   - name: message
     type: string
     required: true
@@ -28,8 +38,12 @@ compatible_triggers:
   - "*"
 
 steps:
+  - action: template.render
+    template: "{{inputs.message}}"
+    output: rendered_message
   - action: http.post
-    url: "{{inputs.webhook_url}}"
-    body: >-
-      {"text":"{{inputs.message}}"{{#if inputs.channel}},"channel":"{{inputs.channel}}"{{/if}}}
-    content_type: application/json
+    url: "{{settings.webhook_url}}"
+    body:
+      text: "{{steps.rendered_message}}"
+      channel: "{{inputs.channel}}"
+    output: slack_response

@@ -50,7 +50,8 @@ func (a *TemplateRenderAction) Execute(config map[string]any, ctx *Context) Resu
 	return Result{Output: rendered, OK: true}
 }
 
-// renderTemplate replaces {{event.field}}, {{inputs.name}}, {{steps.name}} placeholders.
+// renderTemplate replaces {{event.field}}, {{inputs.name}}, {{settings.name}},
+// {{steps.name}} placeholders.
 func renderTemplate(tmpl string, ctx *Context) string {
 	result := tmpl
 
@@ -63,6 +64,12 @@ func renderTemplate(tmpl string, ctx *Context) string {
 	// Replace {{inputs.X}} with resolved inputs.
 	for key, val := range ctx.Inputs {
 		placeholder := "{{inputs." + key + "}}"
+		result = strings.ReplaceAll(result, placeholder, val)
+	}
+
+	// Replace {{settings.X}} with persistent quill settings.
+	for key, val := range ctx.Settings {
+		placeholder := "{{settings." + key + "}}"
 		result = strings.ReplaceAll(result, placeholder, val)
 	}
 

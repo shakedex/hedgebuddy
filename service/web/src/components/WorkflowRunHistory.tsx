@@ -143,8 +143,8 @@ export function StepDetail({ entry }: { entry: StepLogEntry }) {
 function KeyValue({ k, v }: { k: string; v: string }) {
   return (
     <>
-      <span className="text-[10px] font-mono text-muted-foreground truncate">{k}</span>
-      <span className="text-[10px] font-mono truncate">{v || <em className="text-muted-foreground/50">(empty)</em>}</span>
+      <span className="text-[10px] font-mono text-muted-foreground truncate" title={k}>{k}</span>
+      <span className="text-[10px] font-mono break-all" title={v}>{v || <em className="text-muted-foreground/50">(empty)</em>}</span>
     </>
   )
 }

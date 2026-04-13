@@ -72,7 +72,7 @@ export function QuillsPage() {
   ]
 
   return (
-    <div className="p-6 space-y-6 max-w-4xl animate-page-in">
+    <div className="p-6 space-y-6 animate-page-in">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Quills Library</h1>

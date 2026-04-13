@@ -2,10 +2,11 @@ package actions
 
 // ActionMeta describes a registered action for the frontend.
 type ActionMeta struct {
-	Name        string      `json:"name"`
-	Category    string      `json:"category"`
-	Description string      `json:"description"`
-	Inputs      []InputMeta `json:"inputs"`
+	Name        string       `json:"name"`
+	Category    string       `json:"category"`
+	Description string       `json:"description"`
+	Inputs      []InputMeta  `json:"inputs"`
+	Outputs     []OutputMeta `json:"outputs"`
 }
 
 // InputMeta describes an input parameter for an action.
@@ -16,6 +17,13 @@ type InputMeta struct {
 	Description string   `json:"description"`
 	Default     string   `json:"default,omitempty"`
 	Values      []string `json:"values,omitempty"` // for enum type
+}
+
+// OutputMeta describes a single field in an action's output.
+type OutputMeta struct {
+	Name        string `json:"name"`
+	Type        string `json:"type"` // string, number, boolean, path, object, any
+	Description string `json:"description"`
 }
 
 // AllMeta returns metadata for all registered actions, collected from each action's Meta() method.

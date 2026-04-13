@@ -114,7 +114,66 @@ func (s *Store) migrate() error {
 		);
 		CREATE INDEX IF NOT EXISTS idx_runs_wf   ON workflow_runs(workflow_id);
 		CREATE INDEX IF NOT EXISTS idx_runs_time ON workflow_runs(started_at);
+
+		CREATE TABLE IF NOT EXISTS quill_settings (
+			quill_id TEXT NOT NULL,
+			key      TEXT NOT NULL,
+			value    TEXT NOT NULL,
+			PRIMARY KEY (quill_id, key)
+		);
 	`)
+	return err
+}
+
+// GetQuillSettings returns all saved settings for a quill as a key-value map.
+func (s *Store) GetQuillSettings(quillID string) (map[string]string, error) {
+	rows, err := s.db.Query(`SELECT key, value FROM quill_settings WHERE quill_id = ?`, quillID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	settings := make(map[string]string)
+	for rows.Next() {
+		var k, v string
+		if err := rows.Scan(&k, &v); err != nil {
+			return nil, err
+		}
+		settings[k] = v
+	}
+	return settings, rows.Err()
+}
+
+// SetQuillSettings saves a quill's settings, replacing any existing values.
+func (s *Store) SetQuillSettings(quillID string, settings map[string]string) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.Exec(`DELETE FROM quill_settings WHERE quill_id = ?`, quillID); err != nil {
+		return err
+	}
+
+	stmt, err := tx.Prepare(`INSERT INTO quill_settings (quill_id, key, value) VALUES (?, ?, ?)`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	for k, v := range settings {
+		if _, err := stmt.Exec(quillID, k, v); err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
+}
+
+// DeleteQuillSettings removes all saved settings for a quill.
+func (s *Store) DeleteQuillSettings(quillID string) error {
+	_, err := s.db.Exec(`DELETE FROM quill_settings WHERE quill_id = ?`, quillID)
 	return err
 }
 

@@ -1,6 +1,6 @@
 id: email-notify
 name: Email Notification
-version: 1.0.0
+version: 1.1.0
 description: Send an email notification via SMTP when a workflow event fires
 author: HedgeBuddy
 category: messaging
@@ -9,7 +9,7 @@ icon: mail
 implementation: python
 entry: main.py
 
-inputs:
+settings:
   - name: smtp_host
     type: string
     required: true
@@ -17,7 +17,7 @@ inputs:
     description: SMTP server hostname
     default: smtp.gmail.com
   - name: smtp_port
-    type: number
+    type: string
     required: true
     label: SMTP Port
     description: SMTP server port
@@ -31,7 +31,9 @@ inputs:
     type: secure
     required: true
     label: Password
-    description: SMTP authentication password
+    description: SMTP authentication password (app password for Gmail)
+
+inputs:
   - name: to
     type: string
     required: true

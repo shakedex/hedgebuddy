@@ -37,9 +37,10 @@ type StepInput struct {
 
 // Step is a single action in a workflow chain.
 type Step struct {
-	QuillID string      `json:"quill_id"`
-	Mode    string      `json:"mode,omitempty"`
-	Inputs  []StepInput `json:"inputs"`
+	QuillID     string      `json:"quill_id"`
+	Mode        string      `json:"mode,omitempty"`
+	Inputs      []StepInput `json:"inputs"`
+	OutputAlias string      `json:"output_alias,omitempty"`
 }
 
 // Workflow is a user-defined event → action chain.

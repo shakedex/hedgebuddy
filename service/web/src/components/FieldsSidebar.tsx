@@ -1,12 +1,14 @@
-import { useState } from 'react'
-import type { Field } from '#/lib/api'
+import { useMemo, useState } from 'react'
+import type { ActionMeta, Field, OutputMeta } from '#/lib/api'
+import type { Step } from '#/lib/generated/storage'
+import type { Quill } from '#/lib/generated/quills'
 import { ScrollArea } from '#/components/ui/scroll-area'
 import { Badge } from '#/components/ui/badge'
 import { Input } from '#/components/ui/input'
 import {
   Popover, PopoverContent, PopoverTrigger,
 } from '#/components/ui/popover'
-import { GripHorizontal, Clock, Hash, FileText, Braces, Settings2 } from 'lucide-react'
+import { GripHorizontal, Clock, Hash, FileText, Braces, Settings2, ArrowRight } from 'lucide-react'
 
 // ── Template definitions ──
 
@@ -42,12 +44,88 @@ const TEMPLATE_ITEMS: TemplateItem[] = [
 
 // ── Component ──
 
+export interface StepOutputGroup {
+  stepIndex: number
+  label: string
+  outputAlias: string
+  outputs: OutputMeta[]
+}
+
 interface FieldsSidebarProps {
   eventFields: [string, Field][]
   eventType?: string
+  steps?: Step[]
+  quills?: Quill[]
+  actions?: ActionMeta[]
 }
 
-export function FieldsSidebar({ eventFields, eventType }: FieldsSidebarProps) {
+/** Derive the default output alias from a quill/action ID (e.g. "file-ops" → "file_ops"). */
+function defaultAlias(quillId: string, mode?: string): string {
+  const base = quillId.replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_|_$/g, '')
+  return mode ? `${base}_${mode}` : base
+}
+
+/**
+ * Resolve the output fields for a step by looking at the quill's last action step,
+ * then finding that action's declared OutputMeta.
+ */
+function resolveStepOutputs(
+  step: Step,
+  quills: Quill[],
+  actions: ActionMeta[],
+): OutputMeta[] {
+  const quill = quills.find((q) => q.id === step.quill_id)
+  if (quill) {
+    const mode = step.mode ?? ''
+    const modeSteps = mode ? quill.modes?.[mode]?.steps : undefined
+    const steps = modeSteps ?? quill.steps ?? []
+    if (steps.length === 0) return []
+    const lastWithOutput = [...steps].reverse().find((s) => s.output)
+    const actionName = lastWithOutput?.action ?? steps[steps.length - 1]?.action
+    if (actionName) {
+      const action = actions.find((a) => a.name === actionName)
+      return action?.outputs ?? []
+    }
+    return []
+  }
+  const action = actions.find((a) => a.name === step.quill_id)
+  return action?.outputs ?? []
+}
+
+/** Derive the output alias for a step. */
+function resolveAlias(step: Step, _stepIndex: number, quills: Quill[]): string {
+  if (step.output_alias) return step.output_alias
+  const quill = quills.find((q) => q.id === step.quill_id)
+  if (quill) {
+    const mode = step.mode ?? ''
+    const modeSteps = mode ? quill.modes?.[mode]?.steps : undefined
+    const steps = modeSteps ?? quill.steps ?? []
+    if (steps.length === 0) return defaultAlias(step.quill_id, step.mode)
+    const lastWithOutput = [...steps].reverse().find((s) => s.output)
+    if (lastWithOutput?.output) return lastWithOutput.output
+    return defaultAlias(step.quill_id, step.mode)
+  }
+  return defaultAlias(step.quill_id)
+}
+
+export function FieldsSidebar({ eventFields, eventType, steps, quills, actions }: FieldsSidebarProps) {
+  // Compute step output groups.
+  const stepOutputGroups = useMemo((): StepOutputGroup[] => {
+    if (!steps?.length || !quills?.length || !actions?.length) return []
+    const groups: StepOutputGroup[] = []
+    for (let i = 0; i < steps.length; i++) {
+      const step = steps[i]
+      if (!step.quill_id) continue
+      const outputs = resolveStepOutputs(step, quills, actions)
+      if (outputs.length === 0) continue
+      const quill = quills.find((q) => q.id === step.quill_id)
+      const label = quill?.name ?? step.quill_id
+      const alias = resolveAlias(step, i, quills)
+      groups.push({ stepIndex: i, label, outputAlias: alias, outputs })
+    }
+    return groups
+  }, [steps, quills, actions])
+
   return (
     <div className="w-56 shrink-0 rounded-lg border border-border bg-card/50 self-start sticky top-6">
       <div className="px-3 py-2.5 border-b border-border">
@@ -74,6 +152,33 @@ export function FieldsSidebar({ eventFields, eventType }: FieldsSidebarProps) {
             </div>
           )}
 
+          {/* Step outputs */}
+          {stepOutputGroups.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-1">
+                Step Outputs
+              </p>
+              {stepOutputGroups.map((group) => (
+                <div key={group.stepIndex} className="space-y-1">
+                  <div className="flex items-center gap-1 px-1">
+                    <ArrowRight className="size-3 text-muted-foreground/60" />
+                    <p className="text-[10px] font-medium text-muted-foreground truncate" title={`Step ${group.stepIndex + 1}: ${group.label} → ${group.outputAlias}`}>
+                      Step {group.stepIndex + 1}: {group.label}
+                    </p>
+                  </div>
+                  {group.outputs.map((out) => (
+                    <DraggableChip
+                      key={`${group.outputAlias}.${out.name}`}
+                      label={`${group.outputAlias}.${out.name}`}
+                      value={`{{steps.${group.outputAlias}.${out.name}}}`}
+                      badge={out.type}
+                    />
+                  ))}
+                </div>
+              ))}
+            </div>
+          )}
+
           {/* Template items */}
           <div className="space-y-1">
             <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-1">
@@ -93,7 +198,7 @@ export function FieldsSidebar({ eventFields, eventType }: FieldsSidebarProps) {
             )}
           </div>
 
-          {eventFields.length === 0 && (
+          {eventFields.length === 0 && stepOutputGroups.length === 0 && (
             <p className="text-[10px] text-muted-foreground italic px-1">
               Select a trigger event to see available fields
             </p>

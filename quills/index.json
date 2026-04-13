@@ -2,7 +2,7 @@
   {
     "id": "slack-notify",
     "name": "Slack Notification",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "description": "Send a Slack message when a workflow event occurs",
     "author": "HedgeBuddy",
     "category": "messaging"
@@ -10,7 +10,7 @@
   {
     "id": "email-notify",
     "name": "Email Notification",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "description": "Send an email notification via SMTP when a workflow event fires",
     "author": "HedgeBuddy",
     "category": "messaging"
@@ -18,7 +18,7 @@
   {
     "id": "arri-art-cmd",
     "name": "ARRI ART-CMD",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "description": "Process ARRI camera footage using ART-CMD (verify, export, copy, process, mxf-recovery)",
     "author": "HedgeBuddy",
     "category": "media-processing"

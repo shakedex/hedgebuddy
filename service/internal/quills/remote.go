@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -191,11 +192,42 @@ func (lib *Library) CheckUpdates(repoURL string) ([]RemoteQuill, error) {
 		rq := &index[i]
 		if local, ok := lib.quills[rq.ID]; ok {
 			rq.Installed = true
-			rq.UpdateAvail = rq.Version != local.Version
+			rq.UpdateAvail = isNewerVersion(rq.Version, local.Version)
 		}
 	}
 
 	return index, nil
+}
+
+// isNewerVersion returns true if remote is strictly newer than local.
+// Compares dot-separated numeric segments (e.g. "1.2.0" > "1.1.0").
+// Non-numeric segments are compared lexicographically as fallback.
+func isNewerVersion(remote, local string) bool {
+	rParts := strings.Split(strings.TrimPrefix(remote, "v"), ".")
+	lParts := strings.Split(strings.TrimPrefix(local, "v"), ".")
+	maxLen := len(rParts)
+	if len(lParts) > maxLen {
+		maxLen = len(lParts)
+	}
+	for i := 0; i < maxLen; i++ {
+		var rSeg, lSeg string
+		if i < len(rParts) {
+			rSeg = rParts[i]
+		}
+		if i < len(lParts) {
+			lSeg = lParts[i]
+		}
+		rNum, rErr := strconv.Atoi(rSeg)
+		lNum, lErr := strconv.Atoi(lSeg)
+		if rErr == nil && lErr == nil {
+			if rNum != lNum {
+				return rNum > lNum
+			}
+		} else if rSeg != lSeg {
+			return rSeg > lSeg
+		}
+	}
+	return false
 }
 
 // InstallFromYAML installs a quill from raw YAML data and optional companion files.

@@ -11,6 +11,7 @@ export interface ActionMeta {
   category: string;
   description: string;
   inputs: InputMeta[];
+  outputs: OutputMeta[];
 }
 /**
  * InputMeta describes an input parameter for an action.
@@ -22,4 +23,12 @@ export interface InputMeta {
   description: string;
   default?: string;
   values?: string[]; // for enum type
+}
+/**
+ * OutputMeta describes a single field in an action's output.
+ */
+export interface OutputMeta {
+  name: string;
+  type: string; // string, number, boolean, path, object, any
+  description: string;
 }

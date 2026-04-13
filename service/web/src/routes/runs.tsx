@@ -41,7 +41,7 @@ export function RunsPage() {
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
 
   return (
-    <div className="p-6 space-y-4 max-w-4xl animate-page-in">
+    <div className="p-6 space-y-4 animate-page-in">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold tracking-tight">Execution History</h1>
         <div className="flex items-center gap-3">

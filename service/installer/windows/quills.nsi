@@ -24,8 +24,8 @@ InstallDirRegKey HKCU "Software\Quills" "InstallDir"
 RequestExecutionLevel user ; no admin needed
 SetCompressor /SOLID lzma
 
-!define MUI_ICON "..\..\..\branding\hedgebuddy_icon2.ico"
-!define MUI_UNICON "..\..\..\branding\hedgebuddy_icon2.ico"
+!define MUI_ICON "..\..\..\branding\quills.ico"
+!define MUI_UNICON "..\..\..\branding\quills.ico"
 !define MUI_ABORTWARNING
 
 ; ---------------------------------------------------------------------------
@@ -82,7 +82,7 @@ Section "Install"
   File "${EXE_PATH}"
 
   ; Icon for shortcuts
-  File "/oname=quills.ico" "..\..\..\branding\hedgebuddy_icon2.ico"
+  File "/oname=quills.ico" "..\..\..\branding\quills.ico"
 
   ; Write uninstaller
   WriteUninstaller "$INSTDIR\Uninstall.exe"

@@ -8,14 +8,25 @@ import (
 // Meta methods for all action types. Each returns its own ActionMeta so the
 // registry can collect them automatically via AllMeta().
 
+// ── Shared output definitions ──
+
+var httpOutputs = []OutputMeta{
+	{Name: "status", Type: "number", Description: "HTTP status code"},
+	{Name: "headers", Type: "object", Description: "Response headers"},
+	{Name: "body", Type: "any", Description: "Response body (auto-parsed JSON)"},
+}
+
 func (a *HTTPPostAction) Meta() ActionMeta {
 	return ActionMeta{
-		Name: "http.post", Category: "http", Description: "Send an HTTP POST request",
+		Name: "http.post", Category: "http", Description: "Send an HTTP POST request with JSON body",
 		Inputs: []InputMeta{
 			{Name: "url", Type: "url", Required: true, Description: "Target URL"},
-			{Name: "body", Type: "string", Required: false, Description: "Request body (JSON string)"},
+			{Name: "body", Type: "string", Required: false, Description: "Request body (JSON)"},
+			{Name: "auth", Type: "string", Required: false, Description: "Authorization header value (e.g. Bearer token)"},
 			{Name: "headers", Type: "string", Required: false, Description: "HTTP headers as JSON object"},
+			{Name: "timeout", Type: "string", Required: false, Description: "Request timeout (e.g. 30s, 2m)", Default: "30s"},
 		},
+		Outputs: httpOutputs,
 	}
 }
 
@@ -24,8 +35,69 @@ func (a *HTTPGetAction) Meta() ActionMeta {
 		Name: "http.get", Category: "http", Description: "Send an HTTP GET request",
 		Inputs: []InputMeta{
 			{Name: "url", Type: "url", Required: true, Description: "Target URL"},
+			{Name: "auth", Type: "string", Required: false, Description: "Authorization header value"},
 			{Name: "headers", Type: "string", Required: false, Description: "HTTP headers as JSON object"},
+			{Name: "timeout", Type: "string", Required: false, Description: "Request timeout", Default: "30s"},
 		},
+		Outputs: httpOutputs,
+	}
+}
+
+func (a *HTTPPutAction) Meta() ActionMeta {
+	return ActionMeta{
+		Name: "http.put", Category: "http", Description: "Send an HTTP PUT request with JSON body",
+		Inputs: []InputMeta{
+			{Name: "url", Type: "url", Required: true, Description: "Target URL"},
+			{Name: "body", Type: "string", Required: false, Description: "Request body (JSON)"},
+			{Name: "auth", Type: "string", Required: false, Description: "Authorization header value"},
+			{Name: "headers", Type: "string", Required: false, Description: "HTTP headers as JSON object"},
+			{Name: "timeout", Type: "string", Required: false, Description: "Request timeout", Default: "30s"},
+		},
+		Outputs: httpOutputs,
+	}
+}
+
+func (a *HTTPPatchAction) Meta() ActionMeta {
+	return ActionMeta{
+		Name: "http.patch", Category: "http", Description: "Send an HTTP PATCH request with JSON body",
+		Inputs: []InputMeta{
+			{Name: "url", Type: "url", Required: true, Description: "Target URL"},
+			{Name: "body", Type: "string", Required: false, Description: "Request body (JSON)"},
+			{Name: "auth", Type: "string", Required: false, Description: "Authorization header value"},
+			{Name: "headers", Type: "string", Required: false, Description: "HTTP headers as JSON object"},
+			{Name: "timeout", Type: "string", Required: false, Description: "Request timeout", Default: "30s"},
+		},
+		Outputs: httpOutputs,
+	}
+}
+
+func (a *HTTPDeleteAction) Meta() ActionMeta {
+	return ActionMeta{
+		Name: "http.delete", Category: "http", Description: "Send an HTTP DELETE request",
+		Inputs: []InputMeta{
+			{Name: "url", Type: "url", Required: true, Description: "Target URL"},
+			{Name: "body", Type: "string", Required: false, Description: "Optional request body (JSON)"},
+			{Name: "auth", Type: "string", Required: false, Description: "Authorization header value"},
+			{Name: "headers", Type: "string", Required: false, Description: "HTTP headers as JSON object"},
+			{Name: "timeout", Type: "string", Required: false, Description: "Request timeout", Default: "30s"},
+		},
+		Outputs: httpOutputs,
+	}
+}
+
+func (a *HTTPUploadAction) Meta() ActionMeta {
+	return ActionMeta{
+		Name: "http.upload", Category: "http", Description: "Upload a file via multipart/form-data POST",
+		Inputs: []InputMeta{
+			{Name: "url", Type: "url", Required: true, Description: "Target URL"},
+			{Name: "file_path", Type: "path", Required: true, Description: "Path to the file to upload"},
+			{Name: "file_field", Type: "string", Required: false, Description: "Form field name for the file", Default: "file"},
+			{Name: "fields", Type: "string", Required: false, Description: "Additional form fields as JSON object"},
+			{Name: "auth", Type: "string", Required: false, Description: "Authorization header value"},
+			{Name: "headers", Type: "string", Required: false, Description: "HTTP headers as JSON object"},
+			{Name: "timeout", Type: "string", Required: false, Description: "Request timeout", Default: "30s"},
+		},
+		Outputs: httpOutputs,
 	}
 }
 
@@ -35,6 +107,9 @@ func (a *FileMoveAction) Meta() ActionMeta {
 		Inputs: []InputMeta{
 			{Name: "source", Type: "path", Required: true, Description: "Source file/directory path"},
 			{Name: "destination", Type: "path", Required: true, Description: "Destination path"},
+		},
+		Outputs: []OutputMeta{
+			{Name: "destination", Type: "path", Description: "Final destination path"},
 		},
 	}
 }
@@ -46,6 +121,10 @@ func (a *FileCopyAction) Meta() ActionMeta {
 			{Name: "source", Type: "path", Required: true, Description: "Source file path"},
 			{Name: "destination", Type: "path", Required: true, Description: "Destination path"},
 		},
+		Outputs: []OutputMeta{
+			{Name: "destination", Type: "path", Description: "Final destination path"},
+			{Name: "bytes_copied", Type: "number", Description: "Number of bytes copied"},
+		},
 	}
 }
 
@@ -55,6 +134,9 @@ func (a *FileWriteAction) Meta() ActionMeta {
 		Inputs: []InputMeta{
 			{Name: "path", Type: "path", Required: true, Description: "File path to write to"},
 			{Name: "content", Type: "string", Required: true, Description: "Content to write"},
+		},
+		Outputs: []OutputMeta{
+			{Name: "path", Type: "path", Description: "Path of the written file"},
 		},
 	}
 }
@@ -66,6 +148,34 @@ func (a *FileAppendAction) Meta() ActionMeta {
 			{Name: "path", Type: "path", Required: true, Description: "File path to append to"},
 			{Name: "content", Type: "string", Required: true, Description: "Content to append"},
 		},
+		Outputs: []OutputMeta{
+			{Name: "path", Type: "path", Description: "Path of the appended file"},
+		},
+	}
+}
+
+func (a *FileReadAction) Meta() ActionMeta {
+	return ActionMeta{
+		Name: "file.read", Category: "file", Description: "Read file contents (auto-parses JSON)",
+		Inputs: []InputMeta{
+			{Name: "path", Type: "path", Required: true, Description: "File path to read"},
+			{Name: "max_size", Type: "number", Required: false, Description: "Max bytes to read (default 10MB)"},
+		},
+		Outputs: []OutputMeta{
+			{Name: "content", Type: "any", Description: "File contents (parsed JSON if applicable)"},
+			{Name: "size", Type: "number", Description: "File size in bytes"},
+		},
+	}
+}
+
+func (a *JSONExtractAction) Meta() ActionMeta {
+	return ActionMeta{
+		Name: "json.extract", Category: "data", Description: "Extract fields from a JSON source using dot-path notation",
+		Inputs: []InputMeta{
+			{Name: "source", Type: "string", Required: true, Description: "JSON string or structured step output to extract from"},
+			{Name: "fields", Type: "string", Required: true, Description: "Map of output_name: json.path to extract"},
+		},
+		Outputs: []OutputMeta{}, // dynamic — output fields match the keys in config.fields
 	}
 }
 
@@ -76,6 +186,10 @@ func (a *LogWriteAction) Meta() ActionMeta {
 			{Name: "message", Type: "string", Required: true, Description: "Log message"},
 			{Name: "path", Type: "path", Required: false, Description: "Log file path (optional, defaults to stdout)"},
 		},
+		Outputs: []OutputMeta{
+			{Name: "path", Type: "path", Description: "Log file path written to"},
+			{Name: "message", Type: "string", Description: "Rendered log message"},
+		},
 	}
 }
 
@@ -84,6 +198,9 @@ func (a *TemplateRenderAction) Meta() ActionMeta {
 		Name: "template.render", Category: "logic", Description: "Render a template with event/step data",
 		Inputs: []InputMeta{
 			{Name: "template", Type: "string", Required: true, Description: "Template string with {{event.field}} placeholders"},
+		},
+		Outputs: []OutputMeta{
+			{Name: "rendered", Type: "string", Description: "Rendered template string"},
 		},
 	}
 }
@@ -96,6 +213,10 @@ func (a *ConditionMatchAction) Meta() ActionMeta {
 			{Name: "op", Type: "enum", Required: true, Description: "Comparison operator",
 				Values: []string{"eq", "neq", "contains", "not_contains", "starts_with", "ends_with", "gt", "lt", "empty", "not_empty", "in"}},
 			{Name: "value", Type: "string", Required: false, Description: "Expected value (for eq, contains, etc.)"},
+		},
+		Outputs: []OutputMeta{
+			{Name: "matched", Type: "boolean", Description: "Whether the condition was met"},
+			{Name: "actual", Type: "string", Description: "Actual value of the field"},
 		},
 	}
 }
@@ -204,6 +325,9 @@ func (a *DelayWaitAction) Meta() ActionMeta {
 		Inputs: []InputMeta{
 			{Name: "duration", Type: "string", Required: true, Description: "Wait duration (e.g. 5s, 1m, 500ms)"},
 		},
+		Outputs: []OutputMeta{
+			{Name: "waited", Type: "string", Description: "Duration waited"},
+		},
 	}
 }
 
@@ -232,6 +356,11 @@ func (a *ShellExecAction) Meta() ActionMeta {
 			{Name: "options", Type: "string", Required: false, Description: "Key-value options — included as --key value when non-empty"},
 			{Name: "timeout", Type: "string", Required: false, Description: "Execution timeout (e.g. 60s, 5m, 2h)", Default: "60s"},
 			{Name: "working_dir", Type: "path", Required: false, Description: "Working directory for the subprocess"},
+		},
+		Outputs: []OutputMeta{
+			{Name: "exit_code", Type: "number", Description: "Process exit code"},
+			{Name: "stdout", Type: "string", Description: "Standard output"},
+			{Name: "stderr", Type: "string", Description: "Standard error"},
 		},
 	}
 }

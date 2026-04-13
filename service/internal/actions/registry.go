@@ -9,6 +9,7 @@ import (
 type Context struct {
 	Event     map[string]any    // Raw event payload
 	Inputs    map[string]string // Resolved quill step inputs
+	Settings  map[string]string // Persistent quill-level settings
 	Steps     map[string]any    // Named outputs from previous steps
 	AppID     string            // Source app (e.g. "offshoot")
 	EventName string            // Event type (e.g. "FileCopyCompleted")
@@ -43,17 +44,26 @@ func NewRegistry() *Registry {
 	r := &Registry{actions: make(map[string]Action)}
 
 	// Core actions
-	r.Register(&HTTPPostAction{})
 	r.Register(&HTTPGetAction{})
+	r.Register(&HTTPPostAction{})
+	r.Register(&HTTPPutAction{})
+	r.Register(&HTTPPatchAction{})
+	r.Register(&HTTPDeleteAction{})
+	r.Register(&HTTPUploadAction{})
 	r.Register(&FileMoveAction{})
 	r.Register(&FileCopyAction{})
 	r.Register(&FileWriteAction{})
 	r.Register(&FileAppendAction{})
+	r.Register(&FileReadAction{})
 	r.Register(&LogWriteAction{})
 	r.Register(&TemplateRenderAction{})
+	r.Register(&JSONExtractAction{})
 
 	// Condition
 	r.Register(&ConditionMatchAction{})
+
+	// FTP/SFTP
+	r.Register(&FTPUploadAction{})
 
 	// OffShoot app control
 	r.Register(&OffShootOpenAction{})

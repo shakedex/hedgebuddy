@@ -12,10 +12,13 @@ import (
 
 // PythonInput is the JSON payload sent to a Python quill via stdin.
 type PythonInput struct {
-	Event     map[string]any    `json:"event"`
-	Inputs    map[string]string `json:"inputs"`
-	AppID     string            `json:"app_id"`
-	EventName string            `json:"event_name"`
+	Command   string            `json:"command"`              // "execute", "load_options", "test_connection"
+	Settings  map[string]string `json:"settings"`             // Persistent quill-level settings
+	Inputs    map[string]string `json:"inputs"`               // Per-workflow-step inputs
+	Event     map[string]any    `json:"event"`                // Event payload
+	AppID     string            `json:"app_id"`               // Source app
+	EventName string            `json:"event_name"`           // Event type
+	InputName string            `json:"input_name,omitempty"` // For load_options: which input
 }
 
 // PythonOutput is the JSON response expected from a Python quill via stdout.
@@ -28,11 +31,20 @@ type PythonOutput struct {
 // DefaultTimeout is the maximum time a Python quill can run.
 const DefaultTimeout = 30 * time.Second
 
+// CommandTimeout is the timeout for interactive commands (load_options, test_connection).
+const CommandTimeout = 10 * time.Second
+
 // RunPython executes a Python quill script and returns its output.
 // The entry parameter is the path to the Python script (e.g. main.py).
 // The dir parameter is the working directory for the script.
 func RunPython(dir, entry string, input PythonInput) (PythonOutput, error) {
 	return RunPythonWithTimeout(dir, entry, input, DefaultTimeout)
+}
+
+// RunCommand executes an interactive Python quill command (load_options, test_connection)
+// with a shorter timeout appropriate for UI-driven interactions.
+func RunCommand(dir, entry string, input PythonInput) (PythonOutput, error) {
+	return RunPythonWithTimeout(dir, entry, input, CommandTimeout)
 }
 
 // RunPythonWithTimeout executes a Python quill with a custom timeout.

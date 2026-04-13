@@ -221,6 +221,17 @@
         "dev:web"
       ],
       "problemMatcher": []
+    },
+    {
+        "label": "generate-types",
+        "type": "shell",
+        "command": "tygo generate",
+        "group": "build",
+        "presentation": {
+          "reveal": "always",
+          "panel": "dedicated"
+        }
+
     }
   ]
 }

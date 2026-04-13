@@ -6,6 +6,33 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.9.3] - 2026-04-13
+
+### Added
+
+- **Step output aliases** — workflow steps now carry an `output_alias` field; engine stores results under the alias so later steps can reference outputs via `{{steps.<alias>.<field>}}`; auto-derived from quill YAML `output:` declarations on step creation and mode change
+- **`OutputMeta` on actions** — all actions declare their output fields via `OutputMeta` structs on `ActionMeta`; data-producing actions (`file.read`, `http.*`, `ftp.*`, etc.) expose typed output field names
+- **FieldsSidebar step outputs** — sidebar in the workflow editor resolves each step's output fields through the quill→action chain and renders draggable `{{steps.<alias>.<field>}}` chips grouped by step
+- **"Output as" editor in StepCard** — steps with data-producing actions show a visually distinct "Output as" section (dashed border, muted background) for naming the step output; only shown when the step produces outputs; auto-sanitised to valid identifier characters
+
+### Fixed
+
+- **`null` array serialisation crash** — Go nil slices serialise as `null` in JSON; all frontend code accessing `.outputs`, `.steps`, and `.modes` on action/quill types now guards against `null` with optional chaining and `?? []` fallbacks
+- **Array values in templates** — `{{event.sourcePaths}}` and similar array-valued event fields were rendered with Go's `[value]` bracket notation; replaced `fmt.Sprintf("%v", val)` with `stringifyValue()` helper that unwraps single-element arrays and JSON-encodes multi-element arrays cleanly
+- **`{{event_summary}}` array values** — `buildEventSummary` now uses `stringifyValue()` so path arrays in Slack messages no longer include brackets
+- **Event summary truncation** — per-field truncation limit raised from 60 to 120 characters so long paths are not prematurely cut off in Slack/log output
+- **Step alias vs engine key mismatch** — `deriveOutputAlias` was not mode-aware; for mode-only quills (e.g. `file-ops`) the default alias was derived from the quill ID (`file_ops`) while the engine stored under the YAML `output:` name (`file_content`); fixed by checking mode-specific steps first; engine now also stores under both the YAML name and the user alias so either reference works
+
+### Changed
+
+- **Quills list sort order** — `Library.List()` now returns quills sorted by category then name; eliminates random ordering on each page refresh
+- **Version comparison for updates** — `CheckUpdates` replaced simple string `!=` with `isNewerVersion()` that does numeric semver segment comparison; local 1.1.x is no longer flagged as needing an "update" when the remote repo still carries 1.0.x
+- **Installed quill badge** — `QuillCard` now renders a distinct green-tinted "Installed" badge for user-installed quills and a muted "Builtin" badge for built-ins; previous low-contrast outline badge was nearly invisible
+- **Views full-width layout** — Runs, Quills, and Settings views had `max-w-4xl`/`max-w-3xl` constraints that left large dead zones at wide viewports; constraints removed so all views scale to available space consistently with the Events and Workflows views
+- **Run history input display** — long input values (e.g. file paths) now use `break-all` word wrapping instead of `truncate` so the full value is always visible; keys and values both carry native `title` attributes for hover tooltips
+
+---
+
 ## [0.9.2] - 2026-04-12
 
 ### Added

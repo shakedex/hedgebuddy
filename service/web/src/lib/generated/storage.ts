@@ -27,6 +27,28 @@ export interface EventsPage {
   limit: number /* int */;
   offset: number /* int */;
 }
+/**
+ * WorkflowRun is a single execution record for a workflow.
+ */
+export interface WorkflowRun {
+  id: number /* int64 */;
+  workflow_id: string;
+  workflow_name: string;
+  status: string; // "running", "success", "error"
+  error?: string;
+  started_at: string;
+  finished_at?: string;
+  steps_log?: string; // JSON array of step results
+}
+/**
+ * RunsPage is a paginated response containing runs and the total count.
+ */
+export interface RunsPage {
+  runs: WorkflowRun[];
+  total: number /* int */;
+  limit: number /* int */;
+  offset: number /* int */;
+}
 
 //////////
 // source: workflows.go
@@ -62,6 +84,7 @@ export interface Step {
   quill_id: string;
   mode?: string;
   inputs: StepInput[];
+  output_alias?: string;
 }
 /**
  * Workflow is a user-defined event → action chain.

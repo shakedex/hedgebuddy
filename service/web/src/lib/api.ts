@@ -3,7 +3,7 @@ import type {
   Condition, StepInput, Step, Workflow, Trigger,
 } from '#/lib/generated/storage'
 import type { Field, Event, AppSchema } from '#/lib/generated/schema'
-import type { ActionMeta, InputMeta } from '#/lib/generated/actions'
+import type { ActionMeta, InputMeta, OutputMeta } from '#/lib/generated/actions'
 import type { Quill as GeneratedQuill, Input as QuillInput } from '#/lib/generated/quills'
 
 // Extend Quill with runtime-only fields not captured by tygo.
@@ -13,7 +13,7 @@ export type Quill = GeneratedQuill & { source?: 'builtin' | 'installed' }
 export type {
   EventRecord, EventsPage, Condition, StepInput, Step, Workflow, Trigger,
   Field, Event, AppSchema,
-  ActionMeta, InputMeta,
+  ActionMeta, InputMeta, OutputMeta,
   QuillInput,
 }
 
@@ -130,6 +130,31 @@ export const installQuillManual = (files: { quillYaml: File; mainPy?: File; requ
 
 export const uninstallQuill = (quillId: string) =>
   request<{ status: string }>(`/quills/${quillId}`, { method: 'DELETE' })
+
+// --- Quill Settings ---
+
+export const fetchQuillSettings = (quillId: string) =>
+  request<Record<string, string>>(`/quills/${quillId}/settings`)
+
+export const saveQuillSettings = (quillId: string, settings: Record<string, string>) =>
+  request<{ status: string }>(`/quills/${quillId}/settings`, {
+    method: 'PUT',
+    body: JSON.stringify(settings),
+  })
+
+export const testQuillConnection = (quillId: string) =>
+  request<{ ok: boolean; error?: string }>(`/quills/${quillId}/test-connection`, { method: 'POST' })
+
+export interface DynamicOption {
+  value: string
+  label: string
+}
+
+export const loadQuillOptions = (quillId: string, inputName: string) =>
+  request<DynamicOption[]>(`/quills/${quillId}/load-options`, {
+    method: 'POST',
+    body: JSON.stringify({ input_name: inputName }),
+  })
 
 // --- Actions ---
 

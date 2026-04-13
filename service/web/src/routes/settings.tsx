@@ -40,7 +40,7 @@ export function SettingsPage() {
   const injectCmd = 'python inject.py \'{"FileCopyCompleted_state":"Success"}\''
 
   return (
-    <div className="p-6 space-y-6 max-w-3xl animate-page-in">
+    <div className="p-6 space-y-6 animate-page-in">
       <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
 
       {/* Service status */}
