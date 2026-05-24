@@ -9,7 +9,7 @@ import (
 
 func main() {
 	a := app.New()
-	a.Settings().SetTheme(&ui.HedgeBuddyTheme{})
+	a.Settings().SetTheme(ui.NewHedgeBuddyTheme(nil, nil))
 	a.SetIcon(ui.AppIcon())
 
 	w := a.NewWindow(ui.WindowTitle)
