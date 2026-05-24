@@ -76,6 +76,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/download/scripts", s.handleListScripts)
 	s.mux.HandleFunc("GET /api/download/scripts/{filename}", s.handleDownloadScript)
 	s.mux.HandleFunc("GET /api/browse", s.handleBrowse)
+	s.mux.HandleFunc("GET /api/hedgebuddy/vars", s.handleGetHBVars)
 
 	// Serve React SPA for all non-API routes.
 	// In development, the React dev server handles this.

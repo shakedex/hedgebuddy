@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"path/filepath"
 
-	"github.com/shakedex/hedgebuddy/service/internal/actions"
 	"github.com/shakedex/hedgebuddy/service/internal/runner"
 )
 
@@ -72,12 +71,7 @@ func (s *Server) handleTestConnection(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx := &actions.Context{
-		Settings: settings,
-		Event:    make(map[string]any),
-		Inputs:   make(map[string]string),
-		Steps:    make(map[string]any),
-	}
+	ctx, resolvedSettings := s.newHBContext(settings)
 
 	// YAML-defined test_connection: execute the specified action.
 	if quillDef.TestConnection != nil {
@@ -111,7 +105,8 @@ func (s *Server) handleTestConnection(w http.ResponseWriter, r *http.Request) {
 
 		pyInput := runner.PythonInput{
 			Command:  "test_connection",
-			Settings: settings,
+			Settings: resolvedSettings,
+			HBVars:   ctx.HBVars,
 		}
 
 		output, err := runner.RunCommand(quillDef.Dir, filepath.Join(quillDef.Dir, entry), pyInput)
@@ -163,12 +158,7 @@ func (s *Server) handleLoadOptions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx := &actions.Context{
-		Settings: settings,
-		Event:    make(map[string]any),
-		Inputs:   make(map[string]string),
-		Steps:    make(map[string]any),
-	}
+	ctx, resolvedSettings := s.newHBContext(settings)
 
 	// YAML-defined options: execute the specified action and map results.
 	if quillDef.Options != nil {
@@ -203,7 +193,8 @@ func (s *Server) handleLoadOptions(w http.ResponseWriter, r *http.Request) {
 
 		pyInput := runner.PythonInput{
 			Command:   "load_options",
-			Settings:  settings,
+			Settings:  resolvedSettings,
+			HBVars:    ctx.HBVars,
 			InputName: req.InputName,
 		}
 

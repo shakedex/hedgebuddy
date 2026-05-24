@@ -10,6 +10,7 @@ type Context struct {
 	Event     map[string]any    // Raw event payload
 	Inputs    map[string]string // Resolved quill step inputs
 	Settings  map[string]string // Persistent quill-level settings
+	HBVars    map[string]string // HedgeBuddy variables from the active profile
 	Steps     map[string]any    // Named outputs from previous steps
 	AppID     string            // Source app (e.g. "offshoot")
 	EventName string            // Event type (e.g. "FileCopyCompleted")

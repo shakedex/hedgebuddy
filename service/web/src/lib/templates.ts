@@ -38,6 +38,9 @@ export function templateLabel(token: string): string {
   // {{event.X_fieldName}} → fieldName
   const eventMatch = token.match(/^\{\{event\.[^_]+_(.+)\}\}$/)
   if (eventMatch) return eventMatch[1]
+  // {{hb.VAR_NAME}} → VAR_NAME
+  const hbMatch = token.match(/^\{\{hb\.(.+)\}\}$/)
+  if (hbMatch) return hbMatch[1]
   // {{date:FORMAT}} → FORMAT
   const dateMatch = token.match(/^\{\{date:(.+)\}\}$/)
   if (dateMatch) return dateMatch[1]

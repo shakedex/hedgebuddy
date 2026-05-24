@@ -16,6 +16,7 @@ export function formatDuration(start: string, end?: string): string {
  * Used for live preview in the editor — no actual event data.
  */
 export function previewTemplate(value: string): string | null {
+  if (value.startsWith('hedgebuddy:')) return '<hb_value>'
   if (!value.includes('{{')) return null
   const now = new Date()
   const pad = (n: number) => String(n).padStart(2, '0')
@@ -39,6 +40,8 @@ export function previewTemplate(value: string): string | null {
   })
   // Replace event.* with placeholder
   result = result.replace(/\{\{event\.[^}]+\}\}/g, '<event_value>')
+  // Replace hb.* with placeholder
+  result = result.replace(/\{\{hb\.[^}]+\}\}/g, '<hb_value>')
   // If nothing changed, no preview needed
   return result === value ? null : result
 }

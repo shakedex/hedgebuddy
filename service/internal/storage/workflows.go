@@ -29,7 +29,8 @@ type Trigger struct {
 }
 
 // StepInput is a key-value pair for a quill step's configuration.
-// Values prefixed with "hedgebuddy:" are resolved from vars.json at runtime.
+// Values may include HedgeBuddy references such as {{hb.VAR_NAME}} templates
+// or the legacy hedgebuddy:VAR_NAME prefix, both resolved at runtime.
 type StepInput struct {
 	Name  string `json:"name"`
 	Value string `json:"value"`

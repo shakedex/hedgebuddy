@@ -58,7 +58,7 @@ export const clearEvents = () =>
 
 export async function fetchEvents(limit = 50): Promise<EventRecord[]> {
   const page = await fetchEventsPage({ limit })
-  return page.events ?? []
+  return page.events
 }
 
 // --- Workflows ---
@@ -130,6 +130,23 @@ export const installQuillManual = (files: { quillYaml: File; mainPy?: File; requ
 
 export const uninstallQuill = (quillId: string) =>
   request<{ status: string }>(`/quills/${quillId}`, { method: 'DELETE' })
+
+// --- HedgeBuddy Variables ---
+
+export interface HBVariable {
+  value: string
+  type: string
+  description: string
+}
+
+export interface HBVarsResponse {
+  available: boolean
+  profile?: string
+  variables: Record<string, HBVariable>
+}
+
+export const fetchHBVars = () =>
+  request<HBVarsResponse>('/hedgebuddy/vars')
 
 // --- Quill Settings ---
 
@@ -228,7 +245,7 @@ export function fetchRunsPage(query: RunsQuery = {}): Promise<RunsPage> {
 
 export const fetchRuns = async (limit = 50): Promise<WorkflowRun[]> => {
   const page = await fetchRunsPage({ limit })
-  return page.runs ?? []
+  return page.runs
 }
 
 export const clearRuns = () =>

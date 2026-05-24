@@ -11,6 +11,7 @@ import (
 
 	"github.com/shakedex/hedgebuddy/service/internal/actions"
 	"github.com/shakedex/hedgebuddy/service/internal/diskinv"
+	"github.com/shakedex/hedgebuddy/service/internal/hbvars"
 	"github.com/shakedex/hedgebuddy/service/internal/quills"
 	"github.com/shakedex/hedgebuddy/service/internal/runner"
 	"github.com/shakedex/hedgebuddy/service/internal/schema"
@@ -228,9 +229,16 @@ func (e *Engine) executeWorkflow(wf storage.Workflow, payload map[string]any, ap
 		Event:     payload,
 		Inputs:    make(map[string]string),
 		Settings:  make(map[string]string),
+		HBVars:    make(map[string]string),
 		Steps:     make(map[string]any),
 		AppID:     appID,
 		EventName: eventName,
+	}
+
+	if values, err := hbvars.LoadValues(); err == nil {
+		ctx.HBVars = values
+	} else {
+		log.Printf("[engine] Warning: failed to load HedgeBuddy vars: %v", err)
 	}
 
 	for i, step := range wf.Steps {
@@ -244,15 +252,10 @@ func (e *Engine) executeWorkflow(wf storage.Workflow, payload map[string]any, ap
 		// Load persistent quill settings for this step's quill.
 		if settings, err := e.store.GetQuillSettings(step.QuillID); err == nil {
 			ctx.Settings = settings
+			ctx.Settings = resolveStringMap(ctx.Settings, ctx)
 		} else {
 			log.Printf("[engine] Warning: failed to load settings for quill %q: %v", step.QuillID, err)
 			ctx.Settings = make(map[string]string)
-		}
-
-		// Snapshot resolved inputs for logging.
-		resolvedInputs := make(map[string]string, len(ctx.Inputs))
-		for k, v := range ctx.Inputs {
-			resolvedInputs[k] = resolveTemplates(v, ctx)
 		}
 
 		// Look up the quill definition, then resolve its steps.
@@ -262,6 +265,12 @@ func (e *Engine) executeWorkflow(wf storage.Workflow, payload map[string]any, ap
 				if _, exists := ctx.Inputs[qInput.Name]; !exists && qInput.Default != "" {
 					ctx.Inputs[qInput.Name] = qInput.Default
 				}
+			}
+
+			// Snapshot resolved inputs for logging and Python execution.
+			resolvedInputs := make(map[string]string, len(ctx.Inputs))
+			for k, v := range ctx.Inputs {
+				resolvedInputs[k] = resolveTemplates(v, ctx)
 			}
 
 			// Python quills: run via subprocess.
@@ -282,8 +291,9 @@ func (e *Engine) executeWorkflow(wf storage.Workflow, payload map[string]any, ap
 				pyInput := runner.PythonInput{
 					Command:   "execute",
 					Settings:  ctx.Settings,
+					Inputs:    resolvedInputs,
+					HBVars:    ctx.HBVars,
 					Event:     ctx.Event,
-					Inputs:    ctx.Inputs,
 					AppID:     ctx.AppID,
 					EventName: ctx.EventName,
 				}
@@ -362,6 +372,12 @@ func (e *Engine) executeWorkflow(wf storage.Workflow, payload map[string]any, ap
 				stepsLog = append(stepsLog, stepLog{Step: i, Quill: step.QuillID, Status: "success", Inputs: resolvedInputs, Output: lastOutput})
 			}
 		} else {
+			// Snapshot resolved inputs for logging and direct action execution.
+			resolvedInputs := make(map[string]string, len(ctx.Inputs))
+			for k, v := range ctx.Inputs {
+				resolvedInputs[k] = resolveTemplates(v, ctx)
+			}
+
 			// Fallback: treat quill ID as a direct action name.
 			action, err := e.actions.Get(step.QuillID)
 			if err != nil {
@@ -399,10 +415,14 @@ func (e *Engine) executeWorkflow(wf storage.Workflow, payload map[string]any, ap
 }
 
 // resolveTemplates replaces {{event.X}}, {{inputs.X}}, {{settings.X}},
-// {{steps.X.Y.Z}}, and {{app_id}}/{{event_name}} placeholders in a string.
+// {{hb.X}}, {{steps.X.Y.Z}}, and {{app_id}}/{{event_name}} placeholders in a string.
+// It also supports the legacy hedgebuddy:VAR_NAME shorthand for whole-value references.
 // Supports deep dot-path traversal for structured step outputs
 // (e.g. {{steps.auth.body.token}}).
 func resolveTemplates(s string, ctx *actions.Context) string {
+	if resolved, ok := resolveHBPrefixedValue(s, ctx.HBVars); ok {
+		return resolved
+	}
 	if !strings.Contains(s, "{{") {
 		return s
 	}
@@ -460,6 +480,11 @@ func resolveTemplates(s string, ctx *actions.Context) string {
 		result = strings.ReplaceAll(result, "{{settings."+key+"}}", val)
 	}
 
+	// Replace {{hb.X}} with HedgeBuddy variables from the active profile.
+	for key, val := range ctx.HBVars {
+		result = strings.ReplaceAll(result, "{{hb."+key+"}}", val)
+	}
+
 	// Replace {{steps.X}} and {{steps.X.Y.Z}} with deep path resolution.
 	result = resolvePathTemplates(result, "steps", ctx.Steps)
 
@@ -472,6 +497,20 @@ func resolveTemplates(s string, ctx *actions.Context) string {
 	}
 
 	return result
+}
+
+func resolveHBPrefixedValue(s string, hb map[string]string) (string, bool) {
+	if !strings.HasPrefix(s, "hedgebuddy:") {
+		return "", false
+	}
+	key := strings.TrimSpace(strings.TrimPrefix(s, "hedgebuddy:"))
+	if key == "" {
+		return s, true
+	}
+	if val, ok := hb[key]; ok {
+		return val, true
+	}
+	return s, true
 }
 
 // resolvePathTemplates finds all {{prefix.path.to.field}} placeholders and
@@ -597,6 +636,17 @@ func resolveConfigValue(v any, ctx *actions.Context) any {
 	default:
 		return v
 	}
+}
+
+func resolveStringMap(values map[string]string, ctx *actions.Context) map[string]string {
+	if len(values) == 0 {
+		return make(map[string]string)
+	}
+	resolved := make(map[string]string, len(values))
+	for key, val := range values {
+		resolved[key] = resolveTemplates(val, ctx)
+	}
+	return resolved
 }
 
 func inputsToConfig(inputs map[string]string) map[string]any {

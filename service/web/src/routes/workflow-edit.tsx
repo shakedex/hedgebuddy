@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useParams, useNavigate } from '@tanstack/react-router'
 import {
-  fetchWorkflow, updateWorkflow, fetchSchemas, fetchQuills, fetchActions, runWorkflow,
+  fetchWorkflow, updateWorkflow, fetchSchemas, fetchQuills, fetchActions, fetchHBVars, runWorkflow,
 } from '#/lib/api'
 import type { Workflow, Step, StepInput, Condition, ActionMeta, Field } from '#/lib/api'
 import { useState, useEffect, useCallback, useMemo } from 'react'
@@ -19,7 +19,7 @@ import {
 // ─── Page ────────────────────────────────────────────────────────────────────
 
 export function WorkflowEditPage() {
-  const { id } = useParams({ strict: false }) as { id: string }
+  const { id = '' } = useParams({ strict: false })
   const navigate = useNavigate()
   const qc = useQueryClient()
 
@@ -28,6 +28,7 @@ export function WorkflowEditPage() {
   const { data: schemas } = useQuery({ queryKey: ['schemas'], queryFn: fetchSchemas })
   const { data: quillsList } = useQuery({ queryKey: ['quills'], queryFn: fetchQuills })
   const { data: actionsList } = useQuery({ queryKey: ['actions'], queryFn: fetchActions })
+  const { data: hbVars } = useQuery({ queryKey: ['hedgebuddy-vars'], queryFn: fetchHBVars })
 
   // ── Local state ──
   const [form, setForm] = useState<Partial<Workflow>>({})
@@ -66,7 +67,7 @@ export function WorkflowEditPage() {
 
   const eventFieldEntries: [string, Field][] = useMemo(() => {
     if (!selectedEvent || !schemas) return []
-    return Object.entries(schemas[selectedEvent.app]?.events[selectedEvent.value]?.fields ?? {})
+    return Object.entries(schemas[selectedEvent.app].events[selectedEvent.value]?.fields ?? {})
       .filter((e): e is [string, Field] => e[1] != null)
   }, [schemas, selectedEvent])
 
@@ -87,7 +88,7 @@ export function WorkflowEditPage() {
   const getAction = useCallback((name: string) => actionsList?.find((a) => a.name === name), [actionsList])
 
   // ── Updaters ──
-  function update<K extends keyof Workflow>(key: K, val: Workflow[K]) {
+  function update<TKey extends keyof Workflow>(key: TKey, val: Workflow[TKey]) {
     setForm((prev) => ({ ...prev, [key]: val }))
     setDirty(true)
   }
@@ -102,8 +103,8 @@ export function WorkflowEditPage() {
     const quill = getQuill(actionId), action = getAction(actionId)
     let inputs: StepInput[] = []
     const hasModes = quill?.modes && Object.keys(quill.modes).length > 0
-    if (quill && !hasModes) inputs = (quill.inputs ?? []).map((inp) => ({ name: inp.name, value: inp.default ?? '' }))
-    else if (action) inputs = (action.inputs ?? []).map((inp) => ({ name: inp.name, value: inp.default ?? '' }))
+    if (quill && !hasModes) inputs = quill.inputs.map((inp) => ({ name: inp.name, value: inp.default }))
+    else if (action) inputs = action.inputs.map((inp) => ({ name: inp.name, value: inp.default ?? '' }))
     const output_alias = deriveOutputAlias(actionId, quill)
     updateStep(stepIdx, { quill_id: actionId, inputs, output_alias })
   }
@@ -111,8 +112,8 @@ export function WorkflowEditPage() {
     const quill = getQuill(actionId), action = getAction(actionId)
     let inputs: StepInput[] = []
     const hasModes = quill?.modes && Object.keys(quill.modes).length > 0
-    if (quill && !hasModes) inputs = (quill.inputs ?? []).map((inp) => ({ name: inp.name, value: inp.default ?? '' }))
-    else if (action) inputs = (action.inputs ?? []).map((inp) => ({ name: inp.name, value: inp.default ?? '' }))
+    if (quill && !hasModes) inputs = quill.inputs.map((inp) => ({ name: inp.name, value: inp.default }))
+    else if (action) inputs = action.inputs.map((inp) => ({ name: inp.name, value: inp.default ?? '' }))
     const output_alias = deriveOutputAlias(actionId, quill)
     update('steps', [...(form.steps ?? []), { quill_id: actionId, inputs, output_alias }])
   }
@@ -249,6 +250,7 @@ export function WorkflowEditPage() {
           steps={form.steps}
           quills={quillsList}
           actions={actionsList}
+          hbVars={hbVars}
         />
       </div>
 

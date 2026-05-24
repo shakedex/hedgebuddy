@@ -15,6 +15,7 @@ type PythonInput struct {
 	Command   string            `json:"command"`              // "execute", "load_options", "test_connection"
 	Settings  map[string]string `json:"settings"`             // Persistent quill-level settings
 	Inputs    map[string]string `json:"inputs"`               // Per-workflow-step inputs
+	HBVars    map[string]string `json:"hb_vars,omitempty"`    // HedgeBuddy variables from the active profile
 	Event     map[string]any    `json:"event"`                // Event payload
 	AppID     string            `json:"app_id"`               // Source app
 	EventName string            `json:"event_name"`           // Event type

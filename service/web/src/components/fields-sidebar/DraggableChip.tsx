@@ -1,5 +1,7 @@
 import { GripHorizontal } from 'lucide-react'
 import { Badge } from '#/components/ui/badge'
+import { cn } from '#/lib/utils'
+import { hasLastFocusedField, insertIntoLastFocusedField } from '#/lib/field-insertion'
 
 interface DraggableChipProps {
   label: string
@@ -7,21 +9,30 @@ interface DraggableChipProps {
   badge?: string
   icon?: React.ReactNode
   className?: string
+  title?: string
 }
 
-export function DraggableChip({ label, value, badge, icon, className }: DraggableChipProps) {
+export function DraggableChip({ label, value, badge, icon, className, title }: DraggableChipProps) {
   return (
-    <div
+    <button
+      type="button"
       draggable
       onDragStart={(e) => {
         e.dataTransfer.setData('text/plain', value)
         e.dataTransfer.setData('application/x-quill-template', value)
         e.dataTransfer.effectAllowed = 'copy'
       }}
-      className={`flex items-center gap-1.5 px-2 py-1.5 rounded-md border border-border/60 bg-background
-        hover:border-primary/40 hover:bg-accent/30 cursor-grab active:cursor-grabbing
-        transition-colors text-xs group select-none ${className ?? ''}`}
-      title={`Drag to insert: ${value}`}
+      onClick={() => {
+        insertIntoLastFocusedField(value)
+      }}
+      className={cn(
+        'flex w-full items-center gap-1.5 rounded-md border border-border/60 bg-background px-2 py-1.5',
+        'cursor-grab text-xs transition-colors group select-none active:cursor-grabbing',
+        'hover:border-primary/40 hover:bg-accent/30',
+        'focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none',
+        className,
+      )}
+      title={title ?? `${hasLastFocusedField() ? 'Click or drag to insert' : 'Drag to insert'}: ${value}`}
     >
       <GripHorizontal className="size-3 text-muted-foreground/50 group-hover:text-muted-foreground shrink-0" />
       {icon && <span className="text-muted-foreground shrink-0">{icon}</span>}
@@ -31,6 +42,6 @@ export function DraggableChip({ label, value, badge, icon, className }: Draggabl
           {badge}
         </Badge>
       )}
-    </div>
+    </button>
   )
 }

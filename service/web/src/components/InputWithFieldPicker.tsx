@@ -1,4 +1,4 @@
-import { useRef, useState, useMemo } from 'react'
+import { useRef, useState, useMemo, useId, useEffect, useCallback } from 'react'
 import { Input } from '#/components/ui/input'
 import { Button } from '#/components/ui/button'
 import { Badge } from '#/components/ui/badge'
@@ -10,6 +10,7 @@ import { FolderOpen, X } from 'lucide-react'
 import { FileBrowserDialog } from './FileBrowserDialog'
 import { DynamicSelect } from './DynamicSelect'
 import { previewTemplate } from '#/lib/format'
+import { rememberFieldInsertionTarget, releaseFieldInsertionTarget } from '#/lib/field-insertion'
 import { parseSegments, templateLabel } from '#/lib/templates'
 
 /**
@@ -18,14 +19,20 @@ import { parseSegments, templateLabel } from '#/lib/templates'
  * and dynamic API-loaded dropdowns.
  */
 export function InputWithFieldPicker({
-  value, onChange, inputDef, quillId,
+  value, onChange, inputDef, quillId, inputType = 'text', placeholder, alwaysRaw = false,
 }: {
   value: string
   onChange: (v: string) => void
   inputDef: { name: string; type: string; required?: boolean; values?: string[] }
   quillId?: string
+  inputType?: string
+  placeholder?: string
+  alwaysRaw?: boolean
 }) {
+  const fieldId = useId()
   const inputRef = useRef<HTMLInputElement>(null)
+  const valueRef = useRef(value)
+  const selectionRef = useRef<{ start: number; end: number }>({ start: value.length, end: value.length })
   const [browserOpen, setBrowserOpen] = useState(false)
   const [dragOver, setDragOver] = useState(false)
   const [editing, setEditing] = useState(false)
@@ -33,6 +40,56 @@ export function InputWithFieldPicker({
   const preview = previewTemplate(value)
   const segments = useMemo(() => parseSegments(value), [value])
   const hasTemplates = segments.some((s) => s.type === 'template')
+
+  useEffect(() => {
+    valueRef.current = value
+    const end = value.length
+    selectionRef.current = {
+      start: Math.min(selectionRef.current.start, end),
+      end: Math.min(selectionRef.current.end, end),
+    }
+  }, [value])
+
+  useEffect(() => () => releaseFieldInsertionTarget(fieldId), [fieldId])
+
+  const syncSelection = useCallback(() => {
+    const el = inputRef.current
+    if (!el) return
+    selectionRef.current = {
+      start: el.selectionStart ?? valueRef.current.length,
+      end: el.selectionEnd ?? valueRef.current.length,
+    }
+  }, [])
+
+  const insertToken = useCallback((token: string) => {
+    const el = inputRef.current
+    const currentValue = valueRef.current
+    const activeSelection = el && document.activeElement === el
+      ? {
+          start: el.selectionStart ?? currentValue.length,
+          end: el.selectionEnd ?? currentValue.length,
+        }
+      : selectionRef.current
+
+    const start = Math.min(activeSelection.start, currentValue.length)
+    const end = Math.min(activeSelection.end, currentValue.length)
+    const next = currentValue.slice(0, start) + token + currentValue.slice(end)
+    onChange(next)
+    const nextPos = start + token.length
+    selectionRef.current = { start: nextPos, end: nextPos }
+    setEditing(true)
+
+    requestAnimationFrame(() => {
+      const input = inputRef.current
+      if (!input) return
+      input.focus()
+      input.selectionStart = input.selectionEnd = nextPos
+    })
+  }, [onChange])
+
+  const registerAsLastFocused = useCallback(() => {
+    rememberFieldInsertionTarget({ id: fieldId, insertToken })
+  }, [fieldId, insertToken])
 
   // Dynamic → API-powered searchable select
   if (inputDef.type === 'dynamic' && quillId) {
@@ -81,22 +138,7 @@ export function InputWithFieldPicker({
     const text = e.dataTransfer.getData('text/plain')
     if (!text) return
 
-    if (editing) {
-      const el = inputRef.current
-      if (el && document.activeElement === el) {
-        const start = el.selectionStart ?? value.length
-        const end = el.selectionEnd ?? value.length
-        const next = value.slice(0, start) + text + value.slice(end)
-        onChange(next)
-        requestAnimationFrame(() => {
-          const pos = start + text.length
-          el.selectionStart = el.selectionEnd = pos
-          el.focus()
-        })
-        return
-      }
-    }
-    onChange(value ? value + text : text)
+    insertToken(text)
   }
 
   function removeTemplate(token: string) {
@@ -119,10 +161,10 @@ export function InputWithFieldPicker({
         onDrop={handleDrop}
       >
         {/* Badge view (shown when not editing and has templates) */}
-        {!editing && hasTemplates ? (
+        {!alwaysRaw && !editing && hasTemplates ? (
           <div className="flex gap-1.5">
             <button
-              onClick={() => setEditing(true)}
+              onClick={() => { registerAsLastFocused(); setEditing(true) }}
               className="flex-1 min-h-9 flex items-center gap-1 flex-wrap px-3 py-1.5
                 rounded-md border border-input bg-background text-xs font-mono
                 hover:border-primary/40 transition-colors cursor-text text-left"
@@ -163,13 +205,17 @@ export function InputWithFieldPicker({
           <div className="flex gap-1.5">
             <Input
               ref={inputRef}
+              type={inputType}
               value={value}
               onChange={(e) => onChange(e.target.value)}
               onBlur={() => setEditing(false)}
-              onFocus={() => setEditing(true)}
+              onFocus={() => { setEditing(true); registerAsLastFocused(); syncSelection() }}
+              onClick={syncSelection}
+              onKeyUp={syncSelection}
+              onSelect={syncSelection}
               autoFocus={editing}
               className="font-mono text-xs"
-              placeholder={isPath ? 'C:\\path\\to\\folder or click browse...' : 'Type or drag a field here...'}
+              placeholder={placeholder ?? (isPath ? 'C:\\path\\to\\folder or click browse...' : 'Type or drag a field here...')}
             />
             {isPath && (
               <Tooltip>
