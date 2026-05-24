@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime"
 
 	"fyne.io/fyne/v2"
@@ -20,7 +21,12 @@ func LoadOSFonts() (fyne.Resource, fyne.Resource) {
 func osFontPaths() (regular, bold string) {
 	switch runtime.GOOS {
 	case "windows":
-		return `C:\Windows\Fonts\segoeui.ttf`, `C:\Windows\Fonts\segoeuisb.ttf`
+		sysRoot := os.Getenv("SystemRoot")
+		if sysRoot == "" {
+			sysRoot = `C:\Windows` // safety fallback
+		}
+		fontsDir := filepath.Join(sysRoot, "Fonts")
+		return filepath.Join(fontsDir, "segoeui.ttf"), filepath.Join(fontsDir, "segoeuisb.ttf")
 	case "darwin":
 		// macOS — SF NS Display is the system font on modern macOS.
 		// The path has shifted over OS versions; we try the most-common one.
