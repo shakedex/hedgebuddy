@@ -6,6 +6,12 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [Unreleased]
+
+### Changed
+
+- **Quills extracted to its own repository at [shakedex/quills](https://github.com/shakedex/quills).** The `service/` and `quills/` directories, the Quills release workflow, and the combined "HedgeBuddy Suite" installer have been removed. Historical entries below that describe Quills work remain for context, but Quills development continues in the new repo.
+
 ## [0.9.1] - 2026-04-12
 
 ### Added
