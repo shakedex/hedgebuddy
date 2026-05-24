@@ -47,26 +47,52 @@ Expected: empty output (no branches) OR a single `main` branch with only an auto
 Run: `gh api repos/shakedex/quills/commits --jq '.[].commit.message' 2>&1 | head -5`
 Expected: empty OR just `Initial commit`. If the repo has real commits, STOP and ask the user before proceeding — this plan will force-push and overwrite.
 
-### Task 0.3: Stash uncommitted hedgebuddy changes
+### Task 0.3: Commit in-flight Quills WIP to hedgebuddy master
+
+The working tree has substantial uncommitted work under `service/` and `quills/`. To carry these changes into the new repo, we commit them to master before running `filter-repo` (which only operates on committed history). Non-Quills WIP (e.g. `python-lib/uv.lock`) is left alone.
 
 **Files:** working tree of `E:\Coding\hedgebuddy`
 
 - [ ] **Step 1: Show current dirty state**
 
 Run: `git -C E:/Coding/hedgebuddy status --short`
-Expected: a list of `M` and `??` files (these are the user's WIP that must NOT come along with the split).
+Expected: a list of `M` and `??` files. The Quills-related ones (under `service/` and `quills/`) will be staged in Step 2.
 
-- [ ] **Step 2: Stash including untracked**
+- [ ] **Step 2: Stage only Quills-related WIP**
 
-Run: `git -C E:/Coding/hedgebuddy stash push --include-untracked --message "wip-before-quills-split"`
-Expected: `Saved working directory and index state On master: wip-before-quills-split`.
+Run from `E:/Coding/hedgebuddy`:
+```bash
+git add service/ quills/
+```
+Expected: no output.
 
-- [ ] **Step 3: Verify clean tree**
+- [ ] **Step 3: Verify staging is correct (no python-lib, no app, no updater)**
 
-Run: `git -C E:/Coding/hedgebuddy status --short`
-Expected: empty output.
+Run from `E:/Coding/hedgebuddy`: `git diff --cached --name-only | head -30`
+Expected: every line begins with `service/` or `quills/`. If anything else is staged, `git restore --staged <path>` it before committing.
 
-Note: The stash will be restored at the end of Phase 5. Recover any time with `git stash pop` if the plan is abandoned.
+- [ ] **Step 4: Commit**
+
+Run from `E:/Coding/hedgebuddy`:
+```bash
+git commit -m "$(cat <<'EOF'
+chore: snapshot in-flight Quills work before extraction
+
+Pre-extraction snapshot so git filter-repo carries this in-progress
+work to the new shakedex/quills repo. The hedgebuddy cleanup PR
+later in this migration removes everything under service/ and quills/
+again, so this commit's content does not persist in hedgebuddy.
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+EOF
+)"
+```
+Expected: commit succeeds.
+
+- [ ] **Step 5: Verify only non-Quills WIP remains**
+
+Run from `E:/Coding/hedgebuddy`: `git status --short`
+Expected: no `service/` or `quills/` entries remain. Anything else (e.g. `python-lib/uv.lock`) stays as the user's untouched WIP.
 
 ---
 
@@ -1128,19 +1154,19 @@ Run: `gh pr ready --undo` (toggles to draft) — *only if* you want to defer the
 
 If there are no out-in-the-wild installs to worry about, the PR can be merged immediately. The user makes this call.
 
-### Task 5.8: Restore stashed WIP
+### Task 5.8: Return to master
 
 **Files:** working tree of `E:\Coding\hedgebuddy`
 
-- [ ] **Step 1: Switch back to master so the stash applies cleanly**
+- [ ] **Step 1: Switch back to master**
 
 Run: `git -C E:/Coding/hedgebuddy checkout master`
 Expected: `Switched to branch 'master'`.
 
-- [ ] **Step 2: Pop the stash made in Task 0.3**
+- [ ] **Step 2: Verify any non-Quills WIP is still present (it should be — we never touched it)**
 
-Run: `git -C E:/Coding/hedgebuddy stash pop`
-Expected: the stashed changes reappear in `git status`. If there are merge conflicts on files that were deleted in `chore/remove-quills` (e.g. the working tree had modifications to `service/internal/...`), resolve them by deciding per file whether the WIP work should now move to the new Quills repo or be discarded. The stash is intentionally left as-is on conflict for the user to inspect manually.
+Run: `git -C E:/Coding/hedgebuddy status --short`
+Expected: shows any pre-existing non-Quills WIP (e.g. `python-lib/uv.lock`). No `service/` or `quills/` entries (those were committed in Task 0.3 and then deleted in the cleanup PR).
 
 ---
 
