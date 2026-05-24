@@ -35,3 +35,6 @@ todos.json
 
 
 outside-resources/
+
+# Worktrees
+.worktrees/
