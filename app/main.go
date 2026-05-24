@@ -9,7 +9,8 @@ import (
 
 func main() {
 	a := app.New()
-	a.Settings().SetTheme(ui.NewHedgeBuddyTheme(nil, nil))
+	regular, bold := ui.LoadOSFonts()
+	a.Settings().SetTheme(ui.NewHedgeBuddyTheme(regular, bold))
 	a.SetIcon(ui.AppIcon())
 
 	w := a.NewWindow(ui.WindowTitle)
