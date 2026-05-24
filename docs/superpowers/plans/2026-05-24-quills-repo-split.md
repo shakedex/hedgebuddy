@@ -18,20 +18,23 @@
 
 **Files:** none
 
-- [ ] **Step 1: Verify filter-repo is missing (baseline check)**
+Note: On Windows, `pip install git-filter-repo` installs `git-filter-repo.exe` into a per-user `Scripts/` directory that may not be on PATH, so the canonical `git filter-repo` git-subcommand invocation can fail. We invoke as a Python module (`python -m git_filter_repo`) throughout this plan — that works regardless of PATH state.
 
-Run: `git filter-repo --version`
-Expected: `git: 'filter-repo' is not a git command.` (or version string if already installed; if so, skip Step 2).
+- [ ] **Step 1: Check whether the Python module is already importable**
+
+Run: `python -c "import git_filter_repo; print(git_filter_repo.__file__)"`
+Expected: prints the path (e.g. `…/site-packages/git_filter_repo.py`) — meaning it's already installed; skip Step 2.
+If it errors with `ModuleNotFoundError: No module named 'git_filter_repo'`, proceed to Step 2.
 
 - [ ] **Step 2: Install via pip**
 
 Run: `pip install git-filter-repo`
-Expected: `Successfully installed git-filter-repo-2.45.0` (or similar version).
+Expected: `Successfully installed git-filter-repo-X.Y.Z` (any 2.x version is fine).
 
-- [ ] **Step 3: Confirm installed**
+- [ ] **Step 3: Confirm the module is importable and the help works**
 
-Run: `git filter-repo --version`
-Expected: prints a version number (e.g. `2.45.0`).
+Run: `python -m git_filter_repo --help 2>&1 | head -3`
+Expected: prints filter-repo's help banner (starts with `usage: git_filter_repo` or similar). Any non-error output here proves the module loads and the entry point runs.
 
 ### Task 0.2: Confirm new GitHub repo is empty
 
@@ -126,7 +129,7 @@ Expected: contents of both directories listed.
 Run from `E:/Coding/quills-split-tmp`:
 
 ```bash
-git -C E:/Coding/quills-split-tmp filter-repo \
+cd E:/Coding/quills-split-tmp && python -m git_filter_repo \
   --path service/ \
   --path quills/ \
   --path .github/workflows/release-quills.yml \
@@ -135,6 +138,8 @@ git -C E:/Coding/quills-split-tmp filter-repo \
   --path-rename .github/workflows/release-quills.yml:.github/workflows/release.yml \
   --path-rename scripts/sync_quills_version.py:scripts/sync_version.py
 ```
+
+Note: `python -m git_filter_repo` (not `git -C … filter-repo`) — the module form is robust against PATH/Scripts-dir quirks on Windows. filter-repo requires the cwd to be the target repo, hence the `cd` rather than `git -C`.
 
 Expected: `Parsed N commits` … `New history written in X seconds; now repacking/cleaning...` … `Completed successfully.`
 Note: `--path service/:` is a "rename to empty string", which flattens `service/foo` → `foo` at the repo root. Top-level `quills/` is kept under `quills/` (no rename). The `--path` filter keeps anything matching any of the listed paths; everything else is dropped.
