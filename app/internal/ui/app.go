@@ -9,6 +9,7 @@ import (
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/widget"
 	fynetooltip "github.com/dweymouth/fyne-tooltip"
 
@@ -37,6 +38,9 @@ type AppController struct {
 
 	// creatingProfile is true while the inline new-profile row is active.
 	creatingProfile bool
+
+	// editingProfile holds the name of the profile being renamed inline (empty = none).
+	editingProfile string
 
 	// pendingFlash holds variable names that should flash on the next list render.
 	// Consumed (cleared) by buildListView.
@@ -257,6 +261,13 @@ func (c *AppController) rebuildSidebar() {
 	var profileItems []fyne.CanvasObject
 	for _, name := range profileNames {
 		pName := name
+
+		// Inline rename mode: replace the row with the editor.
+		if pName == c.editingProfile {
+			profileItems = append(profileItems, c.buildProfileEditor(pName))
+			continue
+		}
+
 		count := profile.CountVariables(pName)
 		active := pName == c.ProfileIndex.Active
 
@@ -399,8 +410,8 @@ func (c *AppController) buildProfileComposer() fyne.CanvasObject {
 	confirmBtn := components.NewIconButton(icons.Check, "Create profile", components.IconVariantNeutral, confirm)
 	cancelBtn := components.NewIconButton(icons.X, "Cancel", components.IconVariantNeutral, cancel)
 
-	actions := container.NewHBox(confirmBtn, cancelBtn)
-	row := container.NewBorder(nil, nil, nil, actions, entry)
+	actions := container.NewHBox(layout.NewSpacer(), confirmBtn, cancelBtn)
+	row := container.NewVBox(entry, actions)
 
 	// Wrap in subtle background so it's visually distinct from regular profile rows.
 	bg := canvas.NewRectangle(tokens.Surface2)
@@ -418,3 +429,68 @@ func (c *AppController) buildProfileComposer() fyne.CanvasObject {
 	return container.NewStack(bg, container.NewPadded(row))
 }
 
+// buildProfileEditor returns an inline edit composer for renaming an existing
+// profile. The composer replaces the profile row while c.editingProfile equals
+// the profile name; confirm/cancel both clear that flag and rebuild the sidebar.
+func (c *AppController) buildProfileEditor(name string) fyne.CanvasObject {
+	entry := widget.NewEntry()
+	entry.SetText(name)
+
+	var confirm func()
+	cancel := func() {
+		c.editingProfile = ""
+		c.rebuildSidebar()
+	}
+	confirm = func() {
+		newName := entry.Text
+		if newName == "" || newName == name {
+			c.editingProfile = ""
+			c.rebuildSidebar()
+			return
+		}
+		if err := profile.RenameProfile(c.ProfileIndex, name, newName); err != nil {
+			dialog.ShowError(err, c.Window)
+			return
+		}
+		c.updateWindowTitle()
+		c.editingProfile = ""
+		c.rebuildSidebar()
+		c.renderList()
+	}
+
+	entry.OnSubmitted = func(string) { confirm() }
+
+	confirmBtn := components.NewIconButton(icons.Check, "Save name", components.IconVariantNeutral, confirm)
+	cancelBtn := components.NewIconButton(icons.X, "Cancel", components.IconVariantNeutral, cancel)
+
+	actions := container.NewHBox(layout.NewSpacer(), confirmBtn, cancelBtn)
+	row := container.NewVBox(entry, actions)
+
+	bg := canvas.NewRectangle(tokens.Surface2)
+	bg.CornerRadius = tokens.RadiusSidebarItem
+
+	go func() {
+		fyne.Do(func() {
+			c.Window.Canvas().Focus(entry)
+		})
+	}()
+
+	return container.NewStack(bg, container.NewPadded(row))
+}
+
+// duplicateProfileDirect creates a copy of the named profile with an auto-suffixed name.
+func (c *AppController) duplicateProfileDirect(srcName string) {
+	newName := srcName + "-copy"
+	for counter := 2; ; counter++ {
+		if _, exists := c.ProfileIndex.Profiles[newName]; !exists {
+			break
+		}
+		newName = fmt.Sprintf("%s-copy%d", srcName, counter)
+	}
+	if err := profile.DuplicateProfile(c.ProfileIndex, srcName, newName); err != nil {
+		dialog.ShowError(err, c.Window)
+		return
+	}
+	c.rebuildSidebar()
+	c.renderList()
+}

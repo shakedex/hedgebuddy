@@ -8,17 +8,26 @@ import (
 // showProfileRowMenu opens a context menu at the given position with Rename / Duplicate / Delete actions.
 // Anchor is the canvas object the menu attaches to.
 func showProfileRowMenu(c *AppController, profileName string, anchor fyne.CanvasObject) {
-	menu := fyne.NewMenu("",
-		fyne.NewMenuItem("Rename", func() {
-			ShowProfileFormModal(c, ProfileModalModeEdit, profileName)
-		}),
-		fyne.NewMenuItem("Duplicate", func() {
-			ShowProfileFormModal(c, ProfileModalModeDuplicate, profileName)
-		}),
-		fyne.NewMenuItem("Delete", func() {
-			confirmDeleteProfile(c, profileName)
-		}),
-	)
+	renameItem := fyne.NewMenuItem("Rename", func() {
+		c.editingProfile = profileName
+		c.rebuildSidebar()
+	})
+	duplicateItem := fyne.NewMenuItem("Duplicate", func() {
+		c.duplicateProfileDirect(profileName)
+	})
+	deleteItem := fyne.NewMenuItem("Delete", func() {
+		confirmDeleteProfile(c, profileName)
+	})
+
+	if profileName == "default" {
+		renameItem.Disabled = true
+		deleteItem.Disabled = true
+	}
+	if profileName == c.ProfileIndex.Active {
+		deleteItem.Disabled = true
+	}
+
+	menu := fyne.NewMenu("", renameItem, duplicateItem, deleteItem)
 	popup := widget.NewPopUpMenu(menu, c.Window.Canvas())
 	popup.ShowAtRelativePosition(fyne.NewPos(0, 24), anchor)
 }
