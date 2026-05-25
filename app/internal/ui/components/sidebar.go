@@ -133,6 +133,9 @@ type SidebarSection struct {
 	Title string
 	Items []fyne.CanvasObject
 	OnAdd func() // if non-nil, renders a `+` button in the section header
+	// Composer, if non-nil, is rendered as the first row below the section header.
+	// Used for inline-add affordances (e.g., New profile name entry).
+	Composer fyne.CanvasObject
 }
 
 func NewSidebar(sections []SidebarSection, footer []fyne.CanvasObject) *Sidebar {
@@ -181,8 +184,12 @@ func (r *sidebarRenderer) Refresh() {
 			header = container.NewHBox(title)
 		}
 
-		items := container.NewVBox(sec.Items...)
-		r.body.Add(container.NewVBox(header, items))
+		sectionBody := container.NewVBox(header)
+		if sec.Composer != nil {
+			sectionBody.Add(sec.Composer)
+		}
+		sectionBody.Add(container.NewVBox(sec.Items...))
+		r.body.Add(sectionBody)
 	}
 	r.body.Refresh()
 

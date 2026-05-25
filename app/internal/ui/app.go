@@ -6,6 +6,7 @@ import (
 	"runtime"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
@@ -15,6 +16,7 @@ import (
 	"app/internal/storage"
 	"app/internal/ui/components"
 	"app/internal/ui/icons"
+	"app/internal/ui/tokens"
 	"app/internal/validator"
 )
 
@@ -32,6 +34,9 @@ type AppController struct {
 
 	// Filter state
 	activeFilter string // "" | "string" | "path" | "url" | "secret"
+
+	// creatingProfile is true while the inline new-profile row is active.
+	creatingProfile bool
 
 	// pendingFlash holds variable names that should flash on the next list render.
 	// Consumed (cleared) by buildListView.
@@ -277,8 +282,12 @@ func (c *AppController) rebuildSidebar() {
 		Title: "PROFILES",
 		Items: profileItems,
 		OnAdd: func() {
-			ShowProfileFormModal(c, ProfileModalModeNew, "")
+			c.creatingProfile = true
+			c.rebuildSidebar()
 		},
+	}
+	if c.creatingProfile {
+		profilesSection.Composer = c.buildProfileComposer()
 	}
 
 	// Filters section.
@@ -356,5 +365,56 @@ func (c *AppController) renderList() {
 // ShowListView is kept for legacy callers (main.go invokes it).
 func (c *AppController) ShowListView() {
 	c.renderList()
+}
+
+// buildProfileComposer returns the inline editable row used to create a new
+// profile from within the sidebar. The composer is shown when
+// c.creatingProfile is true; confirm/cancel both clear that flag and rebuild
+// the sidebar.
+func (c *AppController) buildProfileComposer() fyne.CanvasObject {
+	entry := widget.NewEntry()
+	entry.SetPlaceHolder("New profile name")
+
+	var confirm func()
+	cancel := func() {
+		c.creatingProfile = false
+		c.rebuildSidebar()
+	}
+	confirm = func() {
+		name := entry.Text
+		if name == "" {
+			return
+		}
+		if err := profile.CreateProfile(c.ProfileIndex, name, ""); err != nil {
+			dialog.ShowError(err, c.Window)
+			return
+		}
+		c.creatingProfile = false
+		c.rebuildSidebar()
+		c.renderList()
+	}
+
+	entry.OnSubmitted = func(string) { confirm() }
+
+	confirmBtn := components.NewIconButton(icons.Check, "Create profile", components.IconVariantNeutral, confirm)
+	cancelBtn := components.NewIconButton(icons.X, "Cancel", components.IconVariantNeutral, cancel)
+
+	actions := container.NewHBox(confirmBtn, cancelBtn)
+	row := container.NewBorder(nil, nil, nil, actions, entry)
+
+	// Wrap in subtle background so it's visually distinct from regular profile rows.
+	bg := canvas.NewRectangle(tokens.Surface2)
+	bg.CornerRadius = tokens.RadiusSidebarItem
+
+	// Defer focus so the entry is mounted before we try to focus it. fyne.Do
+	// schedules the call on the UI goroutine; without the goroutine wrapper
+	// the focus would happen before the widget is laid out.
+	go func() {
+		fyne.Do(func() {
+			c.Window.Canvas().Focus(entry)
+		})
+	}()
+
+	return container.NewStack(bg, container.NewPadded(row))
 }
 
