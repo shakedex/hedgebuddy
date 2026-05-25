@@ -154,7 +154,7 @@ func showPipProgressDialog(w fyne.Window, label, title string, run func(*entryWr
 				statusLabel.Color = ColorAccentRed
 				statusLabel.Refresh()
 
-				hint := MutedLabel(fmt.Sprintf("You can also run manually: %s -m pip install hedgebuddy", executable))
+				hint := mutedLabel(fmt.Sprintf("You can also run manually: %s -m pip install hedgebuddy", executable)) // TODO Task 24: redesign these dialogs
 				content.Add(hint)
 			} else {
 				statusLabel.Text = "✓ Installed successfully"
@@ -169,6 +169,14 @@ func showPipProgressDialog(w fyne.Window, label, title string, run func(*entryWr
 }
 
 // --- helpers ---
+
+// mutedLabel is a small local helper for these legacy dialogs.
+// TODO Task 24: redesign Python/update dialogs and remove this.
+func mutedLabel(text string) *canvas.Text {
+	l := canvas.NewText(text, ColorTextMuted)
+	l.TextSize = 12
+	return l
+}
 
 // dismissPythonCheck saves the "don't ask again" preference.
 func dismissPythonCheck() {

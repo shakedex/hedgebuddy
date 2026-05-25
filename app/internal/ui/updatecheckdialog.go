@@ -62,7 +62,7 @@ func showAppUpdateDialog(w fyne.Window, latestVersion string) {
 	title.TextSize = 16
 	title.TextStyle = fyne.TextStyle{Bold: true}
 
-	currentLabel := MutedLabel("Current version: v" + AppVersion)
+	currentLabel := mutedLabel("Current version: v" + AppVersion) // TODO Task 24
 
 	msg := widget.NewLabel(
 		"A new version of HedgeBuddy is available.\n" +
@@ -99,7 +99,7 @@ func showLibraryUpdateDialog(w fyne.Window, executable, installed, latest string
 	title.TextSize = 16
 	title.TextStyle = fyne.TextStyle{Bold: true}
 
-	currentLabel := MutedLabel("Installed: v" + installed)
+	currentLabel := mutedLabel("Installed: v" + installed) // TODO Task 24
 
 	msg := widget.NewLabel(
 		"A new version of the hedgebuddy Python library is available.\n" +

@@ -4,59 +4,49 @@ import (
 	"fmt"
 	"os/exec"
 	"runtime"
-	"time"
 
 	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
-	"fyne.io/fyne/v2/layout"
-	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	fynetooltip "github.com/dweymouth/fyne-tooltip"
 
 	"app/internal/profile"
 	"app/internal/storage"
+	"app/internal/ui/components"
+	"app/internal/ui/tokens"
 	"app/internal/validator"
 )
 
-// AppController is the central controller managing navigation and state.
+// AppController is the central controller managing shell state, navigation, and storage.
 type AppController struct {
 	App          fyne.App
 	Window       fyne.Window
 	Storage      *storage.Storage
 	ProfileIndex *profile.ProfileIndex
-	ContentRoot  *fyne.Container
 
-	// StatusText is the mutable text element displayed in the header's right area.
-	// When idle it shows "Variable Manager"; on action it briefly shows a status message.
-	StatusText *canvas.Text
+	// Shell components
+	sidebar  *components.Sidebar
+	mainPane *fyne.Container
+	drawer   *components.Drawer
+
+	// Filter state
+	activeFilter string // "" | "string" | "path" | "url" | "secret"
 }
 
-// NewAppController creates a new controller and loads storage.
+// NewAppController initializes storage, profile index, and the shell layout.
 func NewAppController(fyneApp fyne.App, window fyne.Window) *AppController {
-	statusText := canvas.NewText("", ColorTextMuted)
-	statusText.TextSize = 12
-	statusText.Alignment = fyne.TextAlignTrailing
-
 	ctrl := &AppController{
-		App:         fyneApp,
-		Window:      window,
-		StatusText:  statusText,
-		ContentRoot: container.NewMax(),
+		App:    fyneApp,
+		Window: window,
 	}
 
-	window.SetContent(fynetooltip.AddWindowToolTipLayer(ctrl.ContentRoot, window.Canvas()))
-
-	// Run profile migration before loading storage
 	if err := profile.Migrate(); err != nil {
 		fmt.Println("Warning: profile migration failed:", err.Error())
 	}
 
-	// Load profile index
 	idx, err := profile.LoadIndex()
 	if err != nil || idx == nil {
-		// If something went wrong, create a minimal index
 		idx = &profile.ProfileIndex{
 			Active:   "default",
 			Profiles: map[string]profile.ProfileMeta{"default": {Description: "Default profile"}},
@@ -64,9 +54,7 @@ func NewAppController(fyneApp fyne.App, window fyne.Window) *AppController {
 	}
 	ctrl.ProfileIndex = idx
 
-	// Initialize and load storage for the active profile
-	_, err = storage.InitStorage()
-	if err != nil {
+	if _, err := storage.InitStorage(); err != nil {
 		fmt.Println("Warning: failed to initialize storage:", err.Error())
 	}
 
@@ -76,29 +64,59 @@ func NewAppController(fyneApp fyne.App, window fyne.Window) *AppController {
 	}
 	ctrl.Storage = store
 
-	// Set window title with active profile
 	ctrl.updateWindowTitle()
+	ctrl.buildShell()
 
 	return ctrl
 }
 
-// ShowStatus flashes a status message in the header, then reverts to the subtitle.
-func (c *AppController) ShowStatus(message string) {
-	c.StatusText.Text = "✓ " + message
-	c.StatusText.Color = ColorSuccess
-	c.StatusText.Refresh()
+func (c *AppController) buildShell() {
+	c.mainPane = container.NewStack()
+	c.drawer = components.NewDrawer()
 
-	go func() {
-		time.Sleep(time.Duration(StatusDuration) * time.Second)
-		fyne.DoAndWait(func() {
-			c.StatusText.Text = ""
-			c.StatusText.Color = ColorTextMuted
-			c.StatusText.Refresh()
-		})
-	}()
+	c.rebuildSidebar()
+	c.renderList()
+
+	shellBody := container.NewBorder(
+		nil, nil,
+		c.sidebar, nil,
+		c.mainPane,
+	)
+
+	overlay := container.NewStack(shellBody, c.drawer)
+	c.Window.SetContent(fynetooltip.AddWindowToolTipLayer(overlay, c.Window.Canvas()))
+
+	// Esc closes drawer.
+	c.Window.Canvas().SetOnTypedKey(func(e *fyne.KeyEvent) {
+		if e.Name == fyne.KeyEscape && c.drawer.IsOpen() {
+			c.drawer.Close()
+		}
+	})
 }
 
-// Reload reloads variables from disk.
+// --- Drawer control ---
+
+// OpenDrawer shows a right-side drawer with the given title and body.
+func (c *AppController) OpenDrawer(title string, body fyne.CanvasObject, onClose func()) {
+	c.drawer.Open(title, body, onClose)
+}
+
+// CloseDrawer hides the drawer.
+func (c *AppController) CloseDrawer() {
+	c.drawer.Close()
+}
+
+// --- Filter control ---
+
+// SetFilter sets the active type filter (or "" for all) and re-renders the list.
+func (c *AppController) SetFilter(typeName string) {
+	c.activeFilter = typeName
+	c.rebuildSidebar()
+	c.renderList()
+}
+
+// --- Storage / profile ops (unchanged from before) ---
+
 func (c *AppController) Reload() error {
 	store, err := storage.Load()
 	if err != nil {
@@ -108,63 +126,24 @@ func (c *AppController) Reload() error {
 	return nil
 }
 
-// wrapView adds consistent outer padding to any view.
-func (c *AppController) wrapView(content fyne.CanvasObject) fyne.CanvasObject {
-	return container.NewPadded(content)
-}
-
-func (c *AppController) setMainContent(content fyne.CanvasObject) {
-	c.ContentRoot.Objects = []fyne.CanvasObject{c.wrapView(content)}
-	c.ContentRoot.Refresh()
-}
-
-// --- Navigation ---
-
-func (c *AppController) ShowListView() {
-	c.setMainContent(NewListView(c))
-}
-
-func (c *AppController) ShowFormView(editingName, prefillName, prefillValue, prefillType, prefillDesc string) {
-	c.setMainContent(NewFormView(c, editingName, prefillName, prefillValue, prefillType, prefillDesc))
-}
-
-func (c *AppController) ShowImportView() {
-	c.setMainContent(NewImportView(c))
-}
-
-func (c *AppController) ShowExportView() {
-	c.setMainContent(NewExportView(c))
-}
-
-func (c *AppController) ShowAboutView() {
-	c.setMainContent(NewAboutView(c))
-}
-
-func (c *AppController) ShowProfileView() {
-	c.setMainContent(NewProfileView(c))
-}
-
-// SwitchProfile saves current storage, switches active profile, and reloads.
 func (c *AppController) SwitchProfile(name string) error {
-	// Save current storage first
 	if err := c.Storage.Save(); err != nil {
 		return err
 	}
-	// Switch active profile in index
 	if err := profile.SetActiveProfile(c.ProfileIndex, name); err != nil {
 		return err
 	}
-	// Reload storage from new profile
 	store, err := storage.Load()
 	if err != nil {
 		return err
 	}
 	c.Storage = store
 	c.updateWindowTitle()
+	c.rebuildSidebar()
+	c.renderList()
 	return nil
 }
 
-// updateWindowTitle sets the window title with the active profile name.
 func (c *AppController) updateWindowTitle() {
 	if c.ProfileIndex.Active == "default" {
 		c.Window.SetTitle(WindowTitle)
@@ -173,9 +152,6 @@ func (c *AppController) updateWindowTitle() {
 	}
 }
 
-// --- Variable Operations ---
-
-// SaveVariable validates and persists a variable (add or update).
 func (c *AppController) SaveVariable(oldName, name, value, varType, description string) error {
 	isUpdate := oldName != ""
 	if isUpdate && oldName != name {
@@ -198,45 +174,11 @@ func (c *AppController) SaveVariable(oldName, name, value, varType, description 
 	return c.Storage.Save()
 }
 
-// DeleteVariable removes a variable and saves.
 func (c *AppController) DeleteVariable(name string) error {
 	c.Storage.DeleteVariable(name)
 	return c.Storage.Save()
 }
 
-// ConfirmDelete shows a styled delete confirmation dialog.
-func (c *AppController) ConfirmDelete(name string) {
-	msgText := canvas.NewText(
-		fmt.Sprintf("Are you sure you want to delete '%s'?", name),
-		ColorTextSecond,
-	)
-	msgText.TextSize = 14
-
-	hintText := MutedLabel("This action cannot be undone.")
-
-	d := dialog.NewCustomWithoutButtons(
-		"Delete Variable",
-		container.NewVBox(msgText, hintText, widget.NewSeparator()),
-		c.Window,
-	)
-
-	cancelBtn := widget.NewButton("Cancel", func() { d.Hide() })
-	deleteBtn := widget.NewButtonWithIcon("Delete", theme.DeleteIcon(), func() {
-		d.Hide()
-		if err := c.DeleteVariable(name); err != nil {
-			dialog.ShowError(err, c.Window)
-			return
-		}
-		c.ShowStatus(fmt.Sprintf("Deleted '%s'", name))
-		c.ShowListView()
-	})
-	deleteBtn.Importance = widget.DangerImportance
-
-	d.SetButtons([]fyne.CanvasObject{layout.NewSpacer(), cancelBtn, deleteBtn})
-	d.Show()
-}
-
-// DuplicateVariable opens the form pre-filled with a copy of the variable.
 func (c *AppController) DuplicateVariable(name string) {
 	v, ok := c.Storage.GetVariable(name)
 	if !ok {
@@ -249,10 +191,18 @@ func (c *AppController) DuplicateVariable(name string) {
 		}
 		copyName = fmt.Sprintf("%s_COPY%d", name, counter)
 	}
-	c.ShowFormView("", copyName, v.Value, v.Type, v.Description)
+	if err := c.Storage.AddVariable(copyName, storage.Variable{
+		Value:       v.Value,
+		Type:        v.Type,
+		Description: v.Description,
+	}, false); err != nil {
+		dialog.ShowError(err, c.Window)
+		return
+	}
+	_ = c.Storage.Save()
+	c.renderList()
 }
 
-// OpenStorageFolder opens the active profile's storage folder in the system file explorer.
 func (c *AppController) OpenStorageFolder() {
 	path, err := storage.GetStoragePath()
 	if err != nil {
@@ -272,3 +222,44 @@ func (c *AppController) OpenStorageFolder() {
 		dialog.ShowError(err, c.Window)
 	}
 }
+
+// silence unused import in this slice
+var _ = tokens.SpaceSM
+
+// --- Stubs filled by later tasks ---
+
+// rebuildSidebar will be implemented in Task 16. Stub for now.
+func (c *AppController) rebuildSidebar() {
+	c.sidebar = components.NewSidebar(nil, nil)
+}
+
+// renderList will be implemented in Task 17. Stub renders an empty message for now.
+func (c *AppController) renderList() {
+	placeholder := widget.NewLabel("List view under reconstruction")
+	c.mainPane.Objects = []fyne.CanvasObject{placeholder}
+	c.mainPane.Refresh()
+}
+
+// ShowListView is kept for legacy callers (main.go invokes it).
+func (c *AppController) ShowListView() {
+	c.renderList()
+}
+
+// --- Forward stubs (real implementations land in later tasks) ---
+
+type ProfileModalMode int
+
+const (
+	ProfileModalModeNew ProfileModalMode = iota
+	ProfileModalModeEdit
+	ProfileModalModeDuplicate
+	ProfileModalModeImport
+)
+
+func ShowProfileFormModal(*AppController, ProfileModalMode, string) {}
+func confirmDeleteProfile(*AppController, string)                    {}
+func ShowSettingsModal(*AppController)                               {}
+func ShowAboutModal(*AppController)                                  {}
+func ShowEditDrawer(*AppController, string)                          {}
+func ShowImportDrawer(*AppController)                                {}
+func ShowExportDrawer(*AppController)                                {}
