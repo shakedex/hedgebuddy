@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
@@ -16,6 +17,7 @@ import (
 	"fyne.io/fyne/v2/widget"
 
 	"app/internal/pythoncheck"
+	"app/internal/ui/tokens"
 	"app/internal/updatecheck"
 )
 
@@ -57,35 +59,45 @@ func (c *AppController) RunUpdateCheck() {
 func showAppUpdateDialog(w fyne.Window, latestVersion string) {
 	title := canvas.NewText(
 		fmt.Sprintf("HedgeBuddy v%s available", latestVersion),
-		ColorAccentBlue,
+		tokens.Accent,
 	)
 	title.TextSize = 16
 	title.TextStyle = fyne.TextStyle{Bold: true}
 
-	currentLabel := mutedLabel("Current version: v" + AppVersion) // TODO Task 24
+	currentLabel := widget.NewLabel("Current: v" + AppVersion)
+	currentLabel.Importance = widget.LowImportance
 
 	msg := widget.NewLabel(
-		"A new version of HedgeBuddy is available.\n" +
-			"Download the latest release, replace your current app,\n" +
-			"and relaunch — we'll handle the rest.")
+		"A new version is available. Click Install Update to download and apply.")
 	msg.Wrapping = fyne.TextWrapWord
 
-	content := container.NewVBox(title, currentLabel, msg)
+	statusLabel := canvas.NewText("", tokens.TextMuted)
+	statusLabel.TextSize = 11
 
-	d := dialog.NewCustomWithoutButtons("Update Available", content, w)
+	content := container.NewVBox(title, currentLabel, msg, statusLabel)
 
-	downloadBtn := widget.NewButton("Install Update", func() {
-		d.Hide()
-		if launched := tryLaunchUpdater(latestVersion); !launched {
-			// Fallback: open releases page if updater not found.
-			_ = fyne.CurrentApp().OpenURL(urlParse(releasesURL))
-		}
-	})
-	downloadBtn.Importance = widget.HighImportance
+	d := dialog.NewCustomWithoutButtons("Update available", content, w)
 
-	laterBtn := widget.NewButton("Later", func() { d.Hide() })
+	notNow := widget.NewButton("Not now", func() { d.Hide() })
 
-	d.SetButtons([]fyne.CanvasObject{layout.NewSpacer(), laterBtn, downloadBtn})
+	installBtn := widget.NewButton("Install Update", nil)
+	installBtn.Importance = widget.HighImportance
+	installBtn.OnTapped = func() {
+		statusLabel.Text = "Launching updater…"
+		statusLabel.Refresh()
+		installBtn.Disable()
+		go func() {
+			time.Sleep(600 * time.Millisecond)
+			fyne.Do(func() {
+				if launched := tryLaunchUpdater(latestVersion); !launched {
+					_ = fyne.CurrentApp().OpenURL(urlParse(releasesURL))
+					d.Hide()
+				}
+			})
+		}()
+	}
+
+	d.SetButtons([]fyne.CanvasObject{layout.NewSpacer(), notNow, installBtn})
 	d.Show()
 }
 
@@ -94,31 +106,29 @@ func showAppUpdateDialog(w fyne.Window, latestVersion string) {
 func showLibraryUpdateDialog(w fyne.Window, executable, installed, latest string) {
 	title := canvas.NewText(
 		fmt.Sprintf("hedgebuddy library v%s available", latest),
-		ColorSuccess,
+		tokens.Success,
 	)
 	title.TextSize = 16
 	title.TextStyle = fyne.TextStyle{Bold: true}
 
-	currentLabel := mutedLabel("Installed: v" + installed) // TODO Task 24
+	currentLabel := widget.NewLabel("Installed: v" + installed)
+	currentLabel.Importance = widget.LowImportance
 
-	msg := widget.NewLabel(
-		"A new version of the hedgebuddy Python library is available.\n" +
-			"We can upgrade it for you right now (no admin rights needed).")
+	msg := widget.NewLabel("We can upgrade the Python library for you (no admin rights needed).")
 	msg.Wrapping = fyne.TextWrapWord
 
 	content := container.NewVBox(title, currentLabel, msg)
 
-	d := dialog.NewCustomWithoutButtons("Library Update", content, w)
+	d := dialog.NewCustomWithoutButtons("Library update", content, w)
 
-	updateBtn := widget.NewButton("Update Now", func() {
+	notNow := widget.NewButton("Not now", func() { d.Hide() })
+	updateBtn := widget.NewButton("Update now", func() {
 		d.Hide()
 		showUpgradingDialog(w, executable)
 	})
 	updateBtn.Importance = widget.HighImportance
 
-	laterBtn := widget.NewButton("Later", func() { d.Hide() })
-
-	d.SetButtons([]fyne.CanvasObject{layout.NewSpacer(), laterBtn, updateBtn})
+	d.SetButtons([]fyne.CanvasObject{layout.NewSpacer(), notNow, updateBtn})
 	d.Show()
 }
 
