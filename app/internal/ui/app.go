@@ -342,6 +342,5 @@ func ShowProfileFormModal(*AppController, ProfileModalMode, string) {}
 func confirmDeleteProfile(*AppController, string)                   {}
 func ShowSettingsModal(*AppController)                              {}
 func ShowAboutModal(*AppController)                                 {}
-func ShowEditDrawer(*AppController, string)                         {}
 func ShowImportDrawer(*AppController)                               {}
 func ShowExportDrawer(*AppController)                               {}
