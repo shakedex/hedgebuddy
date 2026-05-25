@@ -169,12 +169,12 @@ func (r *cardRowRenderer) Refresh() {
 	}
 
 	// Copy button glyph swap: briefly show a check after a copy action.
+	// Tooltip stays at "Copy value" — tooltips only show on a fresh hover
+	// delay, so a swap-on-click would never be visible anyway.
 	if r.card.copied {
 		r.copyBtn.SetIcon(icons.Check)
-		r.copyBtn.SetToolTip("Copied!")
 	} else {
 		r.copyBtn.SetIcon(icons.Copy)
-		r.copyBtn.SetToolTip("Copy value")
 	}
 }
 

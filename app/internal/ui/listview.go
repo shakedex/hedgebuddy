@@ -42,7 +42,7 @@ func (c *AppController) buildListView() fyne.CanvasObject {
 	header := container.NewBorder(nil, nil, nil, rightSide, searchEntry)
 
 	listContainer := container.NewVBox()
-	var scroll *container.Scroll // declared first so render can capture it
+	scroll := container.NewVScroll(container.NewPadded(listContainer))
 
 	render := func() {
 		listContainer.Objects = nil
@@ -99,7 +99,7 @@ func (c *AppController) buildListView() fyne.CanvasObject {
 		listContainer.Refresh()
 
 		// Auto-scroll to first flashed row, if any.
-		if scroll != nil && firstFlashIndex >= 0 {
+		if firstFlashIndex >= 0 {
 			// CardMinHeight from tokens, plus a small gap for inter-card padding.
 			rowHeight := tokens.CardMinHeight + tokens.SpaceSM
 			target := float32(firstFlashIndex) * rowHeight
@@ -111,8 +111,6 @@ func (c *AppController) buildListView() fyne.CanvasObject {
 	searchEntry.OnChanged = func(string) { render() }
 
 	render()
-
-	scroll = container.NewVScroll(container.NewPadded(listContainer))
 
 	return container.NewBorder(container.NewPadded(header), nil, nil, nil, scroll)
 }
@@ -156,7 +154,7 @@ func (c *AppController) emptyStateMessage(query string) string {
 func (c *AppController) confirmDeleteVariable(name string) {
 	components.ShowDeleteConfirm(components.DeleteConfirmOptions{
 		TargetName: name,
-		BodyText:   "",
+		BodyText:   "This can't be undone.",
 		OnConfirm: func() {
 			if err := c.DeleteVariable(name); err != nil {
 				// Phase 2 surfaces this via InlineStateButton.error; for Phase 1 we accept the modal close + silent failure path.

@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"strings"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -217,8 +218,14 @@ func ShowEditDrawer(c *AppController, editingName string) {
 		}
 
 		if err := c.SaveVariable(oldName, name, value, varType, descEntry.Text); err != nil {
-			// Validation already passed; this is a disk/IO error. Show modal as
-			// a last resort.
+			// If it's a collision (rename or new conflicting with existing),
+			// surface inline under the Name field rather than a modal.
+			if strings.Contains(err.Error(), "already exists") {
+				nameField.SetError(err.Error())
+				saveBtn.SetState(components.StateError)
+				return
+			}
+			// Otherwise it's a real disk/IO error — modal as last resort.
 			saveBtn.SetState(components.StateError)
 			dialog.ShowError(err, c.Window)
 			return

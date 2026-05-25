@@ -271,18 +271,32 @@ func (c *AppController) updateWindowTitle() {
 }
 
 func (c *AppController) SaveVariable(oldName, name, value, varType, description string) error {
-	defer c.suppressFileWatchReload()()
 	isUpdate := oldName != ""
-	if isUpdate && oldName != name {
-		c.Storage.DeleteVariable(oldName)
+	isRename := isUpdate && oldName != name
+
+	// Collision check: when renaming to a name another variable already uses,
+	// refuse to clobber it. Same check applies to brand-new variables —
+	// they shouldn't accidentally overwrite an existing one either.
+	if isRename || !isUpdate {
+		if _, exists := c.Storage.GetVariable(name); exists {
+			return fmt.Errorf("a variable named %q already exists", name)
+		}
 	}
+
 	if err := validator.ValidateVariableName(name); err != nil {
 		return err
 	}
 	if err := validator.ValidateByType(varType, value); err != nil {
 		return err
 	}
-	overwrite := isUpdate
+
+	defer c.suppressFileWatchReload()()
+
+	if isRename {
+		c.Storage.DeleteVariable(oldName)
+	}
+
+	overwrite := isUpdate && !isRename
 	if err := c.Storage.AddVariable(name, storage.Variable{
 		Value:       value,
 		Type:        varType,
