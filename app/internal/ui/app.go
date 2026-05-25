@@ -338,5 +338,4 @@ const (
 	ProfileModalModeImport
 )
 
-func ShowSettingsModal(*AppController) {}
-func ShowAboutModal(*AppController)    {}
+func ShowAboutModal(*AppController) {}
