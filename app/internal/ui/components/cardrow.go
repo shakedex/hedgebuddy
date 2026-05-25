@@ -9,6 +9,7 @@ import (
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/layout"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
 	"app/internal/ui/icons"
@@ -101,6 +102,7 @@ type cardRowRenderer struct {
 	typeDot   *canvas.Circle
 	typeLabel *canvas.Text
 	valueText *widget.Label
+	valueBg   *canvas.Rectangle
 	descText  *widget.Label
 	revealBtn *IconButton
 	copyBtn   *IconButton
@@ -200,10 +202,18 @@ func (c *CardRow) CreateRenderer() fyne.WidgetRenderer {
 	valueText := widget.NewLabel(c.displayValue())
 	valueText.Truncation = fyne.TextTruncateEllipsis
 	valueText.TextStyle = fyne.TextStyle{Monospace: true}
+	valueText.SizeName = theme.SizeNameText // explicit (was implicit)
+
+	// Wrap the value text in a slightly-recessed "code block" background so
+	// it reads as the data payload of the card vs. surrounding chrome.
+	valueBg := canvas.NewRectangle(tokens.SurfaceBase) // darker than card bg (Surface2)
+	valueBg.CornerRadius = 4
+	valueBlock := container.NewStack(valueBg, container.NewPadded(valueText))
 
 	descText := widget.NewLabel(c.data.Description)
 	descText.Truncation = fyne.TextTruncateEllipsis
 	descText.Importance = widget.LowImportance
+	descText.SizeName = theme.SizeNameCaptionText // smaller than value/header
 
 	revealBtn := NewIconButton(icons.Eye, "Reveal secret value", IconVariantNeutral, func() {
 		c.revealed = !c.revealed
@@ -217,17 +227,23 @@ func (c *CardRow) CreateRenderer() fyne.WidgetRenderer {
 
 	actionRow := container.NewHBox(revealBtn, copyBtn, editBtn, dupBtn, delBtn)
 
-	header := container.NewHBox(nameText, container.NewPadded(typeDot), typeLabel, layout.NewSpacer(), actionRow)
-	// Compose the card body with a custom tight VBox layout that uses a 2px
+	header := container.NewHBox(cardSpacerH(8), nameText, container.NewPadded(typeDot), typeLabel, layout.NewSpacer(), actionRow, cardSpacerH(8))
+
+	// Match the header's left/right inset on the value & description rows
+	// so all content sits 8px inside the card's stripe + right edge.
+	valueBlockPadded := container.NewBorder(nil, nil, cardSpacerH(8), cardSpacerH(8), valueBlock)
+	descTextPadded := container.NewBorder(nil, nil, cardSpacerH(8), cardSpacerH(8), descText)
+
+	// Compose the card body with a custom tight VBox layout that uses a 1px
 	// inter-child gap, plus explicit transparent spacers at top + bottom
-	// (6px each). This replaces VBox+NewPadded which combined to roughly 32px
-	// of vertical padding overhead per card; the new layout is ~16px.
-	body := container.New(&tightVBoxLayout{gap: 2},
-		cardSpacer(6), // top breathing space
+	// (4px each). This trims the per-row height vs. Fyne's default VBox
+	// (8px theme padding) and the previous 2px/6px configuration.
+	body := container.New(&tightVBoxLayout{gap: 1},
+		cardSpacer(4), // top breathing space
 		header,
-		valueText,
-		descText,
-		cardSpacer(6), // bottom breathing space
+		valueBlockPadded,
+		descTextPadded,
+		cardSpacer(4), // bottom breathing space
 	)
 
 	inner := container.NewBorder(nil, nil, stripe, nil, body)
@@ -241,6 +257,7 @@ func (c *CardRow) CreateRenderer() fyne.WidgetRenderer {
 		typeDot:   typeDot,
 		typeLabel: typeLabel,
 		valueText: valueText,
+		valueBg:   valueBg,
 		descText:  descText,
 		revealBtn: revealBtn,
 		copyBtn:   copyBtn,
@@ -305,6 +322,15 @@ func (l *tightVBoxLayout) MinSize(objs []fyne.CanvasObject) fyne.Size {
 func cardSpacer(h float32) fyne.CanvasObject {
 	s := canvas.NewRectangle(color.NRGBA{}) // transparent
 	s.SetMinSize(fyne.NewSize(0, h))
+	return s
+}
+
+// cardSpacerH is the horizontal sibling of cardSpacer — a transparent rect
+// with a fixed minimum width. Used to inset content inside an HBox without
+// pulling in container.NewPadded's 4-side padding.
+func cardSpacerH(w float32) fyne.CanvasObject {
+	s := canvas.NewRectangle(color.NRGBA{}) // transparent
+	s.SetMinSize(fyne.NewSize(w, 0))
 	return s
 }
 

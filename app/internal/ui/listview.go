@@ -1,10 +1,12 @@
 package ui
 
 import (
+	"image/color"
 	"strings"
 	"time"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/widget"
@@ -13,6 +15,15 @@ import (
 	"app/internal/ui/icons"
 	"app/internal/ui/tokens"
 )
+
+// newListSpacer is a fully transparent rectangle with a fixed minimum size.
+// Used to inset the scrolling card list from the scroll viewport edges (esp.
+// to keep cards' right edges off the scrollbar gutter).
+func newListSpacer(w, h float32) fyne.CanvasObject {
+	r := canvas.NewRectangle(color.NRGBA{})
+	r.SetMinSize(fyne.NewSize(w, h))
+	return r
+}
 
 // buildListView builds the main pane content: search header + variable cards.
 // Returns the root canvas object that should be placed in c.mainPane.
@@ -43,7 +54,15 @@ func (c *AppController) buildListView() fyne.CanvasObject {
 	header := container.NewBorder(nil, nil, nil, rightSide, searchEntry)
 
 	listContainer := container.NewVBox()
-	scroll := container.NewVScroll(container.NewPadded(listContainer))
+	// Use a manual Border instead of container.NewPadded so we can leave an
+	// asymmetric right inset wide enough for the vertical scrollbar gutter.
+	scroll := container.NewVScroll(container.NewBorder(
+		newListSpacer(0, 8),  // top
+		newListSpacer(0, 8),  // bottom
+		newListSpacer(8, 0),  // left
+		newListSpacer(16, 0), // right — extra space for the scrollbar
+		listContainer,
+	))
 
 	render := func() {
 		listContainer.Objects = nil
