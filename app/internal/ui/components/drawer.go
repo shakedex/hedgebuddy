@@ -1,6 +1,8 @@
 package components
 
 import (
+	"image/color"
+
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
@@ -9,6 +11,9 @@ import (
 	"app/internal/ui/icons"
 	"app/internal/ui/tokens"
 )
+
+// transparent is a fully transparent fill used by spacer rectangles.
+var transparent = color.NRGBA{}
 
 // Drawer is a right-anchored overlay panel with a dimmed scrim.
 // The owning shell places this inside a top-level Stack and toggles visibility.
@@ -83,6 +88,10 @@ func (r *drawerRenderer) Refresh() {
 
 func (d *Drawer) CreateRenderer() fyne.WidgetRenderer {
 	scrim := canvas.NewRectangle(tokens.DimOverlay)
+
+	// Panel background. SetMinSize enforces DrawerWidth on the Stack containing
+	// the panel content; in a Stack, the rectangle is then resized to whatever
+	// the Stack ends up being, so it stays flush with the inner layout.
 	panel := canvas.NewRectangle(tokens.Surface4)
 	panel.SetMinSize(fyne.NewSize(tokens.DrawerWidth, 0))
 
@@ -91,14 +100,27 @@ func (d *Drawer) CreateRenderer() fyne.WidgetRenderer {
 	titleText.TextSize = 22
 	titleText.TextStyle = fyne.TextStyle{Bold: true}
 
+	// Header: title on the left, close on the right. Border puts each at
+	// its respective edge with the gap filled by the implicit center area.
 	header := container.NewBorder(nil, nil, titleText, closeBtn)
 	bodySlot := container.NewStack()
-	panelInner := container.NewBorder(
-		container.NewPadded(header),
+
+	// Inner content: header on top, scrollable body below. The header is
+	// wrapped in an inset (SpaceLG horizontal padding) so the title text
+	// and close X don't sit flush against the panel edges. Theme padding
+	// alone (SpaceSM = 8px) is too tight for a drawer-sized header.
+	headerInset := wrapWithHPadding(header, tokens.SpaceLG)
+	bodyInset := wrapWithHPadding(bodySlot, tokens.SpaceLG)
+	innerContent := container.NewBorder(
+		container.NewPadded(headerInset),
 		nil, nil, nil,
-		container.NewVScroll(container.NewPadded(bodySlot)),
+		container.NewVScroll(bodyInset),
 	)
-	panelStack := container.NewStack(panel, panelInner)
+
+	// Stack the panel rectangle UNDER the inner content. Both children share
+	// the Stack's bounding box, so the dark background always extends exactly
+	// to where the header content does — no overflow onto the scrim.
+	panelStack := container.NewStack(panel, innerContent)
 
 	scrimTappable := newTappableArea(d.Close)
 	rightAnchored := container.NewBorder(nil, nil, nil, panelStack, scrimTappable)
@@ -114,6 +136,18 @@ func (d *Drawer) CreateRenderer() fyne.WidgetRenderer {
 	}
 	r.Refresh() // initial content sync
 	return r
+}
+
+// wrapWithHPadding adds equal horizontal padding (width px on each side)
+// around obj. Used by the drawer to inset the header and body from the
+// panel's literal edges. Fyne has no built-in asymmetric padding container,
+// so we use Border with transparent spacer rectangles in the left/right slots.
+func wrapWithHPadding(obj fyne.CanvasObject, width float32) fyne.CanvasObject {
+	left := canvas.NewRectangle(transparent)
+	left.SetMinSize(fyne.NewSize(width, 0))
+	right := canvas.NewRectangle(transparent)
+	right.SetMinSize(fyne.NewSize(width, 0))
+	return container.NewBorder(nil, nil, left, right, obj)
 }
 
 // tappableArea is a click target painted with the dim overlay color.
