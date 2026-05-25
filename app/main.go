@@ -3,13 +3,16 @@ package main
 import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
+	fynetooltip "github.com/dweymouth/fyne-tooltip"
 
 	"app/internal/ui"
 )
 
 func main() {
+	ui.InstallLogFilter()
 	a := app.New()
-	a.Settings().SetTheme(&ui.HedgeBuddyTheme{})
+	regular, bold := ui.LoadOSFonts()
+	a.Settings().SetTheme(ui.NewHedgeBuddyTheme(regular, bold))
 	a.SetIcon(ui.AppIcon())
 
 	w := a.NewWindow(ui.WindowTitle)
@@ -20,8 +23,14 @@ func main() {
 	ctrl := ui.NewAppController(a, w)
 	ctrl.ShowListView()
 
-	go ctrl.RunPythonCheck()
-	go ctrl.RunUpdateCheck()
+	go func() {
+		ctrl.RunPythonCheck(func() {
+			ctrl.RunUpdateCheck()
+		})
+	}()
 
 	w.ShowAndRun()
+
+	// Cleanup tooltip layer (fyne-tooltip best practice for window teardown).
+	fynetooltip.DestroyWindowToolTipLayer(w.Canvas())
 }

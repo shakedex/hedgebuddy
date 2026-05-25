@@ -268,14 +268,10 @@ class TestStoragePath:
             assert path.name == "vars.json"
     
     @patch("sys.platform", "linux")
-    def test_linux_storage_path(self):
-        """Test that Linux uses .local/share path (future support)."""
-        with patch("pathlib.Path.home", return_value=Path("/home/test")):
-            path = get_storage_path()
-            assert ".local" in str(path)
-            assert "share" in str(path)
-            assert "hedgebuddy" in str(path)
-            assert path.name == "vars.json"
+    def test_linux_storage_path_raises(self):
+        """Linux platform raises StorageNotFoundError — no longer supported."""
+        with pytest.raises(StorageNotFoundError):
+            get_storage_path()
 
 
 class TestEdgeCases:

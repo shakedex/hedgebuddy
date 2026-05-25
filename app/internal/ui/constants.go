@@ -3,7 +3,7 @@ package ui
 // App metadata
 const (
 	AppName    = "HedgeBuddy"
-	AppVersion = "0.9.1"
+	AppVersion = "0.10.0"
 
 	WindowTitle  = "HedgeBuddy"
 	WindowWidth  = 1024
@@ -25,10 +25,3 @@ const (
 func AllTypes() []string {
 	return []string{TypeString, TypePath, TypeURL, TypeSecret}
 }
-
-// Display constants
-const (
-	SecretMask       = "••••••••"
-	ValueTruncateLen = 80
-	StatusDuration   = 3 // seconds
-)

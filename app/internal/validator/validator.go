@@ -13,7 +13,7 @@ func ValidatePath(path string) error {
 	}
 
 	if _, err := os.Stat(path); os.IsNotExist(err) {
-		return fmt.Errorf("path does not exist: %s", path)
+		return fmt.Errorf("can't find this path on this machine: %s", path)
 	}
 	return nil
 }
@@ -30,7 +30,7 @@ func ValidateURL(urlStr string) error {
 	}
 
 	if u.Scheme != "http" && u.Scheme != "https" {
-		return fmt.Errorf("URL must use http or https scheme, got: %s", u.Scheme)
+		return fmt.Errorf("URLs must start with http:// or https://")
 	}
 
 	if u.Host == "" {
@@ -70,7 +70,7 @@ func ValidateVariableName(name string) error {
 
 	for _, c := range name {
 		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '-') {
-			return fmt.Errorf("variable name contains invalid character: %c (use only letters, numbers, _, -)", c)
+			return fmt.Errorf("use only letters, digits, underscores, or hyphens (found %q in %q)", string(c), name)
 		}
 	}
 

@@ -5,6 +5,7 @@ go 1.25.0
 require (
 	fyne.io/fyne/v2 v2.7.3
 	github.com/dweymouth/fyne-tooltip v0.4.0
+	github.com/fsnotify/fsnotify v1.10.1
 	github.com/ncruces/zenity v0.10.14
 	github.com/tidwall/gjson v1.18.0
 	github.com/tidwall/sjson v1.2.5
@@ -17,7 +18,6 @@ require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/dchest/jsmin v1.0.0 // indirect
 	github.com/fredbi/uri v1.1.1 // indirect
-	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/fyne-io/gl-js v0.2.0 // indirect
 	github.com/fyne-io/glfw-js v0.3.0 // indirect
 	github.com/fyne-io/image v0.1.1 // indirect
