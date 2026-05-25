@@ -32,7 +32,8 @@ type CardRowActions struct {
 }
 
 // CardRow renders a single variable as a rounded card.
-// Mouse-in reveals the action icons and lifts the background to Surface3.
+// Action icons are always visible; mouse-in lifts the background to Surface3
+// for visual hover feedback.
 type CardRow struct {
 	widget.BaseWidget
 	data     CardRowData
@@ -115,13 +116,10 @@ func (r *cardRowRenderer) Refresh() {
 	case r.card.flashing:
 		// Accent at ~25% alpha — a noticeable wash without being garish.
 		r.bg.FillColor = color.NRGBA{R: 0x4F, G: 0x7F, B: 0xF8, A: 0x40}
-		r.actionRow.Hide()
 	case r.card.hover:
 		r.bg.FillColor = tokens.Surface3
-		r.actionRow.Show()
 	default:
 		r.bg.FillColor = tokens.Surface2
-		r.actionRow.Hide()
 	}
 	r.bg.Refresh()
 
@@ -153,8 +151,6 @@ func (r *cardRowRenderer) Refresh() {
 	} else {
 		r.revealBtn.Hide()
 	}
-
-	r.actionRow.Refresh()
 }
 
 func (c *CardRow) CreateRenderer() fyne.WidgetRenderer {
@@ -215,7 +211,7 @@ func (c *CardRow) CreateRenderer() fyne.WidgetRenderer {
 		actionRow: actionRow,
 		root:      root,
 	}
-	r.Refresh() // initial state sync (e.g. hide actionRow if not hovered)
+	r.Refresh() // initial state sync (background color, reveal-button visibility)
 	return r
 }
 
