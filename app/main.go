@@ -23,8 +23,11 @@ func main() {
 	ctrl := ui.NewAppController(a, w)
 	ctrl.ShowListView()
 
-	go ctrl.RunPythonCheck()
-	go ctrl.RunUpdateCheck()
+	go func() {
+		ctrl.RunPythonCheck(func() {
+			ctrl.RunUpdateCheck()
+		})
+	}()
 
 	w.ShowAndRun()
 

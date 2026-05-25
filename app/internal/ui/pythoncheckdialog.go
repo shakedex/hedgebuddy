@@ -21,27 +21,39 @@ const pythonDownloadURL = "https://www.python.org/downloads/"
 
 // RunPythonCheck checks for Python + hedgebuddy library on startup.
 // It should be called from a goroutine so the UI stays responsive.
-func (c *AppController) RunPythonCheck() {
+// The done callback fires once the python check is "out of the way" — either
+// no dialog was needed, the user dismissed the dialog, or the install dialog
+// took over. Callers use this to sequence follow-up startup work (e.g. update
+// check) so dialogs don't stack.
+func (c *AppController) RunPythonCheck(done func()) {
+	finish := func() {
+		if done != nil {
+			done()
+		}
+	}
+
 	p, _ := prefs.Load()
 	if p.PythonCheckDismissed {
+		finish()
 		return
 	}
 
 	status := pythoncheck.Detect()
 	if status.PythonFound && status.LibraryInstalled {
+		finish()
 		return
 	}
 
 	if !status.PythonFound {
-		showPythonNotFoundDialog(c.Window)
+		showPythonNotFoundDialog(c.Window, finish)
 	} else {
-		showLibraryMissingDialog(c.Window, status.Executable)
+		showLibraryMissingDialog(c.Window, status.Executable, finish)
 	}
 }
 
 // --- Python not found ---
 
-func showPythonNotFoundDialog(w fyne.Window) {
+func showPythonNotFoundDialog(w fyne.Window, done func()) {
 	title := canvas.NewText("Python is not installed", tokens.Danger)
 	title.TextSize = 16
 	title.TextStyle = fyne.TextStyle{Bold: true}
@@ -62,11 +74,22 @@ func showPythonNotFoundDialog(w fyne.Window) {
 			dismissPythonCheck()
 		}
 		d.Hide()
+		if done != nil {
+			done()
+			done = nil
+		}
 	})
 
 	downloadBtn := widget.NewButton("Download Python", func() {
 		u, _ := url.Parse(pythonDownloadURL)
 		_ = fyne.CurrentApp().OpenURL(u)
+		// Treat opening the URL as "python check is done" — the dialog stays
+		// visible so the user can come back to it, but we don't want to block
+		// follow-up startup work indefinitely.
+		if done != nil {
+			done()
+			done = nil
+		}
 	})
 	downloadBtn.Importance = widget.HighImportance
 
@@ -76,7 +99,7 @@ func showPythonNotFoundDialog(w fyne.Window) {
 
 // --- Library not installed ---
 
-func showLibraryMissingDialog(w fyne.Window, executable string) {
+func showLibraryMissingDialog(w fyne.Window, executable string, done func()) {
 	title := canvas.NewText("hedgebuddy Python library not installed", tokens.Warning)
 	title.TextSize = 16
 	title.TextStyle = fyne.TextStyle{Bold: true}
@@ -97,10 +120,20 @@ func showLibraryMissingDialog(w fyne.Window, executable string) {
 			dismissPythonCheck()
 		}
 		d.Hide()
+		if done != nil {
+			done()
+			done = nil
+		}
 	})
 
 	installBtn := widget.NewButton("Install now", func() {
 		d.Hide()
+		// Fire done before launching the install dialog. The install dialog is
+		// non-blocking and centered, so a subsequent update toast can coexist.
+		if done != nil {
+			done()
+			done = nil
+		}
 		showInstallingDialog(w, executable)
 	})
 	installBtn.Importance = widget.HighImportance
