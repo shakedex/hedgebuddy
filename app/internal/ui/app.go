@@ -337,5 +337,3 @@ const (
 	ProfileModalModeDuplicate
 	ProfileModalModeImport
 )
-
-func ShowAboutModal(*AppController) {}
