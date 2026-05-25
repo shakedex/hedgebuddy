@@ -18,9 +18,12 @@ _NO_DEFAULT = object()
 
 def _get_base_dir() -> Path:
     """Get the platform-specific HedgeBuddy data directory.
-    
+
     Returns:
         Path: Absolute path to the HedgeBuddy data directory
+
+    Raises:
+        StorageNotFoundError: On unsupported platforms (anything other than Windows or macOS).
     """
     if sys.platform == "win32":
         app_data = os.environ.get("APPDATA")
@@ -30,7 +33,7 @@ def _get_base_dir() -> Path:
     elif sys.platform == "darwin":
         return Path.home() / "Library" / "Application Support" / "hedgebuddy"
     else:
-        return Path.home() / ".local" / "share" / "hedgebuddy"
+        raise StorageNotFoundError(f"Unsupported platform: {sys.platform}")
 
 
 def get_storage_path() -> Path:
@@ -45,7 +48,6 @@ def get_storage_path() -> Path:
     Platform-specific locations:
         - Windows: %APPDATA%\\hedgebuddy\\profiles\\{active}\\vars.json
         - macOS: ~/Library/Application Support/hedgebuddy/profiles/{active}/vars.json
-        - Linux: ~/.local/share/hedgebuddy/profiles/{active}/vars.json (future support)
     """
     base = _get_base_dir()
     profiles_index = base / "profiles.json"
