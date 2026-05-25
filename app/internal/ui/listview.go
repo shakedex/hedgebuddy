@@ -135,7 +135,7 @@ func (c *AppController) emptyStateMessage(query string) string {
 func (c *AppController) confirmDeleteVariable(name string) {
 	components.ShowDeleteConfirm(components.DeleteConfirmOptions{
 		TargetName: name,
-		BodyText:   "This variable will be removed from the " + c.ProfileIndex.Active + " profile. Scripts that reference it will fail until it's recreated.",
+		BodyText:   "",
 		OnConfirm: func() {
 			if err := c.DeleteVariable(name); err != nil {
 				// Phase 2 surfaces this via InlineStateButton.error; for Phase 1 we accept the modal close + silent failure path.

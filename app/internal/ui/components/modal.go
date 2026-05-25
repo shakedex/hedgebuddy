@@ -22,12 +22,19 @@ type DeleteConfirmOptions struct {
 //	Body: <BodyText> (wraps via widget.Label)
 //	Buttons: Cancel (ghost) · Delete <Name> (Danger)
 func ShowDeleteConfirm(opts DeleteConfirmOptions) {
-	body := widget.NewLabel(opts.BodyText)
-	body.Wrapping = fyne.TextWrapWord
+	var content fyne.CanvasObject
+	if opts.BodyText != "" {
+		body := widget.NewLabel(opts.BodyText)
+		body.Wrapping = fyne.TextWrapWord
+		content = container.NewPadded(body)
+	} else {
+		// Empty body — title + buttons carry the meaning. No filler text.
+		content = container.NewPadded(widget.NewLabel(""))
+	}
 
 	d := dialog.NewCustomWithoutButtons(
 		"Delete "+opts.TargetName+"?",
-		container.NewPadded(body),
+		content,
 		opts.Parent,
 	)
 

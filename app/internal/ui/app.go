@@ -232,6 +232,7 @@ func (c *AppController) DuplicateVariable(name string) {
 		return
 	}
 	_ = c.Storage.Save()
+	c.FlashRow(copyName)
 	c.renderList()
 }
 

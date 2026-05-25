@@ -76,7 +76,7 @@ func confirmDeleteProfile(c *AppController, name string) {
 	}
 	components.ShowDeleteConfirm(components.DeleteConfirmOptions{
 		TargetName: name,
-		BodyText:   "This will permanently delete the profile and all variables it contains.",
+		BodyText:   "",
 		OnConfirm: func() {
 			if err := profile.DeleteProfile(c.ProfileIndex, name); err != nil {
 				dialog.ShowError(err, c.Window)
