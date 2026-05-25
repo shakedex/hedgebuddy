@@ -14,7 +14,7 @@ import (
 	"app/internal/profile"
 	"app/internal/storage"
 	"app/internal/ui/components"
-	"app/internal/ui/tokens"
+	"app/internal/ui/icons"
 	"app/internal/validator"
 )
 
@@ -223,14 +223,98 @@ func (c *AppController) OpenStorageFolder() {
 	}
 }
 
-// silence unused import in this slice
-var _ = tokens.SpaceSM
-
 // --- Stubs filled by later tasks ---
 
-// rebuildSidebar will be implemented in Task 16. Stub for now.
 func (c *AppController) rebuildSidebar() {
-	c.sidebar = components.NewSidebar(nil, nil)
+	// Profiles section.
+	profileNames := profile.ListProfiles(c.ProfileIndex)
+	var profileItems []fyne.CanvasObject
+	for _, name := range profileNames {
+		pName := name
+		count := profile.CountVariables(pName)
+		active := pName == c.ProfileIndex.Active
+
+		item := components.NewSidebarItem(pName, &count, active, func() {
+			if pName == c.ProfileIndex.Active {
+				return
+			}
+			if err := c.SwitchProfile(pName); err != nil {
+				dialog.ShowError(err, c.Window)
+				return
+			}
+		})
+
+		menuBtn := components.NewIconButton(icons.Ellipsis, "Profile actions", components.IconVariantNeutral, nil)
+		menuBtn.OnTapped = func() {
+			showProfileRowMenu(c, pName, menuBtn)
+		}
+		row := container.NewBorder(nil, nil, nil, menuBtn, item)
+		profileItems = append(profileItems, row)
+	}
+
+	profilesSection := components.SidebarSection{
+		Title: "PROFILES",
+		Items: profileItems,
+		OnAdd: func() {
+			ShowProfileFormModal(c, ProfileModalModeNew, "")
+		},
+	}
+
+	// Filters section.
+	all := len(c.Storage.Variables)
+	counts := map[string]int{"string": 0, "path": 0, "url": 0, "secret": 0}
+	for _, v := range c.Storage.Variables {
+		counts[v.Type]++
+	}
+
+	filtersData := []struct {
+		Label string
+		Key   string
+		Count int
+	}{
+		{"All", "", all},
+		{"String", "string", counts["string"]},
+		{"Path", "path", counts["path"]},
+		{"URL", "url", counts["url"]},
+		{"Secret", "secret", counts["secret"]},
+	}
+
+	var filterItems []fyne.CanvasObject
+	for _, f := range filtersData {
+		fKey := f.Key
+		fCount := f.Count
+		active := c.activeFilter == fKey
+		filterItems = append(filterItems,
+			components.NewSidebarItem(f.Label, &fCount, active, func() {
+				c.SetFilter(fKey)
+			}),
+		)
+	}
+
+	filtersSection := components.SidebarSection{
+		Title: "FILTERS",
+		Items: filterItems,
+	}
+
+	// Footer.
+	settingsBtn := widget.NewButtonWithIcon("Settings", icons.Settings, func() {
+		ShowSettingsModal(c)
+	})
+	settingsBtn.Alignment = widget.ButtonAlignLeading
+	settingsBtn.Importance = widget.LowImportance
+
+	aboutBtn := widget.NewButtonWithIcon("About", icons.Info, func() {
+		ShowAboutModal(c)
+	})
+	aboutBtn.Alignment = widget.ButtonAlignLeading
+	aboutBtn.Importance = widget.LowImportance
+
+	footer := []fyne.CanvasObject{settingsBtn, aboutBtn}
+
+	c.sidebar = components.NewSidebar(
+		[]components.SidebarSection{profilesSection, filtersSection},
+		footer,
+	)
 }
 
 // renderList will be implemented in Task 17. Stub renders an empty message for now.
@@ -257,9 +341,9 @@ const (
 )
 
 func ShowProfileFormModal(*AppController, ProfileModalMode, string) {}
-func confirmDeleteProfile(*AppController, string)                    {}
-func ShowSettingsModal(*AppController)                               {}
-func ShowAboutModal(*AppController)                                  {}
-func ShowEditDrawer(*AppController, string)                          {}
-func ShowImportDrawer(*AppController)                                {}
-func ShowExportDrawer(*AppController)                                {}
+func confirmDeleteProfile(*AppController, string)                   {}
+func ShowSettingsModal(*AppController)                              {}
+func ShowAboutModal(*AppController)                                 {}
+func ShowEditDrawer(*AppController, string)                         {}
+func ShowImportDrawer(*AppController)                               {}
+func ShowExportDrawer(*AppController)                               {}
