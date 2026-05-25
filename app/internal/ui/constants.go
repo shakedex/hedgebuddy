@@ -25,10 +25,3 @@ const (
 func AllTypes() []string {
 	return []string{TypeString, TypePath, TypeURL, TypeSecret}
 }
-
-// Display constants
-const (
-	SecretMask       = "••••••••"
-	ValueTruncateLen = 80
-	StatusDuration   = 3 // seconds
-)
