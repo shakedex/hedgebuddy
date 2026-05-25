@@ -65,7 +65,8 @@ func (c *AppController) buildListView() fyne.CanvasObject {
 		for _, name := range matched {
 			n := name
 			v, _ := c.Storage.GetVariable(n)
-			card := components.NewCardRow(
+			var card *components.CardRow
+			card = components.NewCardRow(
 				components.CardRowData{
 					Name:        n,
 					Value:       v.Value,
@@ -73,7 +74,12 @@ func (c *AppController) buildListView() fyne.CanvasObject {
 					Description: v.Description,
 				},
 				components.CardRowActions{
-					OnCopy:      func() { c.Window.Clipboard().SetContent(v.Value) },
+					OnCopy: func() {
+						c.Window.Clipboard().SetContent(v.Value)
+						if card != nil {
+							card.ConfirmCopy()
+						}
+					},
 					OnEdit:      func() { ShowEditDrawer(c, n) },
 					OnDuplicate: func() { c.DuplicateVariable(n) },
 					OnDelete:    func() { c.confirmDeleteVariable(n) },

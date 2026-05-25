@@ -41,6 +41,7 @@ type CardRow struct {
 	revealed bool // for secret type: is the value revealed
 	hover    bool
 	flashing bool // briefly true after Flash() to signal save/import
+	copied   bool // briefly true after ConfirmCopy() to signal a copy action
 }
 
 // NewCardRow builds a card. Call ExtendBaseWidget internally.
@@ -74,6 +75,20 @@ func (c *CardRow) Flash() {
 	}()
 }
 
+// ConfirmCopy briefly swaps the copy icon to a check to confirm a copy action.
+// Called by the list view's OnCopy callback alongside the actual clipboard write.
+func (c *CardRow) ConfirmCopy() {
+	c.copied = true
+	c.Refresh()
+	go func() {
+		time.Sleep(1000 * time.Millisecond)
+		fyne.Do(func() {
+			c.copied = false
+			c.Refresh()
+		})
+	}()
+}
+
 // cardRowRenderer is the reactive renderer for CardRow. It holds references to the
 // mutable canvas objects (background, stripe, text labels, action row) so that
 // Refresh() can re-sync them with the widget's current state.
@@ -88,6 +103,7 @@ type cardRowRenderer struct {
 	valueText *widget.Label
 	descText  *widget.Label
 	revealBtn *IconButton
+	copyBtn   *IconButton
 	actionRow *fyne.Container
 	root      fyne.CanvasObject
 }
@@ -151,6 +167,15 @@ func (r *cardRowRenderer) Refresh() {
 	} else {
 		r.revealBtn.Hide()
 	}
+
+	// Copy button glyph swap: briefly show a check after a copy action.
+	if r.card.copied {
+		r.copyBtn.SetIcon(icons.Check)
+		r.copyBtn.SetToolTip("Copied!")
+	} else {
+		r.copyBtn.SetIcon(icons.Copy)
+		r.copyBtn.SetToolTip("Copy value")
+	}
 }
 
 func (c *CardRow) CreateRenderer() fyne.WidgetRenderer {
@@ -208,6 +233,7 @@ func (c *CardRow) CreateRenderer() fyne.WidgetRenderer {
 		valueText: valueText,
 		descText:  descText,
 		revealBtn: revealBtn,
+		copyBtn:   copyBtn,
 		actionRow: actionRow,
 		root:      root,
 	}
