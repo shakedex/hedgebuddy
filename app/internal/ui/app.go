@@ -309,10 +309,20 @@ func (c *AppController) rebuildSidebar() {
 
 	footer := []fyne.CanvasObject{settingsBtn, aboutBtn}
 
-	c.sidebar = components.NewSidebar(
-		[]components.SidebarSection{profilesSection, filtersSection},
-		footer,
-	)
+	// First call creates the widget; subsequent calls mutate it in place so the
+	// existing mount keeps its identity and the renderer's Refresh picks up the
+	// new sections/footer.
+	if c.sidebar == nil {
+		c.sidebar = components.NewSidebar(
+			[]components.SidebarSection{profilesSection, filtersSection},
+			footer,
+		)
+	} else {
+		c.sidebar.Rebuild(
+			[]components.SidebarSection{profilesSection, filtersSection},
+			footer,
+		)
+	}
 }
 
 func (c *AppController) renderList() {

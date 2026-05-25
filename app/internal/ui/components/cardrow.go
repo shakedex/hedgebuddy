@@ -56,6 +56,85 @@ func (c *CardRow) MouseIn(*fyne.PointEvent)    { c.hover = true; c.Refresh() }
 func (c *CardRow) MouseOut()                   { c.hover = false; c.Refresh() }
 func (c *CardRow) MouseMoved(*fyne.PointEvent) {}
 
+// cardRowRenderer is the reactive renderer for CardRow. It holds references to the
+// mutable canvas objects (background, stripe, text labels, action row) so that
+// Refresh() can re-sync them with the widget's current state.
+type cardRowRenderer struct {
+	card *CardRow
+
+	bg        *canvas.Rectangle
+	stripe    *canvas.Rectangle
+	nameText  *canvas.Text
+	typeDot   *canvas.Circle
+	typeLabel *canvas.Text
+	valueText *widget.Label
+	descText  *widget.Label
+	revealBtn *IconButton
+	actionRow *fyne.Container
+	root      fyne.CanvasObject
+}
+
+func (r *cardRowRenderer) Destroy() {}
+
+func (r *cardRowRenderer) Layout(size fyne.Size) {
+	r.root.Resize(size)
+}
+
+func (r *cardRowRenderer) MinSize() fyne.Size {
+	min := r.root.MinSize()
+	if min.Height < tokens.CardMinHeight {
+		min.Height = tokens.CardMinHeight
+	}
+	return min
+}
+
+func (r *cardRowRenderer) Objects() []fyne.CanvasObject {
+	return []fyne.CanvasObject{r.root}
+}
+
+func (r *cardRowRenderer) Refresh() {
+	// Background reflects hover state.
+	if r.card.hover {
+		r.bg.FillColor = tokens.Surface3
+		r.actionRow.Show()
+	} else {
+		r.bg.FillColor = tokens.Surface2
+		r.actionRow.Hide()
+	}
+	r.bg.Refresh()
+
+	// Stripe reflects current type.
+	r.stripe.FillColor = tokens.TypeColor(r.card.data.Type)
+	r.stripe.Refresh()
+
+	// Name + value + description + type label all reflect current data.
+	r.nameText.Text = r.card.data.Name
+	r.nameText.Refresh()
+	r.typeDot.FillColor = tokens.TypeColor(r.card.data.Type)
+	r.typeDot.Refresh()
+	r.typeLabel.Text = r.card.data.Type
+	r.typeLabel.Color = tokens.TypeColor(r.card.data.Type)
+	r.typeLabel.Refresh()
+	r.valueText.SetText(r.card.displayValue())
+	r.descText.SetText(r.card.data.Description)
+
+	// Reveal button visibility + icon for secret rows.
+	if r.card.data.Type == "secret" {
+		r.revealBtn.Show()
+		if r.card.revealed {
+			r.revealBtn.SetIcon(icons.EyeOff)
+			r.revealBtn.SetToolTip("Hide secret value")
+		} else {
+			r.revealBtn.SetIcon(icons.Eye)
+			r.revealBtn.SetToolTip("Reveal secret value")
+		}
+	} else {
+		r.revealBtn.Hide()
+	}
+
+	r.actionRow.Refresh()
+}
+
 func (c *CardRow) CreateRenderer() fyne.WidgetRenderer {
 	bg := canvas.NewRectangle(tokens.Surface2)
 	bg.CornerRadius = tokens.RadiusCard
@@ -87,12 +166,6 @@ func (c *CardRow) CreateRenderer() fyne.WidgetRenderer {
 		c.revealed = !c.revealed
 		c.Refresh()
 	})
-	if c.data.Type != "secret" {
-		revealBtn.Hide()
-	} else if c.revealed {
-		revealBtn.SetIcon(icons.EyeOff)
-		revealBtn.SetToolTip("Hide secret value")
-	}
 
 	copyBtn := NewIconButton(icons.Copy, "Copy value", IconVariantNeutral, c.actions.OnCopy)
 	editBtn := NewIconButton(icons.Pencil, "Edit variable", IconVariantNeutral, c.actions.OnEdit)
@@ -100,22 +173,28 @@ func (c *CardRow) CreateRenderer() fyne.WidgetRenderer {
 	delBtn := NewIconButton(icons.Trash, "Delete variable", IconVariantDanger, c.actions.OnDelete)
 
 	actionRow := container.NewHBox(revealBtn, copyBtn, editBtn, dupBtn, delBtn)
-	if !c.hover {
-		actionRow.Hide()
-	}
 
 	header := container.NewHBox(nameText, container.NewPadded(typeDot), typeLabel, layout.NewSpacer(), actionRow)
 	body := container.NewVBox(header, valueText, descText)
 
 	inner := container.NewBorder(nil, nil, stripe, nil, container.NewPadded(body))
 	root := container.NewStack(bg, inner)
-	root.Resize(fyne.NewSize(0, tokens.CardMinHeight))
 
-	if c.hover {
-		bg.FillColor = tokens.Surface3
+	r := &cardRowRenderer{
+		card:      c,
+		bg:        bg,
+		stripe:    stripe,
+		nameText:  nameText,
+		typeDot:   typeDot,
+		typeLabel: typeLabel,
+		valueText: valueText,
+		descText:  descText,
+		revealBtn: revealBtn,
+		actionRow: actionRow,
+		root:      root,
 	}
-
-	return widget.NewSimpleRenderer(root)
+	r.Refresh() // initial state sync (e.g. hide actionRow if not hovered)
+	return r
 }
 
 const secretMask = "••••••••"

@@ -52,40 +52,68 @@ func (d *Drawer) Close() {
 // IsOpen returns true if the drawer is currently shown.
 func (d *Drawer) IsOpen() bool { return d.visible }
 
+// drawerRenderer is the reactive renderer for Drawer. The bodySlot container is
+// a stable mount point — Open() updates d.title/d.content then Refresh() swaps
+// the title text and replaces bodySlot.Objects.
+type drawerRenderer struct {
+	drawer    *Drawer
+	scrim     *canvas.Rectangle
+	panel     *canvas.Rectangle
+	titleText *canvas.Text
+	closeBtn  *IconButton
+	bodySlot  *fyne.Container
+	root      fyne.CanvasObject
+}
+
+func (r *drawerRenderer) Destroy()                     {}
+func (r *drawerRenderer) Layout(s fyne.Size)           { r.root.Resize(s) }
+func (r *drawerRenderer) MinSize() fyne.Size           { return r.root.MinSize() }
+func (r *drawerRenderer) Objects() []fyne.CanvasObject { return []fyne.CanvasObject{r.root} }
+
+func (r *drawerRenderer) Refresh() {
+	r.titleText.Text = r.drawer.title
+	r.titleText.Refresh()
+
+	r.bodySlot.Objects = nil
+	if r.drawer.content != nil {
+		r.bodySlot.Add(r.drawer.content)
+	}
+	r.bodySlot.Refresh()
+}
+
 func (d *Drawer) CreateRenderer() fyne.WidgetRenderer {
+	scrim := canvas.NewRectangle(tokens.DimOverlay)
 	panel := canvas.NewRectangle(tokens.Surface4)
+	panel.SetMinSize(fyne.NewSize(tokens.DrawerWidth, 0))
 
 	closeBtn := NewIconButton(icons.X, "Close", IconVariantNeutral, d.Close)
-
 	titleText := canvas.NewText(d.title, tokens.TextPrimary)
 	titleText.TextSize = 22
 	titleText.TextStyle = fyne.TextStyle{Bold: true}
 
 	header := container.NewBorder(nil, nil, titleText, closeBtn)
-
-	var body fyne.CanvasObject
-	if d.content == nil {
-		body = container.NewPadded(widget.NewLabel(""))
-	} else {
-		body = container.NewPadded(d.content)
-	}
-
+	bodySlot := container.NewStack()
 	panelInner := container.NewBorder(
 		container.NewPadded(header),
 		nil, nil, nil,
-		container.NewVScroll(body),
+		container.NewVScroll(container.NewPadded(bodySlot)),
 	)
-
 	panelStack := container.NewStack(panel, panelInner)
 
-	// The scrim covers the full window; the panel is anchored right at fixed width.
 	scrimTappable := newTappableArea(d.Close)
-
 	rightAnchored := container.NewBorder(nil, nil, nil, panelStack, scrimTappable)
-	// We need to enforce panel width via a min-size wrapper.
-	panel.SetMinSize(fyne.NewSize(tokens.DrawerWidth, 0))
 
-	return widget.NewSimpleRenderer(rightAnchored)
+	r := &drawerRenderer{
+		drawer:    d,
+		scrim:     scrim,
+		panel:     panel,
+		titleText: titleText,
+		closeBtn:  closeBtn,
+		bodySlot:  bodySlot,
+		root:      rightAnchored,
+	}
+	r.Refresh() // initial content sync
+	return r
 }
 
 // tappableArea is a click target painted with the dim overlay color.
