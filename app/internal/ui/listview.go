@@ -10,6 +10,7 @@ import (
 
 	"app/internal/ui/components"
 	"app/internal/ui/icons"
+	"app/internal/ui/tokens"
 )
 
 // buildListView builds the main pane content: search header + variable cards.
@@ -41,6 +42,7 @@ func (c *AppController) buildListView() fyne.CanvasObject {
 	header := container.NewBorder(nil, nil, nil, rightSide, searchEntry)
 
 	listContainer := container.NewVBox()
+	var scroll *container.Scroll // declared first so render can capture it
 
 	render := func() {
 		listContainer.Objects = nil
@@ -62,7 +64,8 @@ func (c *AppController) buildListView() fyne.CanvasObject {
 			return
 		}
 
-		for _, name := range matched {
+		firstFlashIndex := -1
+		for i, name := range matched {
 			n := name
 			v, _ := c.Storage.GetVariable(n)
 			var card *components.CardRow
@@ -88,16 +91,28 @@ func (c *AppController) buildListView() fyne.CanvasObject {
 			listContainer.Add(card)
 			if _, ok := flashSet[n]; ok {
 				card.Flash()
+				if firstFlashIndex == -1 {
+					firstFlashIndex = i
+				}
 			}
 		}
 		listContainer.Refresh()
+
+		// Auto-scroll to first flashed row, if any.
+		if scroll != nil && firstFlashIndex >= 0 {
+			// CardMinHeight from tokens, plus a small gap for inter-card padding.
+			rowHeight := tokens.CardMinHeight + tokens.SpaceSM
+			target := float32(firstFlashIndex) * rowHeight
+			scroll.Offset = fyne.NewPos(0, target)
+			scroll.Refresh()
+		}
 	}
 
 	searchEntry.OnChanged = func(string) { render() }
 
 	render()
 
-	scroll := container.NewVScroll(container.NewPadded(listContainer))
+	scroll = container.NewVScroll(container.NewPadded(listContainer))
 
 	return container.NewBorder(container.NewPadded(header), nil, nil, nil, scroll)
 }
