@@ -142,7 +142,9 @@ func ShowImportDrawer(c *AppController) {
 			selected[name] = v
 		}
 		importBtn.SetState(components.StateBusy)
+		release := c.suppressFileWatchReload()
 		_, err := c.Storage.ImportSelectedVariables(selected)
+		release()
 		if err != nil {
 			importBtn.SetState(components.StateError)
 			dialog.ShowError(err, c.Window)

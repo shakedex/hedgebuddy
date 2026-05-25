@@ -3,7 +3,9 @@ package ui
 import (
 	"fmt"
 	"os/exec"
+	"path/filepath"
 	"runtime"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
@@ -12,6 +14,7 @@ import (
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/widget"
 	fynetooltip "github.com/dweymouth/fyne-tooltip"
+	"github.com/fsnotify/fsnotify"
 
 	"app/internal/profile"
 	"app/internal/storage"
@@ -45,6 +48,15 @@ type AppController struct {
 	// pendingFlash holds variable names that should flash on the next list render.
 	// Consumed (cleared) by buildListView.
 	pendingFlash map[string]struct{}
+
+	// watcher monitors the directory containing the active profile's vars.json
+	// for external edits. Replaced when the active profile changes.
+	watcher *fsnotify.Watcher
+
+	// suppressReload tells the watcher goroutine to ignore fsnotify events
+	// while we're writing to vars.json ourselves. Set true around storage
+	// writes; cleared after a short delay (longer than typical fsnotify lag).
+	suppressReload bool
 }
 
 // FlashRow marks one or more variable names to flash on the next list render.
@@ -98,8 +110,81 @@ func NewAppController(fyneApp fyne.App, window fyne.Window) *AppController {
 
 	ctrl.updateWindowTitle()
 	ctrl.buildShell()
+	ctrl.startFileWatch()
 
 	return ctrl
+}
+
+// startFileWatch begins watching the directory containing the active profile's
+// vars.json. When the file is written or replaced externally, the list reloads.
+// Safe to call repeatedly; replaces any existing watcher.
+func (c *AppController) startFileWatch() {
+	if c.watcher != nil {
+		_ = c.watcher.Close()
+		c.watcher = nil
+	}
+
+	path, err := storage.GetStoragePath()
+	if err != nil {
+		return
+	}
+
+	w, err := fsnotify.NewWatcher()
+	if err != nil {
+		return
+	}
+
+	// Watch the parent directory — vars.json may be replaced atomically (rename),
+	// which fsnotify reports as Create+Remove rather than Write.
+	if err := w.Add(filepath.Dir(path)); err != nil {
+		_ = w.Close()
+		return
+	}
+	c.watcher = w
+
+	go func(target string, watcher *fsnotify.Watcher) {
+		for {
+			select {
+			case event, ok := <-watcher.Events:
+				if !ok {
+					return
+				}
+				if event.Name != target {
+					continue
+				}
+				if event.Op&(fsnotify.Write|fsnotify.Create|fsnotify.Rename) == 0 {
+					continue
+				}
+				fyne.Do(func() {
+					if c.suppressReload {
+						return
+					}
+					if err := c.Reload(); err != nil {
+						return
+					}
+					c.rebuildSidebar()
+					c.renderList()
+				})
+			case _, ok := <-watcher.Errors:
+				if !ok {
+					return
+				}
+			}
+		}
+	}(path, w)
+}
+
+// suppressFileWatchReload sets suppressReload=true and schedules it to clear
+// after a short delay. Call as `defer c.suppressFileWatchReload()()` around
+// storage writes so fsnotify events from our own writes don't trigger a reload.
+func (c *AppController) suppressFileWatchReload() func() {
+	c.suppressReload = true
+	return func() {
+		go func() {
+			time.Sleep(200 * time.Millisecond)
+			c.suppressReload = false
+		}()
+	}
 }
 
 func (c *AppController) buildShell() {
@@ -171,6 +256,7 @@ func (c *AppController) SwitchProfile(name string) error {
 	}
 	c.Storage = store
 	c.updateWindowTitle()
+	c.startFileWatch()
 	c.rebuildSidebar()
 	c.renderList()
 	return nil
@@ -185,6 +271,7 @@ func (c *AppController) updateWindowTitle() {
 }
 
 func (c *AppController) SaveVariable(oldName, name, value, varType, description string) error {
+	defer c.suppressFileWatchReload()()
 	isUpdate := oldName != ""
 	if isUpdate && oldName != name {
 		c.Storage.DeleteVariable(oldName)
@@ -207,11 +294,13 @@ func (c *AppController) SaveVariable(oldName, name, value, varType, description 
 }
 
 func (c *AppController) DeleteVariable(name string) error {
+	defer c.suppressFileWatchReload()()
 	c.Storage.DeleteVariable(name)
 	return c.Storage.Save()
 }
 
 func (c *AppController) DuplicateVariable(name string) {
+	defer c.suppressFileWatchReload()()
 	v, ok := c.Storage.GetVariable(name)
 	if !ok {
 		return
