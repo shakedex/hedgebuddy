@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
@@ -12,6 +13,8 @@ import (
 	"app/internal/storage"
 	"app/internal/ui/components"
 	"app/internal/ui/icons"
+	"app/internal/ui/tokens"
+	"app/internal/validator"
 )
 
 // ShowEditDrawer opens the edit drawer. If editingName is empty, treats as New Variable.
@@ -32,6 +35,12 @@ func ShowEditDrawer(c *AppController, editingName string) {
 	nameEntry := widget.NewEntry()
 	nameEntry.SetPlaceHolder("VARIABLE_NAME")
 	nameEntry.SetText(editingName)
+	nameEntry.Validator = func(s string) error {
+		if s == "" {
+			return nil // don't show "required" until they try to save
+		}
+		return validator.ValidateVariableName(s)
+	}
 
 	typeRadio := widget.NewRadioGroup([]string{"String", "Path", "URL", "Secret"}, nil)
 	typeRadio.Horizontal = true
@@ -40,10 +49,22 @@ func ShowEditDrawer(c *AppController, editingName string) {
 	valueEntry := widget.NewEntry()
 	valueEntry.SetPlaceHolder("Variable value")
 	valueEntry.SetText(prefill.Value)
+	valueEntry.Validator = func(s string) error {
+		if s == "" {
+			return nil // empty is OK until save
+		}
+		return validator.ValidateByType(labelToType(typeRadio.Selected), s)
+	}
 
 	secretEntry := widget.NewPasswordEntry()
 	secretEntry.SetPlaceHolder("Secret value")
 	secretEntry.SetText(prefill.Value)
+	secretEntry.Validator = func(s string) error {
+		if s == "" {
+			return nil
+		}
+		return validator.ValidateByType("secret", s)
+	}
 
 	browseFileBtn := widget.NewButtonWithIcon("File…", icons.File, func() {
 		path, err := zenity.SelectFile(zenity.Title("Select file"))
@@ -70,6 +91,52 @@ func ShowEditDrawer(c *AppController, editingName string) {
 	// valueField/descField: we use the FieldRow visual but compose manually because the value field has type-dependent content.
 	descField := components.NewFieldRow("Description", descEntry, nil)
 
+	// Inline error caption for the (type-dependent) value field. We can't use a
+	// FieldRow here because the visible widget swaps when the user changes type.
+	valueErrText := canvas.NewText("", tokens.Danger)
+	valueErrText.TextSize = 11
+	valueErrText.Hide()
+	setValueErr := func(msg string) {
+		if msg == "" {
+			valueErrText.Hide()
+			return
+		}
+		valueErrText.Text = msg
+		valueErrText.Show()
+		valueErrText.Refresh()
+	}
+
+	// Wire inline validation. Name is straightforward.
+	nameEntry.SetOnValidationChanged(func(err error) {
+		if err == nil {
+			nameField.SetError("")
+			return
+		}
+		nameField.SetError(err.Error())
+	})
+	// For value, the active entry depends on the selected type. Each entry
+	// only publishes errors when it's the visible one.
+	valueEntry.SetOnValidationChanged(func(err error) {
+		if labelToType(typeRadio.Selected) == "secret" {
+			return // not visible — ignore
+		}
+		if err == nil {
+			setValueErr("")
+			return
+		}
+		setValueErr(err.Error())
+	})
+	secretEntry.SetOnValidationChanged(func(err error) {
+		if labelToType(typeRadio.Selected) != "secret" {
+			return
+		}
+		if err == nil {
+			setValueErr("")
+			return
+		}
+		setValueErr(err.Error())
+	})
+
 	applyType := func(label string) {
 		t := labelToType(label)
 		switch t {
@@ -84,6 +151,18 @@ func ShowEditDrawer(c *AppController, editingName string) {
 			browseContainer.Hide()
 		}
 		valueContainer.Refresh()
+		// Re-run validation on the newly active entry so the inline error
+		// reflects the current value under the new type's rules.
+		setValueErr("")
+		if t == "secret" {
+			if err := secretEntry.Validate(); err != nil {
+				setValueErr(err.Error())
+			}
+		} else {
+			if err := valueEntry.Validate(); err != nil {
+				setValueErr(err.Error())
+			}
+		}
 	}
 
 	typeRadio.OnChanged = func(label string) { applyType(label) }
@@ -98,6 +177,7 @@ func ShowEditDrawer(c *AppController, editingName string) {
 		fieldLabel("Value"),
 		valueContainer,
 		browseContainer,
+		valueErrText,
 		widget.NewSeparator(),
 		descField.Object(),
 	)
@@ -122,9 +202,25 @@ func ShowEditDrawer(c *AppController, editingName string) {
 			oldName = editingName
 		}
 
-		if err := c.SaveVariable(oldName, name, value, varType, descEntry.Text); err != nil {
+		// Inline pre-validation: if the user hasn't fixed (or never touched) the
+		// required fields, surface the error under the offending row instead of
+		// a modal popup.
+		if err := validator.ValidateVariableName(name); err != nil {
+			nameField.SetError(err.Error())
 			saveBtn.SetState(components.StateError)
-			dialog.ShowError(err, c.Window) // Phase 2 replaces this with inline validation
+			return
+		}
+		if err := validator.ValidateByType(varType, value); err != nil {
+			setValueErr(err.Error())
+			saveBtn.SetState(components.StateError)
+			return
+		}
+
+		if err := c.SaveVariable(oldName, name, value, varType, descEntry.Text); err != nil {
+			// Validation already passed; this is a disk/IO error. Show modal as
+			// a last resort.
+			saveBtn.SetState(components.StateError)
+			dialog.ShowError(err, c.Window)
 			return
 		}
 
