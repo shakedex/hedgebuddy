@@ -283,9 +283,9 @@ func (c *AppController) rebuildSidebar() {
 		})
 
 		menuBtn := components.NewIconButton(icons.Ellipsis, "Profile actions", components.IconVariantNeutral, nil)
-		menuBtn.OnTapped = func() {
+		menuBtn.SetOnTapped(func() {
 			showProfileRowMenu(c, pName, menuBtn)
-		}
+		})
 		row := container.NewBorder(nil, nil, nil, menuBtn, item)
 		profileItems = append(profileItems, row)
 	}

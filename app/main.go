@@ -3,6 +3,7 @@ package main
 import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
+	fynetooltip "github.com/dweymouth/fyne-tooltip"
 
 	"app/internal/ui"
 )
@@ -26,4 +27,7 @@ func main() {
 	go ctrl.RunUpdateCheck()
 
 	w.ShowAndRun()
+
+	// Cleanup tooltip layer (fyne-tooltip best practice for window teardown).
+	fynetooltip.DestroyWindowToolTipLayer(w.Canvas())
 }
