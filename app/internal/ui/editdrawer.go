@@ -1,7 +1,7 @@
 package ui
 
 import (
-	"strings"
+	"errors"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -220,7 +220,8 @@ func ShowEditDrawer(c *AppController, editingName string) {
 		if err := c.SaveVariable(oldName, name, value, varType, descEntry.Text); err != nil {
 			// If it's a collision (rename or new conflicting with existing),
 			// surface inline under the Name field rather than a modal.
-			if strings.Contains(err.Error(), "already exists") {
+			var dupErr *storage.DuplicateKeyError
+			if errors.Is(err, ErrVariableExists) || errors.As(err, &dupErr) {
 				nameField.SetError(err.Error())
 				saveBtn.SetState(components.StateError)
 				return

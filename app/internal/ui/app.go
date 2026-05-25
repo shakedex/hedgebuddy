@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"errors"
 	"fmt"
 	"os/exec"
 	"path/filepath"
@@ -23,6 +24,10 @@ import (
 	"app/internal/ui/tokens"
 	"app/internal/validator"
 )
+
+// ErrVariableExists is returned by SaveVariable when a rename or new-create
+// would clobber an existing variable. Surfaced inline under the Name field.
+var ErrVariableExists = errors.New("variable name already exists")
 
 // AppController is the central controller managing shell state, navigation, and storage.
 type AppController struct {
@@ -244,6 +249,7 @@ func (c *AppController) Reload() error {
 }
 
 func (c *AppController) SwitchProfile(name string) error {
+	defer c.suppressFileWatchReload()()
 	if err := c.Storage.Save(); err != nil {
 		return err
 	}
@@ -279,7 +285,7 @@ func (c *AppController) SaveVariable(oldName, name, value, varType, description 
 	// they shouldn't accidentally overwrite an existing one either.
 	if isRename || !isUpdate {
 		if _, exists := c.Storage.GetVariable(name); exists {
-			return fmt.Errorf("a variable named %q already exists", name)
+			return fmt.Errorf("a variable named %q already exists: %w", name, ErrVariableExists)
 		}
 	}
 
