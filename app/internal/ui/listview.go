@@ -13,7 +13,6 @@ import (
 
 	"app/internal/ui/components"
 	"app/internal/ui/icons"
-	"app/internal/ui/tokens"
 )
 
 // newListSpacer is a fully transparent rectangle with a fixed minimum size.
@@ -122,12 +121,12 @@ func (c *AppController) buildListView() fyne.CanvasObject {
 		// Auto-scroll to first flashed row, if any. Deferred to fyne.Do so the
 		// scroll widget is mounted to the canvas before we move its offset —
 		// otherwise Fyne resets to (0,0) on mount.
-		if firstFlashIndex >= 0 {
-			rowHeight := tokens.CardMinHeight + tokens.SpaceSM
-			target := float32(firstFlashIndex) * rowHeight
+		if firstFlashIndex >= 0 && firstFlashIndex < len(listContainer.Objects) {
+			flashedObj := listContainer.Objects[firstFlashIndex]
 			go func() {
 				time.Sleep(50 * time.Millisecond)
 				fyne.Do(func() {
+					target := flashedObj.Position().Y
 					scroll.Offset = fyne.NewPos(0, target)
 					scroll.Refresh()
 				})

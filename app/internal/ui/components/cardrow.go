@@ -206,7 +206,7 @@ func (c *CardRow) CreateRenderer() fyne.WidgetRenderer {
 
 	// Wrap the value text in a slightly-recessed "code block" background so
 	// it reads as the data payload of the card vs. surrounding chrome.
-	valueBg := canvas.NewRectangle(tokens.SurfaceBase) // darker than card bg (Surface2)
+	valueBg := canvas.NewRectangle(tokens.Surface1) // slightly darker than card bg, NOT the app bg
 	valueBg.CornerRadius = 4
 	valueBlock := container.NewStack(valueBg, container.NewPadded(valueText))
 
