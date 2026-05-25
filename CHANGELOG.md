@@ -8,9 +8,56 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-05-25
+
+Major UI modernization. Old top-toolbar layout replaced with a sidebar shell + right-side drawers. The 5 legacy views (`*view.go`) have been removed and rebuilt as drawers and modals composed from a shared component library.
+
+### Added
+
+- **Sidebar shell** — left-aligned 200px sidebar with PROFILES section (active profile highlighted, inline `+` composer and inline rename), FILTERS section (`All / String / Path / URL / Secret` with live counts and Lucide icons), and Settings/About footer links.
+- **Right-side drawer overlay** — replaces the previous full-pane navigation for Edit/New/Import/Export. Esc and scrim-tap both close. Drawer content swaps without re-mounting the shell.
+- **Design token packages** — `app/internal/ui/tokens/` defines colors, spacing, and radii as the single source of truth. The theme proxies to tokens.
+- **OS-native font loader** — Segoe UI on Windows (`segoeui.ttf` + `segoeuib.ttf`), SF Pro on macOS, with safe fallback to Fyne's default when files are missing. Path uses `%SystemRoot%` for portability.
+- **Lucide icon set** — 28 outlined SVGs vendored via `tools/icons` fetcher tool and embedded via `//go:embed`. Replaces all `theme.*Icon()` callsites in the new UI surfaces.
+- **Reusable component primitives** (`app/internal/ui/components/`): `Sidebar`+`SidebarItem`, `CardRow`, `Drawer`, `IconButton` (with hover-tint and tooltip), `InlineStateButton` (idle→busy→done/error state machine), `Modal`+`ShowDeleteConfirm`, `FieldRow` with inline error caption.
+- **No-toast feedback contract** — `InlineStateButton` morphs on save/import/export; `CardRow.Flash()` tints rows on save/import/duplicate/copy; `CardRow.ConfirmCopy()` swaps copy icon to a check for 1s. Replaces transient toast notifications.
+- **Inline validation** — `Entry.Validator` + `FieldRow.SetError` surface variable name and value errors under the field as the user types. Modal `dialog.ShowError` reduced to disk-IO last resort.
+- **Auto-reload via fsnotify** — `vars.json` is watched; external edits refresh the list automatically.
+- **Variable name collision check** — `SaveVariable` refuses to rename or create a variable that would clobber an existing one. Surfaces inline under the Name field via `ErrVariableExists` sentinel.
+- **Auto-scroll to flashed row** — duplicate/save/import scrolls the list to bring the affected row into view (uses real `Position().Y`, not estimated row height).
+- **Inline profile composer** — new-profile and rename happen as inline editable rows in the sidebar. Modal forms remain only for Import-as-Profile.
+- **Sidebar filter icons** — Lucide `type/folder/link/lock` icons next to filter labels.
+- **Code-block styling for variable values** — recessed `Surface1` background distinguishes value from description.
+- **Tooltip layer** — IconButtons embed `ttwidget.ToolTipWidget` for hover tooltips on all actionable icons.
+- **Browse File / Browse Folder split** — path-type variables now offer both file and folder pickers.
+- **Phase 2 manual QA checklist** — `docs/superpowers/specs/2026-05-24-hedgebuddy-ui-modernization-qa.md`.
+
 ### Changed
 
-- **Quills extracted to its own repository at [shakedex/quills](https://github.com/shakedex/quills).** The `service/` and `quills/` directories, the Quills release workflow, and the combined "HedgeBuddy Suite" installer have been removed. Historical entries below that describe Quills work remain for context, but Quills development continues in the new repo.
+- **Storage directory case-normalized to lowercase `hedgebuddy/`** on Windows and macOS. Existing `HedgeBuddy/` directories migrate automatically on first launch. Aligns Go side with Python side; eliminates case-sensitive filesystem mismatches.
+- **Python check + update check sequenced** — update dialog only fires after the Python check completes or dismisses, eliminating modal stacking.
+- **Export warning** — now mentions both `.env` and JSON formats (both write secrets in plain text).
+- **Delete confirm dialog** — action-specific button label (`Delete API_KEY`) and terse single-line body.
+- **Python/update dialogs** — two-button layout with inline "Don't remind me again" checkbox (was 3-4 stacked buttons).
+- **Install Update** — shows "Launching updater…" inline for 600ms before quit instead of disappearing instantly.
+- **Validator messages** — human language ("URLs must start with http:// or https://"; "can't find this path on this machine").
+- **About modal** — softened disclaimer; less shouty.
+- **Default and active profile** — Rename and Delete options disabled in the ⋯ menu instead of throwing errors after the click.
+
+### Removed
+
+- **6 legacy view files** — `aboutview.go`, `formview.go`, `importview.go`, `exportview.go`, `profileview.go`, `helpers.go`. Replaced by `aboutmodal.go`, `editdrawer.go`, `importdrawer.go`, `exportdrawer.go`, `profilemodal.go`, `settingsmodal.go`, and the new components package.
+- **Linux branch of Python lib's `_get_base_dir()`** — raises `StorageNotFoundError` on Linux. The Go GUI doesn't ship for Linux, so the silent fallback was creating drift.
+- **Toast notifications and `ShowStatus`** — replaced by the inline feedback contract.
+- **Manual "Refresh" toolbar button** — fsnotify replaces it.
+
+### Fixed
+
+- **CRITICAL: rename collision data loss** — renaming variable `A` to an existing variable `B`'s name no longer silently overwrites `B`. (Pre-Phase-2 behavior would merge into `B`, losing its value.)
+- **Drop-handler leak across views** — drop handler scoped to drawer lifecycle.
+- **Confirm-delete modal text wrapping** — uses `widget.Label` with `TextWrapWord`.
+- **`container.NewMax`** deprecated calls replaced with `container.NewStack`.
+- **Manual string truncation** replaced with `widget.Label.Truncation = TextTruncateEllipsis`.
 
 ## [0.9.1] - 2026-04-12
 
