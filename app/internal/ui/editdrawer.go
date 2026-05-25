@@ -133,7 +133,10 @@ func ShowEditDrawer(c *AppController, editingName string) {
 		}()
 	}
 
-	footer := container.NewBorder(nil, nil, cancelBtn, saveBtn.Button)
+	footer := components.DrawerFooter(
+		[]fyne.CanvasObject{cancelBtn},
+		[]fyne.CanvasObject{saveBtn.Button},
+	)
 
 	body := container.NewBorder(nil, footer, nil, nil, container.NewVScroll(container.NewPadded(form)))
 

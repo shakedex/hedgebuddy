@@ -94,6 +94,8 @@ func (d *Drawer) CreateRenderer() fyne.WidgetRenderer {
 	// the Stack ends up being, so it stays flush with the inner layout.
 	panel := canvas.NewRectangle(tokens.Surface4)
 	panel.SetMinSize(fyne.NewSize(tokens.DrawerWidth, 0))
+	panel.StrokeColor = tokens.BorderSubtle
+	panel.StrokeWidth = 1
 
 	closeBtn := NewIconButton(icons.X, "Close", IconVariantNeutral, d.Close)
 	titleText := canvas.NewText(d.title, tokens.TextPrimary)
@@ -148,6 +150,24 @@ func wrapWithHPadding(obj fyne.CanvasObject, width float32) fyne.CanvasObject {
 	right := canvas.NewRectangle(transparent)
 	right.SetMinSize(fyne.NewSize(width, 0))
 	return container.NewBorder(nil, nil, left, right, obj)
+}
+
+// DrawerFooter builds the canonical bottom-of-drawer row: a separator above,
+// then left (typically Cancel) and right (typically the primary InlineStateButton)
+// groups with breathing room above and below. Use it from every drawer body to
+// keep button alignment and padding consistent across the app.
+func DrawerFooter(left, right []fyne.CanvasObject) fyne.CanvasObject {
+	leftBox := container.NewHBox(left...)
+	rightBox := container.NewHBox(right...)
+
+	row := container.NewBorder(nil, nil, leftBox, rightBox)
+
+	// Vertical breathing room above + below the button row.
+	// Plus a thin separator hint so the footer reads as a distinct strip.
+	return container.NewVBox(
+		widget.NewSeparator(),
+		container.NewPadded(row),
+	)
 }
 
 // tappableArea is a click target painted with the dim overlay color.

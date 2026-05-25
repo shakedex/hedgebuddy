@@ -164,7 +164,10 @@ func ShowImportDrawer(c *AppController) {
 		container.NewHBox(selectAllBtn, deselectAllBtn),
 	)
 
-	footer := container.NewBorder(nil, nil, cancelBtn, importBtn.Button)
+	footer := components.DrawerFooter(
+		[]fyne.CanvasObject{cancelBtn},
+		[]fyne.CanvasObject{importBtn.Button},
+	)
 
 	body := container.NewBorder(header, footer, nil, nil, contentArea)
 

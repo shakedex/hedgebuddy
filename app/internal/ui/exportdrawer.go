@@ -115,7 +115,10 @@ func ShowExportDrawer(c *AppController) {
 		secretWarn,
 	)
 
-	footer := container.NewBorder(nil, nil, cancelBtn, container.NewHBox(envBtn.Button, jsonBtn.Button))
+	footer := components.DrawerFooter(
+		[]fyne.CanvasObject{cancelBtn},
+		[]fyne.CanvasObject{envBtn.Button, jsonBtn.Button},
+	)
 
 	body := container.NewBorder(header, footer, nil, nil, container.NewVScroll(listBox))
 
