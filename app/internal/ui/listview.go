@@ -47,6 +47,10 @@ func (c *AppController) buildListView() fyne.CanvasObject {
 		query := strings.ToLower(searchEntry.Text)
 		matched := c.filteredKeys(query)
 
+		// Drain pending flashes once per render. Cards whose names match
+		// will flash briefly after they're mounted.
+		flashSet := c.consumeFlash()
+
 		if len(matched) == 0 {
 			emptyLabel := widget.NewLabel(c.emptyStateMessage(query))
 			emptyLabel.Alignment = fyne.TextAlignCenter
@@ -76,6 +80,9 @@ func (c *AppController) buildListView() fyne.CanvasObject {
 				},
 			)
 			listContainer.Add(card)
+			if _, ok := flashSet[n]; ok {
+				card.Flash()
+			}
 		}
 		listContainer.Refresh()
 	}

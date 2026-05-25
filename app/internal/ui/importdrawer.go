@@ -149,6 +149,11 @@ func ShowImportDrawer(c *AppController) {
 			return
 		}
 		importBtn.SetState(components.StateDone)
+		flashNames := make([]string, 0, len(selected))
+		for name := range selected {
+			flashNames = append(flashNames, name)
+		}
+		c.FlashRow(flashNames...)
 		c.rebuildSidebar()
 		c.renderList()
 		c.CloseDrawer()

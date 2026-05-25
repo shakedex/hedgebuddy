@@ -123,6 +123,7 @@ func ShowEditDrawer(c *AppController, editingName string) {
 		}
 
 		saveBtn.SetState(components.StateDone)
+		c.FlashRow(name)
 		c.rebuildSidebar()
 		c.renderList()
 		// Hold briefly so the user sees "✓ Saved" before the drawer closes.

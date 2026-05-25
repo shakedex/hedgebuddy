@@ -2,6 +2,8 @@ package components
 
 import (
 	"fmt"
+	"image/color"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
@@ -37,6 +39,7 @@ type CardRow struct {
 	actions  CardRowActions
 	revealed bool // for secret type: is the value revealed
 	hover    bool
+	flashing bool // briefly true after Flash() to signal save/import
 }
 
 // NewCardRow builds a card. Call ExtendBaseWidget internally.
@@ -55,6 +58,20 @@ func (c *CardRow) SetData(data CardRowData) {
 func (c *CardRow) MouseIn(*fyne.PointEvent)    { c.hover = true; c.Refresh() }
 func (c *CardRow) MouseOut()                   { c.hover = false; c.Refresh() }
 func (c *CardRow) MouseMoved(*fyne.PointEvent) {}
+
+// Flash briefly highlights the card to signal that it was just changed.
+// Used as part of the no-toast feedback contract for Save/Import operations.
+func (c *CardRow) Flash() {
+	c.flashing = true
+	c.Refresh()
+	go func() {
+		time.Sleep(800 * time.Millisecond)
+		fyne.Do(func() {
+			c.flashing = false
+			c.Refresh()
+		})
+	}()
+}
 
 // cardRowRenderer is the reactive renderer for CardRow. It holds references to the
 // mutable canvas objects (background, stripe, text labels, action row) so that
@@ -93,11 +110,16 @@ func (r *cardRowRenderer) Objects() []fyne.CanvasObject {
 }
 
 func (r *cardRowRenderer) Refresh() {
-	// Background reflects hover state.
-	if r.card.hover {
+	// Background reflects flashing > hover > default priority.
+	switch {
+	case r.card.flashing:
+		// Accent at ~25% alpha — a noticeable wash without being garish.
+		r.bg.FillColor = color.NRGBA{R: 0x4F, G: 0x7F, B: 0xF8, A: 0x40}
+		r.actionRow.Hide()
+	case r.card.hover:
 		r.bg.FillColor = tokens.Surface3
 		r.actionRow.Show()
-	} else {
+	default:
 		r.bg.FillColor = tokens.Surface2
 		r.actionRow.Hide()
 	}

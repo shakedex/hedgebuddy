@@ -32,6 +32,29 @@ type AppController struct {
 
 	// Filter state
 	activeFilter string // "" | "string" | "path" | "url" | "secret"
+
+	// pendingFlash holds variable names that should flash on the next list render.
+	// Consumed (cleared) by buildListView.
+	pendingFlash map[string]struct{}
+}
+
+// FlashRow marks one or more variable names to flash on the next list render.
+// Called after Save / Import as part of the no-toast feedback contract.
+func (c *AppController) FlashRow(names ...string) {
+	if c.pendingFlash == nil {
+		c.pendingFlash = make(map[string]struct{})
+	}
+	for _, n := range names {
+		c.pendingFlash[n] = struct{}{}
+	}
+}
+
+// consumeFlash returns the pending flash set and clears it. Called once per
+// list render.
+func (c *AppController) consumeFlash() map[string]struct{} {
+	out := c.pendingFlash
+	c.pendingFlash = nil
+	return out
 }
 
 // NewAppController initializes storage, profile index, and the shell layout.
