@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"image/color"
 	"path/filepath"
 	"strings"
 
@@ -76,12 +77,19 @@ func ShowImportDrawer(c *AppController) {
 				warn = "exists — will overwrite"
 			}
 
-			row := container.NewVBox(
+			rowContent := container.NewVBox(
 				container.NewHBox(cb, widget.NewLabel("["+vv.Type+"]"), warningText(warn)),
 				ve,
 				lowLabel(vv.Description),
 			)
-			listBox.Add(row)
+			bg := canvas.NewRectangle(tokens.Surface2)
+			bg.CornerRadius = tokens.RadiusCard
+			bg.StrokeColor = tokens.BorderSubtle
+			bg.StrokeWidth = 1
+			cardRow := container.NewStack(bg, container.NewPadded(rowContent))
+
+			listBox.Add(cardRow)
+			listBox.Add(spacerFn(8))
 		}
 		listBox.Refresh()
 		updateImportLabel()
@@ -204,4 +212,12 @@ func lowLabel(s string) fyne.CanvasObject {
 	l.Wrapping = fyne.TextWrapWord
 	l.Importance = widget.LowImportance
 	return l
+}
+
+// spacerFn returns a fully transparent CanvasObject with a fixed minimum
+// height. Used between import-drawer card rows to separate them visually.
+func spacerFn(h float32) fyne.CanvasObject {
+	s := canvas.NewRectangle(color.NRGBA{})
+	s.SetMinSize(fyne.NewSize(0, h))
+	return s
 }

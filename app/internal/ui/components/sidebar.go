@@ -16,14 +16,22 @@ import (
 type SidebarItem struct {
 	widget.BaseWidget
 	label  string
-	count  *int // nil = no count shown
+	icon   fyne.Resource // optional; rendered before label
+	count  *int          // nil = no count shown
 	active bool
 	hover  bool
 	onTap  func()
 }
 
+// NewSidebarItem creates a tappable sidebar row without an icon.
 func NewSidebarItem(label string, count *int, active bool, onTap func()) *SidebarItem {
-	i := &SidebarItem{label: label, count: count, active: active, onTap: onTap}
+	return NewSidebarItemWithIcon(nil, label, count, active, onTap)
+}
+
+// NewSidebarItemWithIcon creates a tappable sidebar row with an optional leading icon.
+// Pass nil for icon to render without one.
+func NewSidebarItemWithIcon(icon fyne.Resource, label string, count *int, active bool, onTap func()) *SidebarItem {
+	i := &SidebarItem{label: label, icon: icon, count: count, active: active, onTap: onTap}
 	i.ExtendBaseWidget(i)
 	return i
 }
@@ -44,6 +52,7 @@ type sidebarItemRenderer struct {
 	item      *SidebarItem
 	bg        *canvas.Rectangle
 	stripe    *canvas.Rectangle
+	iconImg   *widget.Icon // nil if item has no icon
 	labelText *canvas.Text
 	countText *canvas.Text
 	row       *fyne.Container
@@ -91,19 +100,27 @@ func (i *SidebarItem) CreateRenderer() fyne.WidgetRenderer {
 	stripe := canvas.NewRectangle(tokens.Surface1)
 	stripe.SetMinSize(fyne.NewSize(2, 0))
 
+	var iconImg *widget.Icon
+	if i.icon != nil {
+		iconImg = widget.NewIcon(i.icon)
+	}
+
 	labelText := canvas.NewText(i.label, tokens.TextPrimary)
 	labelText.TextSize = 13
 
 	var countText *canvas.Text
-	var row *fyne.Container
+	var rowChildren []fyne.CanvasObject
+	if iconImg != nil {
+		rowChildren = append(rowChildren, iconImg)
+	}
+	rowChildren = append(rowChildren, labelText, layout.NewSpacer())
 	if i.count != nil {
 		countText = canvas.NewText(fmt.Sprintf("%d", *i.count), tokens.TextMuted)
 		countText.TextSize = 11
 		countText.Alignment = fyne.TextAlignTrailing
-		row = container.NewHBox(labelText, layout.NewSpacer(), countText)
-	} else {
-		row = container.NewHBox(labelText)
+		rowChildren = append(rowChildren, countText)
 	}
+	row := container.NewHBox(rowChildren...)
 
 	inner := container.NewBorder(nil, nil, stripe, nil, container.NewPadded(row))
 	root := container.NewStack(bg, inner)
@@ -112,6 +129,7 @@ func (i *SidebarItem) CreateRenderer() fyne.WidgetRenderer {
 		item:      i,
 		bg:        bg,
 		stripe:    stripe,
+		iconImg:   iconImg,
 		labelText: labelText,
 		countText: countText,
 		row:       row,

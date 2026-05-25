@@ -415,22 +415,24 @@ func (c *AppController) rebuildSidebar() {
 	filtersData := []struct {
 		Label string
 		Key   string
+		Icon  fyne.Resource
 		Count int
 	}{
-		{"All", "", all},
-		{"String", "string", counts["string"]},
-		{"Path", "path", counts["path"]},
-		{"URL", "url", counts["url"]},
-		{"Secret", "secret", counts["secret"]},
+		{"All", "", nil, all},
+		{"String", "string", icons.Type, counts["string"]},
+		{"Path", "path", icons.Folder, counts["path"]},
+		{"URL", "url", icons.Link, counts["url"]},
+		{"Secret", "secret", icons.Lock, counts["secret"]},
 	}
 
 	var filterItems []fyne.CanvasObject
 	for _, f := range filtersData {
 		fKey := f.Key
 		fCount := f.Count
+		fIcon := f.Icon
 		active := c.activeFilter == fKey
 		filterItems = append(filterItems,
-			components.NewSidebarItem(f.Label, &fCount, active, func() {
+			components.NewSidebarItemWithIcon(fIcon, f.Label, &fCount, active, func() {
 				c.SetFilter(fKey)
 			}),
 		)

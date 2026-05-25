@@ -23,3 +23,7 @@ chevron-right
 chevron-down
 triangle-alert
 cloud-download
+type
+folder
+link
+lock

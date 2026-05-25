@@ -218,9 +218,19 @@ func (c *CardRow) CreateRenderer() fyne.WidgetRenderer {
 	actionRow := container.NewHBox(revealBtn, copyBtn, editBtn, dupBtn, delBtn)
 
 	header := container.NewHBox(nameText, container.NewPadded(typeDot), typeLabel, layout.NewSpacer(), actionRow)
-	body := container.NewVBox(header, valueText, descText)
+	// Compose the card body with a custom tight VBox layout that uses a 2px
+	// inter-child gap, plus explicit transparent spacers at top + bottom
+	// (6px each). This replaces VBox+NewPadded which combined to roughly 32px
+	// of vertical padding overhead per card; the new layout is ~16px.
+	body := container.New(&tightVBoxLayout{gap: 2},
+		cardSpacer(6), // top breathing space
+		header,
+		valueText,
+		descText,
+		cardSpacer(6), // bottom breathing space
+	)
 
-	inner := container.NewBorder(nil, nil, stripe, nil, container.NewPadded(body))
+	inner := container.NewBorder(nil, nil, stripe, nil, body)
 	root := container.NewStack(bg, inner)
 
 	r := &cardRowRenderer{
@@ -248,6 +258,54 @@ func (c *CardRow) displayValue() string {
 		return secretMask
 	}
 	return middleEllipsize(c.data.Value, 80)
+}
+
+// tightVBoxLayout lays children vertically with a small fixed gap, replacing
+// Fyne's default VBox which uses the theme padding (8 px). Used inside CardRow
+// to keep the per-row height compact.
+type tightVBoxLayout struct {
+	gap float32
+}
+
+func (l *tightVBoxLayout) Layout(objs []fyne.CanvasObject, size fyne.Size) {
+	y := float32(0)
+	for _, obj := range objs {
+		if obj == nil || !obj.Visible() {
+			continue
+		}
+		h := obj.MinSize().Height
+		obj.Resize(fyne.NewSize(size.Width, h))
+		obj.Move(fyne.NewPos(0, y))
+		y += h + l.gap
+	}
+}
+
+func (l *tightVBoxLayout) MinSize(objs []fyne.CanvasObject) fyne.Size {
+	var width, height float32
+	var visible int
+	for _, obj := range objs {
+		if obj == nil || !obj.Visible() {
+			continue
+		}
+		visible++
+		m := obj.MinSize()
+		if m.Width > width {
+			width = m.Width
+		}
+		height += m.Height
+	}
+	if visible > 1 {
+		height += l.gap * float32(visible-1)
+	}
+	return fyne.NewSize(width, height)
+}
+
+// cardSpacer returns a fully transparent CanvasObject with a fixed minimum
+// height. Used as a top/bottom padding strip inside CardRow.
+func cardSpacer(h float32) fyne.CanvasObject {
+	s := canvas.NewRectangle(color.NRGBA{}) // transparent
+	s.SetMinSize(fyne.NewSize(0, h))
+	return s
 }
 
 // middleEllipsize keeps the start and end of long strings, useful for paths.

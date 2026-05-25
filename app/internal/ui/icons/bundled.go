@@ -107,3 +107,19 @@ var TriangleAlert = &fyne.StaticResource{StaticName: "triangle-alert.svg", Stati
 //go:embed svg/cloud-download.svg
 var cloudDownloadData []byte
 var CloudDownload = &fyne.StaticResource{StaticName: "cloud-download.svg", StaticContent: cloudDownloadData}
+
+//go:embed svg/type.svg
+var typeData []byte
+var Type = &fyne.StaticResource{StaticName: "type.svg", StaticContent: typeData}
+
+//go:embed svg/folder.svg
+var folderData []byte
+var Folder = &fyne.StaticResource{StaticName: "folder.svg", StaticContent: folderData}
+
+//go:embed svg/link.svg
+var linkData []byte
+var Link = &fyne.StaticResource{StaticName: "link.svg", StaticContent: linkData}
+
+//go:embed svg/lock.svg
+var lockData []byte
+var Lock = &fyne.StaticResource{StaticName: "lock.svg", StaticContent: lockData}
