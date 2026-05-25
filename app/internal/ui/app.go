@@ -317,10 +317,8 @@ func (c *AppController) rebuildSidebar() {
 	)
 }
 
-// renderList will be implemented in Task 17. Stub renders an empty message for now.
 func (c *AppController) renderList() {
-	placeholder := widget.NewLabel("List view under reconstruction")
-	c.mainPane.Objects = []fyne.CanvasObject{placeholder}
+	c.mainPane.Objects = []fyne.CanvasObject{c.buildListView()}
 	c.mainPane.Refresh()
 }
 
