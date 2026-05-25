@@ -45,7 +45,13 @@ func ShowEditDrawer(c *AppController, editingName string) {
 	secretEntry.SetPlaceHolder("Secret value")
 	secretEntry.SetText(prefill.Value)
 
-	browseBtn := widget.NewButtonWithIcon("Folder…", icons.FolderOpen, func() {
+	browseFileBtn := widget.NewButtonWithIcon("File…", icons.File, func() {
+		path, err := zenity.SelectFile(zenity.Title("Select file"))
+		if err == nil {
+			valueEntry.SetText(path)
+		}
+	})
+	browseFolderBtn := widget.NewButtonWithIcon("Folder…", icons.FolderOpen, func() {
 		path, err := zenity.SelectFile(zenity.Title("Select folder"), zenity.Directory())
 		if err == nil {
 			valueEntry.SetText(path)
@@ -53,7 +59,7 @@ func ShowEditDrawer(c *AppController, editingName string) {
 	})
 
 	valueContainer := container.NewStack(valueEntry)
-	browseContainer := container.NewHBox(browseBtn)
+	browseContainer := container.NewHBox(browseFileBtn, browseFolderBtn)
 	browseContainer.Hide()
 
 	descEntry := widget.NewEntry()
