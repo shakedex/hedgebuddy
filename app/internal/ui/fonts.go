@@ -26,7 +26,7 @@ func osFontPaths() (regular, bold string) {
 			sysRoot = `C:\Windows` // safety fallback
 		}
 		fontsDir := filepath.Join(sysRoot, "Fonts")
-		return filepath.Join(fontsDir, "segoeui.ttf"), filepath.Join(fontsDir, "segoeuisb.ttf")
+		return filepath.Join(fontsDir, "segoeui.ttf"), filepath.Join(fontsDir, "segoeuib.ttf")
 	case "darwin":
 		// macOS — SF NS Display is the system font on modern macOS.
 		// The path has shifted over OS versions; we try the most-common one.

@@ -8,6 +8,7 @@ import (
 )
 
 func main() {
+	ui.InstallLogFilter()
 	a := app.New()
 	regular, bold := ui.LoadOSFonts()
 	a.Settings().SetTheme(ui.NewHedgeBuddyTheme(regular, bold))
