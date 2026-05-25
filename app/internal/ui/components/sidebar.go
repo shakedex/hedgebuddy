@@ -35,8 +35,8 @@ func (i *SidebarItem) Tapped(*fyne.PointEvent) {
 		i.onTap()
 	}
 }
-func (i *SidebarItem) MouseIn(*fyne.PointEvent)   { i.hover = true; i.Refresh() }
-func (i *SidebarItem) MouseOut()                  { i.hover = false; i.Refresh() }
+func (i *SidebarItem) MouseIn(*fyne.PointEvent)    { i.hover = true; i.Refresh() }
+func (i *SidebarItem) MouseOut()                   { i.hover = false; i.Refresh() }
 func (i *SidebarItem) MouseMoved(*fyne.PointEvent) {}
 
 func (i *SidebarItem) CreateRenderer() fyne.WidgetRenderer {

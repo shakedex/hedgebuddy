@@ -17,9 +17,10 @@ type DeleteConfirmOptions struct {
 }
 
 // ShowDeleteConfirm renders a centered confirmation modal with:
-//   Title: "Delete <Name>?"
-//   Body: <BodyText> (wraps via widget.Label)
-//   Buttons: Cancel (ghost) · Delete <Name> (Danger)
+//
+//	Title: "Delete <Name>?"
+//	Body: <BodyText> (wraps via widget.Label)
+//	Buttons: Cancel (ghost) · Delete <Name> (Danger)
 func ShowDeleteConfirm(opts DeleteConfirmOptions) {
 	body := widget.NewLabel(opts.BodyText)
 	body.Wrapping = fyne.TextWrapWord

@@ -52,8 +52,8 @@ func (c *CardRow) SetData(data CardRowData) {
 	c.Refresh()
 }
 
-func (c *CardRow) MouseIn(*fyne.PointEvent)   { c.hover = true; c.Refresh() }
-func (c *CardRow) MouseOut()                  { c.hover = false; c.Refresh() }
+func (c *CardRow) MouseIn(*fyne.PointEvent)    { c.hover = true; c.Refresh() }
+func (c *CardRow) MouseOut()                   { c.hover = false; c.Refresh() }
 func (c *CardRow) MouseMoved(*fyne.PointEvent) {}
 
 func (c *CardRow) CreateRenderer() fyne.WidgetRenderer {
