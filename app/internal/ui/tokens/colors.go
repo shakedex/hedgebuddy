@@ -38,6 +38,15 @@ var (
 // DimOverlay — black at 50% alpha for drawer/modal scrims.
 var DimOverlay = color.NRGBA{R: 0x00, G: 0x00, B: 0x00, A: 0x80}
 
+// HoverOverlay tints widgets on mouse hover (white at 8% alpha).
+var HoverOverlay = color.NRGBA{R: 0xFF, G: 0xFF, B: 0xFF, A: 0x14}
+
+// Shadow is the cast-shadow tint used by overlays (black at 53% alpha).
+var Shadow = color.NRGBA{R: 0x00, G: 0x00, B: 0x00, A: 0x88}
+
+// Selection is the text-selection highlight (Accent at 19% alpha).
+var Selection = color.NRGBA{R: 0x4F, G: 0x7F, B: 0xF8, A: 0x30}
+
 // TypeColor returns the accent stripe color for a given variable type.
 // Strings get TextMuted so the stripe is barely visible (string is the default).
 func TypeColor(varType string) color.NRGBA {

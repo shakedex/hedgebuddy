@@ -95,12 +95,6 @@ func NewSidebar(sections []SidebarSection, footer []fyne.CanvasObject) *Sidebar 
 	return s
 }
 
-// Rebuild swaps the sections (e.g. after profile or filter changes).
-func (s *Sidebar) Rebuild(sections []SidebarSection) {
-	s.sections = sections
-	s.Refresh()
-}
-
 func (s *Sidebar) CreateRenderer() fyne.WidgetRenderer {
 	bg := canvas.NewRectangle(tokens.Surface1)
 	bg.SetMinSize(fyne.NewSize(tokens.SidebarWidth, 0))

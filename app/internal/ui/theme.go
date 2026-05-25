@@ -38,7 +38,7 @@ func (t *HedgeBuddyTheme) Color(name fyne.ThemeColorName, _ fyne.ThemeVariant) c
 	case theme.ColorNameForeground:
 		return tokens.TextPrimary
 	case theme.ColorNameHover:
-		return color.NRGBA{R: 0xFF, G: 0xFF, B: 0xFF, A: 0x14}
+		return tokens.HoverOverlay
 	case theme.ColorNameInputBackground:
 		return tokens.Surface3
 	case theme.ColorNameInputBorder:
@@ -52,7 +52,7 @@ func (t *HedgeBuddyTheme) Color(name fyne.ThemeColorName, _ fyne.ThemeVariant) c
 	case theme.ColorNameSeparator:
 		return tokens.BorderSubtle
 	case theme.ColorNameShadow:
-		return color.NRGBA{R: 0x00, G: 0x00, B: 0x00, A: 0x88}
+		return tokens.Shadow
 	case theme.ColorNameHeaderBackground:
 		return tokens.Surface1
 	case theme.ColorNameMenuBackground:
@@ -60,7 +60,7 @@ func (t *HedgeBuddyTheme) Color(name fyne.ThemeColorName, _ fyne.ThemeVariant) c
 	case theme.ColorNameOverlayBackground:
 		return tokens.Surface1
 	case theme.ColorNameSelection:
-		return color.NRGBA{R: 0x4F, G: 0x7F, B: 0xF8, A: 0x30}
+		return tokens.Selection
 	case theme.ColorNameFocus:
 		return tokens.BorderFocus
 	case theme.ColorNameSuccess:

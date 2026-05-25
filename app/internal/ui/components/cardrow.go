@@ -118,11 +118,6 @@ func (c *CardRow) CreateRenderer() fyne.WidgetRenderer {
 	return widget.NewSimpleRenderer(root)
 }
 
-// Refresh resyncs the renderer to the latest data; for now, force re-create.
-func (c *CardRow) Refresh() {
-	c.BaseWidget.Refresh()
-}
-
 const secretMask = "••••••••"
 
 func (c *CardRow) displayValue() string {

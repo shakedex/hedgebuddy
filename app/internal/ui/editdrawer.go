@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"time"
+
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
@@ -61,7 +63,6 @@ func ShowEditDrawer(c *AppController, editingName string) {
 	nameField := components.NewFieldRow("Name", nameEntry, nil)
 	// valueField/descField: we use the FieldRow visual but compose manually because the value field has type-dependent content.
 	descField := components.NewFieldRow("Description", descEntry, nil)
-	_ = descField // descField object is used below via descField.Object()
 
 	applyType := func(label string) {
 		t := labelToType(label)
@@ -124,7 +125,11 @@ func ShowEditDrawer(c *AppController, editingName string) {
 		saveBtn.SetState(components.StateDone)
 		c.rebuildSidebar()
 		c.renderList()
-		c.CloseDrawer()
+		// Hold briefly so the user sees "✓ Saved" before the drawer closes.
+		go func() {
+			time.Sleep(600 * time.Millisecond)
+			fyne.Do(func() { c.CloseDrawer() })
+		}()
 	}
 
 	footer := container.NewBorder(nil, nil, cancelBtn, saveBtn.Button)

@@ -27,7 +27,7 @@ Run through this list on Windows (Segoe UI) and macOS (SF Pro) before tagging Ph
 
 - [ ] `+ New` opens drawer with "New variable" title and empty fields.
 - [ ] Click pencil icon on a row opens drawer with prefilled fields.
-- [ ] Save button cycles through "Save" → "Save…" → "✓ Saved" → "Save" then closes the drawer.
+- [ ] Save button cycles through "Save" → "Save…" → "✓ Saved" (held ~600 ms) → drawer closes.
 - [ ] Save failure (e.g., empty name) shows error dialog and button morphs to "✕ Save failed".
 - [ ] Cancel closes drawer without saving.
 - [ ] Esc closes drawer without saving.
@@ -79,7 +79,7 @@ Run through this list on Windows (Segoe UI) and macOS (SF Pro) before tagging Ph
 
 - [ ] No transient toast/banner appears anywhere.
 - [ ] Save / Import / Export feedback lives on the button itself.
-- [ ] Copy icon glyph swaps to a check briefly when clicked.
+- [ ] Clicking the copy icon copies the value to clipboard (no glyph swap; Phase 2 polish).
 - [ ] Reveal-secret icon toggles eye / eye-off.
 
 ## Theme

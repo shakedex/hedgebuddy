@@ -8,7 +8,6 @@ import (
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/widget"
 
-	"app/internal/storage"
 	"app/internal/ui/components"
 	"app/internal/ui/icons"
 )
@@ -142,6 +141,3 @@ func (c *AppController) confirmDeleteVariable(name string) {
 		Parent: c.Window,
 	})
 }
-
-// _ silences unused import; storage is referenced via c.Storage type.
-var _ = storage.Variable{}

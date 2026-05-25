@@ -14,6 +14,16 @@ import (
 	"app/internal/ui/components"
 )
 
+// ProfileModalMode selects which form variant ShowProfileFormModal renders.
+type ProfileModalMode int
+
+const (
+	ProfileModalModeNew ProfileModalMode = iota
+	ProfileModalModeEdit
+	ProfileModalModeDuplicate
+	ProfileModalModeImport
+)
+
 // ShowProfileFormModal opens the unified profile create/edit/duplicate/import modal.
 // `target` is empty for New, or the profile name for other modes.
 func ShowProfileFormModal(c *AppController, mode ProfileModalMode, target string) {

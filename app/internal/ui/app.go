@@ -223,8 +223,6 @@ func (c *AppController) OpenStorageFolder() {
 	}
 }
 
-// --- Stubs filled by later tasks ---
-
 func (c *AppController) rebuildSidebar() {
 	// Profiles section.
 	profileNames := profile.ListProfiles(c.ProfileIndex)
@@ -327,13 +325,3 @@ func (c *AppController) ShowListView() {
 	c.renderList()
 }
 
-// --- Forward stubs (real implementations land in later tasks) ---
-
-type ProfileModalMode int
-
-const (
-	ProfileModalModeNew ProfileModalMode = iota
-	ProfileModalModeEdit
-	ProfileModalModeDuplicate
-	ProfileModalModeImport
-)
