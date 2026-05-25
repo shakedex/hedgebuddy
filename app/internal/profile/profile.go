@@ -30,13 +30,13 @@ func GetBaseDir() (string, error) {
 		if appData == "" {
 			return "", fmt.Errorf("APPDATA environment variable not found")
 		}
-		return filepath.Join(appData, "HedgeBuddy"), nil
+		return filepath.Join(appData, "hedgebuddy"), nil
 	case "darwin":
 		homeDir, err := os.UserHomeDir()
 		if err != nil {
 			return "", err
 		}
-		return filepath.Join(homeDir, "Library", "Application Support", "HedgeBuddy"), nil
+		return filepath.Join(homeDir, "Library", "Application Support", "hedgebuddy"), nil
 	default:
 		return "", fmt.Errorf("unsupported platform: %s", runtime.GOOS)
 	}
@@ -113,6 +113,57 @@ func SaveIndex(idx *ProfileIndex) error {
 	return nil
 }
 
+// migrateCapitalizedDir performs a one-shot rename of an existing capitalized
+// "HedgeBuddy" directory to the new lowercase "hedgebuddy" name. Safe to call
+// repeatedly — it no-ops when there's nothing to migrate.
+//
+// This addresses the historical Go (capital H) / Python (lowercase) mismatch
+// that breaks on case-sensitive filesystems.
+func migrateCapitalizedDir() error {
+	var oldDir string
+	switch runtime.GOOS {
+	case "windows":
+		oldDir = filepath.Join(os.Getenv("APPDATA"), "HedgeBuddy")
+	case "darwin":
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return err
+		}
+		oldDir = filepath.Join(homeDir, "Library", "Application Support", "HedgeBuddy")
+	default:
+		return nil
+	}
+
+	newDir, err := GetBaseDir()
+	if err != nil {
+		return err
+	}
+
+	// Nothing to do if paths are identical (case-insensitive FS or already lowercase).
+	if oldDir == newDir {
+		return nil
+	}
+
+	// Skip if no old dir.
+	oldInfo, err := os.Stat(oldDir)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if !oldInfo.IsDir() {
+		return nil
+	}
+
+	// Skip if new dir already exists (don't clobber it).
+	if _, err := os.Stat(newDir); err == nil {
+		return nil
+	}
+
+	return os.Rename(oldDir, newDir)
+}
+
 // Migrate performs a one-time migration from the flat vars.json layout to
 // the profiles-based layout. If profiles/ already exists, it's a no-op.
 //
@@ -121,6 +172,12 @@ func SaveIndex(idx *ProfileIndex) error {
 //  2. Move existing vars.json into profiles/default/vars.json
 //  3. Create profiles.json with active = "default"
 func Migrate() error {
+	// One-shot rename from capitalized HedgeBuddy dir to lowercase hedgebuddy.
+	// No-op when there's nothing to migrate.
+	if err := migrateCapitalizedDir(); err != nil {
+		fmt.Println("Warning: migrating HedgeBuddy → hedgebuddy:", err.Error())
+	}
+
 	base, err := GetBaseDir()
 	if err != nil {
 		return err
