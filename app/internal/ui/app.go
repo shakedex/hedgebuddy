@@ -338,7 +338,5 @@ const (
 	ProfileModalModeImport
 )
 
-func ShowProfileFormModal(*AppController, ProfileModalMode, string) {}
-func confirmDeleteProfile(*AppController, string)                   {}
-func ShowSettingsModal(*AppController)                              {}
-func ShowAboutModal(*AppController)                                 {}
+func ShowSettingsModal(*AppController) {}
+func ShowAboutModal(*AppController)    {}
