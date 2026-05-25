@@ -123,22 +123,3 @@ func TypeColor(varType string) color.NRGBA {
 	return tokens.TypeColor(varType)
 }
 
-// --- DEPRECATED legacy color vars (referenced by views that haven't migrated yet) ---
-// Remove after all views are rebuilt (Task 26).
-var (
-	ColorBgPrimary   = tokens.SurfaceBase
-	ColorBgSecondary = tokens.Surface1
-	ColorBgCard      = tokens.Surface2
-	ColorBgButton    = tokens.Surface3
-	ColorBgInput     = tokens.Surface3
-	ColorBorder      = tokens.BorderSubtle
-	ColorHover       = color.NRGBA{R: 0xFF, G: 0xFF, B: 0xFF, A: 0x14}
-	ColorSeparator   = tokens.BorderSubtle
-	ColorTextPrimary = tokens.TextPrimary
-	ColorTextSecond  = tokens.TextSecondary
-	ColorTextMuted   = tokens.TextMuted
-	ColorAccentBlue  = tokens.Accent
-	ColorAccentRed   = tokens.Danger
-	ColorSuccess     = tokens.Success
-	ColorWarning     = tokens.Warning
-)
