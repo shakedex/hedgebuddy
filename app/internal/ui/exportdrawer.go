@@ -67,7 +67,7 @@ func ShowExportDrawer(c *AppController) {
 
 	var secretWarn fyne.CanvasObject = widget.NewLabel("")
 	if hasSecrets {
-		w := canvas.NewText("⚠ Some variables are secrets — .env export will include their plain text values.", tokens.Warning)
+		w := canvas.NewText("⚠ Some variables are secrets — both .env and JSON exports include their plain text values.", tokens.Warning)
 		w.TextSize = 12
 		secretWarn = w
 	}
