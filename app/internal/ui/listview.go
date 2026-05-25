@@ -2,6 +2,7 @@ package ui
 
 import (
 	"strings"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
@@ -81,6 +82,7 @@ func (c *AppController) buildListView() fyne.CanvasObject {
 						c.Window.Clipboard().SetContent(v.Value)
 						if card != nil {
 							card.ConfirmCopy()
+							card.Flash()
 						}
 					},
 					OnEdit:      func() { ShowEditDrawer(c, n) },
@@ -98,13 +100,19 @@ func (c *AppController) buildListView() fyne.CanvasObject {
 		}
 		listContainer.Refresh()
 
-		// Auto-scroll to first flashed row, if any.
+		// Auto-scroll to first flashed row, if any. Deferred to fyne.Do so the
+		// scroll widget is mounted to the canvas before we move its offset —
+		// otherwise Fyne resets to (0,0) on mount.
 		if firstFlashIndex >= 0 {
-			// CardMinHeight from tokens, plus a small gap for inter-card padding.
 			rowHeight := tokens.CardMinHeight + tokens.SpaceSM
 			target := float32(firstFlashIndex) * rowHeight
-			scroll.Offset = fyne.NewPos(0, target)
-			scroll.Refresh()
+			go func() {
+				time.Sleep(50 * time.Millisecond)
+				fyne.Do(func() {
+					scroll.Offset = fyne.NewPos(0, target)
+					scroll.Refresh()
+				})
+			}()
 		}
 	}
 
