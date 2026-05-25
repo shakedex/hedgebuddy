@@ -97,6 +97,22 @@ Run through this list on Windows (Segoe UI) and macOS (SF Pro) before tagging Ph
 
 ---
 
+## Phase 2 additions
+
+Behaviors landed in Phase 2 — verify manually:
+
+- [ ] **Inline validation (edit drawer):** typing an invalid name (e.g. `"with space"`) surfaces a red caption under the Name field with no modal popup. Same for invalid URL / non-existent path.
+- [ ] **Path Browse buttons:** Path-type field shows BOTH `File…` and `Folder…` buttons.
+- [ ] **Export warning copy:** the yellow strip mentions both `.env` and JSON.
+- [ ] **Startup dialog ordering:** if Python check needs a dialog, it appears alone. Update check dialog only fires after the Python one is dismissed.
+- [ ] **External edit to vars.json:** open the file in a text editor, add a variable manually, save → the list refreshes automatically within ~1 s.
+- [ ] **Storage dir on Windows:** new path is `%APPDATA%\hedgebuddy\` (lowercase). Existing `HedgeBuddy\` (capital) gets renamed on first launch.
+- [ ] **Python lib on Linux:** importing the lib and calling `var()` raises `StorageNotFoundError` instead of silently using `~/.local/share/...`.
+- [ ] **Copy icon feedback:** click the copy icon → it briefly becomes a check + tooltip "Copied!" for 1 s → reverts.
+- [ ] **Auto-scroll on flash:** duplicate a variable from the top of a long list → the list scrolls to bring the flashing copy into view.
+
+---
+
 ## Plan-vs-implementation deltas
 
 For the record (captured during execution, harmless):
@@ -109,4 +125,11 @@ For the record (captured during execution, harmless):
 3. **Drawer slide animation**: explicitly out-of-scope (Phase 1 ships instant in/out). Future task.
 4. **macOS bold font**: plan declared the same SFNS.ttf path for both regular and bold weights. The font loader falls back to Fyne's default for bold rendering on macOS; cosmetic and acceptable. Future task can refine the bold-weight path.
 5. **JSON-export secret warning**: Phase 1 ships the `.env` warning only. Phase 2 covers JSON export.
-6. **Inline validation**: Phase 1 still uses modal `dialog.ShowError` for save failures; Phase 2 wires up `widget.Form` + `Entry.Validator`.
+6. **Inline validation**: Phase 1 still uses modal `dialog.ShowError` for save failures; Phase 2 wires up `widget.Form` + `Entry.Validator`. *(Landed in Phase 2.)*
+
+## Known Phase 2 carry-overs
+
+- **Profile-rename watcher**: when an active profile is renamed via the inline editor, the fsnotify watcher continues to point at the old directory name. Reload happens on next manual action / profile switch. Low priority.
+- **Auto-scroll heuristic**: scroll offset is calculated from `CardMinHeight + SpaceSM`. If a description wraps to two lines (currently truncated, so unlikely), the offset can be slightly off.
+- **Settings as drawer**: deferred to Phase 3 per user choice.
+- **macOS bold font path**: still uses regular SFNS.ttf for both regular and bold. Future polish.
