@@ -98,7 +98,7 @@ impl Store {
             .collect();
         files.sort();
 
-        // Group by run_id, preserving first-seen order so ties sort stably.
+        // Group by run_id. Ties on started_at are broken by run_id order (BTreeMap) so the result is deterministic.
         let mut runs: BTreeMap<String, Run> = BTreeMap::new();
         for file in files {
             let text = fs::read_to_string(&file).map_err(|e| CoreError::io(&file, e))?;
@@ -115,22 +115,19 @@ impl Store {
                         script,
                         profile,
                     } => {
-                        runs.insert(
-                            run_id.clone(),
-                            Run {
-                                run_id,
-                                started_at: ts,
-                                app,
-                                event,
-                                script,
-                                profile,
-                                logs: Vec::new(),
-                                ended_at: None,
-                                status: None,
-                                exit_code: None,
-                                traceback: None,
-                            },
-                        );
+                        runs.entry(run_id.clone()).or_insert_with(|| Run {
+                            run_id,
+                            started_at: ts,
+                            app,
+                            event,
+                            script,
+                            profile,
+                            logs: Vec::new(),
+                            ended_at: None,
+                            status: None,
+                            exit_code: None,
+                            traceback: None,
+                        });
                     }
                     RunRecord::Log {
                         ts,
@@ -367,5 +364,34 @@ mod tests {
         assert!(store.runs_dir().join("2026-08-16.jsonl").exists());
         assert!(store.runs_dir().join("notes.txt").exists());
         assert!(store.runs_dir().join("bad-name.jsonl").exists());
+    }
+
+    #[test]
+    fn duplicate_start_keeps_the_first_and_its_logs() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(dir.path());
+        fs::create_dir_all(store.runs_dir()).unwrap();
+        fs::write(
+            store.runs_dir().join("2026-09-15.jsonl"),
+            concat!(
+                r#"{"ts":"2026-09-15T10:00:00Z","run_id":"d","phase":"start","script":"x.py","profile":"p"}"#,
+                "\n",
+                r#"{"ts":"2026-09-15T10:00:01Z","run_id":"d","phase":"log","message":"first"}"#,
+                "\n",
+                r#"{"ts":"2026-09-15T10:00:02Z","run_id":"d","phase":"start","script":"y.py","profile":"p"}"#,
+                "\n",
+                r#"{"ts":"2026-09-15T10:00:03Z","run_id":"d","phase":"end","status":"ok","exit_code":0}"#,
+                "\n",
+            ),
+        )
+        .unwrap();
+
+        let runs = store.list_runs(&RunFilter::default()).unwrap();
+        assert_eq!(runs.len(), 1);
+        let r = &runs[0];
+        assert_eq!(r.run_id, "d");
+        assert_eq!(r.script, "x.py");
+        assert_eq!(r.logs.len(), 1);
+        assert_eq!(r.status, Some(RunStatus::Ok));
     }
 }
