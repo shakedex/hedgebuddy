@@ -1,0 +1,19 @@
+[package]
+name = "hedgebuddy-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "HedgeBuddy command line and MCP server"
+
+[[bin]]
+name = "hedgebuddy"
+path = "src/main.rs"
+
+[dependencies]
+clap = { workspace = true }
+hedgebuddy-core = { workspace = true }
+
+[dev-dependencies]
+assert_cmd = "2"
+predicates = "3"
