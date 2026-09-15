@@ -42,7 +42,10 @@ pub fn write_atomic(path: &Path, bytes: &[u8], private: bool) -> Result<()> {
             return Err(e);
         }
     }
-    fs::rename(tmp, path).map_err(|e| CoreError::io(path, e))?;
+    fs::rename(tmp, path).map_err(|e| {
+        let _ = fs::remove_file(tmp);
+        CoreError::io(path, e)
+    })?;
     Ok(())
 }
 
@@ -81,21 +84,28 @@ mod tests {
     #[test]
     fn failed_write_leaves_no_tmp_file() {
         let dir = tempfile::tempdir().unwrap();
-        let parent = dir.path().join("parent_file");
+        let target = dir.path().join("hedgebuddy.json");
 
-        // Create a file where the parent directory should be,
-        // so create_dir_all fails before the temp file is created.
-        fs::write(&parent, b"obstacle").unwrap();
+        // Create a directory at the target path so that rename fails
+        // (renaming a file over a directory fails on Windows and macOS)
+        fs::create_dir_all(&target).unwrap();
 
-        let path = parent.join("testfile");
-
-        // Attempt to write_atomic: create_dir_all should fail
-        let result = write_atomic(&path, b"test", false);
+        // Attempt to write_atomic: the temp file will be created and written,
+        // but rename will fail because the target is a directory
+        let result = write_atomic(&target, b"{}", false);
         assert!(result.is_err());
 
-        // Verify no .tmp file exists (if one were created before the error,
-        // it should have been cleaned up, but in this case create_dir_all
-        // fails first so no temp file is ever created)
-        assert!(!path.with_extension("tmp").exists());
+        // The result should be an Io error
+        assert!(matches!(result.unwrap_err(), CoreError::Io { .. }));
+
+        // Verify the temp file was cleaned up (no .tmp file exists)
+        let tmp_path = target.with_extension("json.tmp");
+        assert!(
+            !tmp_path.exists(),
+            "temp file should be removed after failed rename"
+        );
+
+        // Verify the target directory still exists
+        assert!(target.exists(), "target should still exist");
     }
 }
