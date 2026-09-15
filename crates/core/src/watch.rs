@@ -5,22 +5,29 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc::{channel, Receiver};
 
 use notify::{EventKind, RecommendedWatcher, RecursiveMode, Watcher};
+use serde::{Deserialize, Serialize};
 
 use crate::error::{CoreError, Result};
 
 /// The kind of filesystem change a watcher event represents.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ChangeKind {
+    /// A file or directory was created.
     Created,
+    /// A file or directory was modified.
     Modified,
+    /// A file or directory was removed.
     Removed,
+    /// Some other kind of change (for example a rename).
     Other,
 }
 
-/// A single filesystem change reported by [`watch`].
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// A single filesystem change reported by [`watch()`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Change {
+    /// The path that changed.
     pub path: PathBuf,
+    /// The kind of change.
     pub kind: ChangeKind,
 }
 

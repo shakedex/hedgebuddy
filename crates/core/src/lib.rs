@@ -6,11 +6,11 @@
 //!
 //! Entry point: [`Store`], opened on a data directory ([`Store::at_default`]
 //! for the platform location). Profiles, variables, secrets, scripts, and run
-//! records are all methods on `Store`; [`watch`] reports external changes.
+//! records are all methods on `Store`; [`watch()`] reports external changes.
 //! Every file `Store` writes conforms to the JSON Schemas under `schema/`.
 
 pub mod error;
-pub mod fs_util;
+pub(crate) mod fs_util;
 pub mod manifest;
 pub mod paths;
 pub mod profile;
@@ -28,9 +28,9 @@ pub use manifest::{
 };
 pub use paths::{data_dir, PathError, DATA_DIR_ENV};
 pub use profile::Profile;
-pub use runs::{Run, RunFilter, RunRecord, RunStatus, RUN_RETENTION_DAYS};
+pub use runs::{LogLine, Run, RunFilter, RunRecord, RunStatus, RUN_RETENTION_DAYS};
 pub use scripts::{validate_script_name, ScriptCheck, ScriptInfo};
 pub use secrets::{ResolvedVariable, VariableInput};
 pub use store::{Index, Store};
-pub use variable::{VarType, VarValue, Variable};
+pub use variable::{validate_slug, validate_var_name, VarType, VarValue, Variable};
 pub use watch::{watch, Change, ChangeKind, WatchHandle};

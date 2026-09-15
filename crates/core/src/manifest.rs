@@ -40,15 +40,23 @@ pub struct Manifest {
 }
 
 /// Why a profile does not satisfy a manifest.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
 pub enum RequirementIssue {
+    /// The profile has no variable with this name.
     Missing {
+        /// The missing variable's name.
         name: String,
+        /// The type the manifest requires.
         ty: VarType,
     },
+    /// The profile has this variable, but with the wrong type.
     TypeMismatch {
+        /// The variable's name.
         name: String,
+        /// The type the manifest requires.
         expected: VarType,
+        /// The type the profile actually declares.
         actual: VarType,
     },
 }

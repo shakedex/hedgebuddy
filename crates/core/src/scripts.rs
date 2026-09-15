@@ -3,25 +3,32 @@
 use std::fs;
 use std::path::PathBuf;
 
+use serde::{Deserialize, Serialize};
+
 use crate::error::{CoreError, Result};
 use crate::fs_util;
 use crate::manifest::{check_requirements, parse_manifest, Manifest, RequirementIssue};
 use crate::store::Store;
 
 /// One entry of a profile's `scripts/` folder with its parsed manifest, if any.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ScriptInfo {
+    /// The script's file name.
     pub name: String,
+    /// The script's parsed manifest, or `None` when it has no manifest block.
     pub manifest: Option<Manifest>,
     /// Set when the file has a manifest block that does not parse.
     pub manifest_error: Option<String>,
 }
 
 /// Result of comparing a script's manifest against its profile.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ScriptCheck {
+    /// The script's file name.
     pub name: String,
+    /// The script's parsed manifest, or `None` when it has no manifest block.
     pub manifest: Option<Manifest>,
+    /// Every requirement the profile fails to satisfy.
     pub issues: Vec<RequirementIssue>,
 }
 

@@ -129,7 +129,11 @@ pub fn validate_slug(name: &str) -> Result<()> {
 }
 
 fn err(name: &str, msg: impl AsRef<str>) -> CoreError {
-    CoreError::Validation(format!("variable '{name}': {}", msg.as_ref()))
+    if name.is_empty() {
+        CoreError::Validation(msg.as_ref().to_owned())
+    } else {
+        CoreError::Validation(format!("variable '{name}': {}", msg.as_ref()))
+    }
 }
 
 fn string_list(name: &str, v: &Value, non_empty: bool) -> Result<Vec<String>> {
@@ -158,7 +162,7 @@ impl Variable {
     /// The typed value, or `None` for a secret (whose value lives elsewhere)
     /// or a variable with no value. Validates first.
     pub fn typed(&self) -> Result<Option<VarValue>> {
-        self.typed_inner("<value>")
+        self.typed_inner("")
     }
 
     fn typed_inner(&self, name: &str) -> Result<Option<VarValue>> {

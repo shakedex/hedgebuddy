@@ -4,6 +4,7 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::error::{CoreError, Result};
@@ -14,19 +15,26 @@ use crate::variable::{validate_var_name, VarType, Variable};
 /// What a caller supplies to create or replace a variable.
 #[derive(Debug, Clone, PartialEq)]
 pub struct VariableInput {
+    /// The variable's declared type.
     pub ty: VarType,
     /// For `Secret`, the secret string as a JSON string; for all other types
     /// the typed JSON value.
     pub value: Option<Value>,
+    /// Free-text description shown to whoever edits the profile.
     pub description: String,
 }
 
 /// A variable with its value resolved from whichever file holds it.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ResolvedVariable {
+    /// The variable's name.
     pub name: String,
+    /// The variable's declared type.
     pub ty: VarType,
+    /// The variable's resolved value: from `profile.json` for a plain
+    /// variable, or from `secrets.json` for a secret.
     pub value: Option<Value>,
+    /// Free-text description shown to whoever edits the profile.
     pub description: String,
 }
 

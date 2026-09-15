@@ -57,28 +57,52 @@ pub enum RunRecord {
     },
 }
 
+/// One `log` record, reassociated with its run.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct LogLine {
+    /// When the log line was written.
+    pub ts: String,
+    /// The log message.
+    pub message: String,
+}
+
 /// A start record with its logs and (if any) its end record.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Run {
+    /// The run's unique ID, from the `start` record.
     pub run_id: String,
+    /// Timestamp of the `start` record.
     pub started_at: String,
+    /// The app that triggered the run, if any.
     pub app: Option<String>,
+    /// The event that triggered the run, if any.
     pub event: Option<String>,
+    /// Name of the script that ran.
     pub script: String,
+    /// Name of the profile the run used.
     pub profile: String,
-    pub logs: Vec<(String, String)>,
+    /// Every `log` record for this run, in file order.
+    pub logs: Vec<LogLine>,
+    /// Timestamp of the `end` record, if the run has ended.
     pub ended_at: Option<String>,
+    /// The run's outcome, if it has ended.
     pub status: Option<RunStatus>,
+    /// The script's exit code, if the run has ended.
     pub exit_code: Option<i32>,
+    /// A traceback, if the run ended with one.
     pub traceback: Option<String>,
 }
 
 /// Filter for listing runs.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RunFilter {
+    /// Only runs against this profile.
     pub profile: Option<String>,
+    /// Only runs of this script.
     pub script: Option<String>,
+    /// Only runs triggered by this app.
     pub app: Option<String>,
+    /// At most this many runs (after sorting and filtering).
     pub limit: Option<usize>,
 }
 
@@ -135,7 +159,7 @@ impl Store {
                         message,
                     } => {
                         if let Some(run) = runs.get_mut(&run_id) {
-                            run.logs.push((ts, message));
+                            run.logs.push(LogLine { ts, message });
                         }
                     }
                     RunRecord::End {
@@ -254,10 +278,10 @@ mod tests {
         assert_eq!(r.app.as_deref(), Some("offshoot"));
         assert_eq!(
             r.logs,
-            vec![(
-                "2026-09-15T18:23:48Z".to_string(),
-                "posted to slack".to_string()
-            )]
+            vec![LogLine {
+                ts: "2026-09-15T18:23:48Z".to_string(),
+                message: "posted to slack".to_string()
+            }]
         );
         assert_eq!(r.status, Some(RunStatus::Ok));
         assert_eq!(r.exit_code, Some(0));
