@@ -35,18 +35,19 @@ def read_version() -> str:
 
 
 def find(path: Path, pattern: str) -> str:
-    m = re.search(pattern, path.read_text(encoding="utf-8"), flags=re.MULTILINE)
+    m = re.search(pattern, path.open(encoding="utf-8", newline="").read(), flags=re.MULTILINE)
     if not m:
         sys.exit(f"pattern not found in {path.relative_to(ROOT)}")
     return m.group(2)
 
 
 def replace(path: Path, pattern: str, version: str) -> None:
-    text = path.read_text(encoding="utf-8")
+    text = path.open(encoding="utf-8", newline="").read()
     new, n = re.subn(pattern, lambda m: f"{m.group(1)}{version}{m.group(3)}", text, count=1, flags=re.MULTILINE)
     if n != 1:
         sys.exit(f"pattern not found in {path.relative_to(ROOT)}")
-    path.write_text(new, encoding="utf-8")
+    with path.open("w", encoding="utf-8", newline="") as f:
+        f.write(new)
 
 
 def check() -> int:
@@ -65,6 +66,10 @@ def check() -> int:
 def set_version(version: str) -> None:
     if not SEMVER.match(version):
         sys.exit(f"'{version}' is not a ZeroVer version (0.MINOR.PATCH)")
+    # Validate all targets exist before writing anything
+    for rel, pattern, _ in TARGETS:
+        find(ROOT / rel, pattern)
+    # Write VERSION and all targets
     VERSION_FILE.write_text(version + "\n", encoding="utf-8")
     for rel, pattern, _ in TARGETS:
         replace(ROOT / rel, pattern, version)
