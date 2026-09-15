@@ -14,7 +14,10 @@ pub mod store;
 pub mod variable;
 
 pub use error::{CoreError, Result};
-pub use manifest::{check_requirements, parse_manifest, Manifest, Requirement, RequirementIssue};
+pub use manifest::{
+    check_requirements, extract_manifest_text, parse_manifest, Manifest, Requirement,
+    RequirementIssue,
+};
 pub use paths::{data_dir, PathError, DATA_DIR_ENV};
 pub use profile::Profile;
 pub use secrets::{ResolvedVariable, VariableInput};

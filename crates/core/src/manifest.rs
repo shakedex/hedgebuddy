@@ -9,6 +9,7 @@ use crate::error::{CoreError, Result};
 use crate::profile::Profile;
 use crate::variable::{validate_var_name, VarType};
 
+/// One entry of a manifest's `requires` map.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Requirement {
     #[serde(rename = "type")]
@@ -19,6 +20,7 @@ pub struct Requirement {
     pub default: Option<Value>,
 }
 
+/// The parsed manifest block from a script's module docstring (spec section 6).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Manifest {
     pub hedgebuddy: u32,
@@ -44,8 +46,9 @@ pub enum RequirementIssue {
     },
 }
 
-/// The text before the `---` line of the first `"""` docstring, when that
-/// text begins with `{`. Trailing whitespace on the `---` line is ignored.
+/// The text before the `---` line of the first `"""` or `'''` docstring, when that
+/// text begins with `{`. Leading blank lines and comment lines (`#`) are skipped.
+/// Trailing whitespace on the `---` line is ignored.
 pub fn extract_manifest_text(source: &str) -> Option<String> {
     // The module docstring is the first statement: skip blank lines and
     // comments, then require the file to open with a triple quote.
@@ -239,6 +242,26 @@ mod tests {
                 expected: VarType::String,
                 actual: VarType::Int
             }]
+        );
+    }
+
+    #[test]
+    fn requirement_issues_are_sorted_by_name() {
+        let src = "\"\"\"\n{\"hedgebuddy\": 1, \"requires\": {\"ZED\": {\"type\": \"int\"}, \"ALPHA\": {\"type\": \"string\"}}}\n---\n\"\"\"\n";
+        let m = parse_manifest(src).unwrap().unwrap();
+        let p = Profile::new("p", "");
+        assert_eq!(
+            check_requirements(&m, &p),
+            vec![
+                RequirementIssue::Missing {
+                    name: "ALPHA".into(),
+                    ty: VarType::String
+                },
+                RequirementIssue::Missing {
+                    name: "ZED".into(),
+                    ty: VarType::Int
+                }
+            ]
         );
     }
 }
