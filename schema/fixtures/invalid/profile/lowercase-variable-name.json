@@ -1,0 +1,1 @@
+{ "version": 1, "name": "x", "variables": { "project": { "type": "string", "value": "a" } } }

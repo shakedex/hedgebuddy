@@ -1,0 +1,1 @@
+{ "hedgebuddy": 1, "app": "offshoot", "event": "FileCopyCompleted", "requires": { "X": { "type": "date" } } }

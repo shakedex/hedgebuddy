@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/shakedex/hedgebuddy/schema/profile.schema.json",
+  "title": "HedgeBuddy profile",
+  "type": "object",
+  "required": ["version", "name", "variables"],
+  "additionalProperties": false,
+  "properties": {
+    "version": { "const": 1 },
+    "name": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,63}$" },
+    "description": { "type": "string" },
+    "variables": {
+      "type": "object",
+      "propertyNames": { "pattern": "^[A-Z][A-Z0-9_]*$" },
+      "additionalProperties": { "$ref": "#/$defs/variable" }
+    }
+  },
+  "$defs": {
+    "variableType": {
+      "enum": ["string", "secret", "int", "float", "bool", "path", "url", "string[]", "path[]"]
+    },
+    "variable": {
+      "type": "object",
+      "required": ["type"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "$ref": "#/$defs/variableType" },
+        "value": {},
+        "description": { "type": "string" }
+      },
+      "allOf": [
+        { "if": { "properties": { "type": { "const": "string" } } },
+          "then": { "required": ["value"], "properties": { "value": { "type": "string" } } } },
+        { "if": { "properties": { "type": { "const": "secret" } } },
+          "then": { "not": { "required": ["value"] } } },
+        { "if": { "properties": { "type": { "const": "int" } } },
+          "then": { "required": ["value"], "properties": { "value": { "type": "integer" } } } },
+        { "if": { "properties": { "type": { "const": "float" } } },
+          "then": { "required": ["value"], "properties": { "value": { "type": "number" } } } },
+        { "if": { "properties": { "type": { "const": "bool" } } },
+          "then": { "required": ["value"], "properties": { "value": { "type": "boolean" } } } },
+        { "if": { "properties": { "type": { "const": "path" } } },
+          "then": { "required": ["value"], "properties": { "value": { "type": "string", "minLength": 1 } } } },
+        { "if": { "properties": { "type": { "const": "url" } } },
+          "then": { "required": ["value"], "properties": { "value": { "type": "string", "pattern": "^https?://" } } } },
+        { "if": { "properties": { "type": { "const": "string[]" } } },
+          "then": { "required": ["value"], "properties": { "value": { "type": "array", "items": { "type": "string" } } } } },
+        { "if": { "properties": { "type": { "const": "path[]" } } },
+          "then": { "required": ["value"], "properties": { "value": { "type": "array", "items": { "type": "string", "minLength": 1 } } } } }
+      ]
+    }
+  }
+}

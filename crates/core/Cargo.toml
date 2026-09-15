@@ -12,3 +12,5 @@ thiserror = { workspace = true }
 
 [dev-dependencies]
 tempfile = "3"
+jsonschema = "0.56"
+serde_json = { workspace = true }

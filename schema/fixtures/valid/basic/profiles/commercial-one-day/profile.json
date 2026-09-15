@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "name": "commercial-one-day",
+  "description": "Client X, single-day commercial",
+  "variables": {
+    "PROJECT_NAME": { "type": "string", "value": "ClientX Spot", "description": "Shown in Slack messages" },
+    "DEST_ROOTS": { "type": "path[]", "value": ["D:/Offload", "F:/Offload"], "description": "Every external drive to offload to" },
+    "NOTIFY": { "type": "bool", "value": true, "description": "" },
+    "RETRIES": { "type": "int", "value": 3, "description": "" },
+    "THRESHOLD": { "type": "float", "value": 0.85, "description": "" },
+    "REPORT_DIR": { "type": "path", "value": "D:/Reports", "description": "" },
+    "API_URL": { "type": "url", "value": "https://example.com/api", "description": "" },
+    "CAMERAS": { "type": "string[]", "value": ["A", "B"], "description": "" },
+    "SLACK_WEBHOOK": { "type": "secret", "description": "Incoming webhook URL" }
+  }
+}

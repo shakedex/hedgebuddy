@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/shakedex/hedgebuddy/schema/script-manifest.schema.json",
+  "title": "HedgeBuddy script manifest",
+  "type": "object",
+  "required": ["hedgebuddy"],
+  "additionalProperties": false,
+  "properties": {
+    "hedgebuddy": { "const": 1 },
+    "app": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+    "event": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9]*$" },
+    "requires": {
+      "type": "object",
+      "propertyNames": { "pattern": "^[A-Z][A-Z0-9_]*$" },
+      "additionalProperties": {
+        "type": "object",
+        "required": ["type"],
+        "additionalProperties": false,
+        "properties": {
+          "type": { "enum": ["string", "secret", "int", "float", "bool", "path", "url", "string[]", "path[]"] },
+          "description": { "type": "string" },
+          "default": {}
+        }
+      }
+    }
+  },
+  "dependentRequired": { "event": ["app"] }
+}

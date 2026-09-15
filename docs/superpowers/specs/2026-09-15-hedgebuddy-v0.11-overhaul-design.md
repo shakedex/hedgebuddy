@@ -117,6 +117,8 @@ HedgeBuddy/
 }
 ```
 
+Profile `name` is a slug matching `^[a-z0-9][a-z0-9-]{0,63}$` and is also the directory name under `profiles/`. Human-readable wording goes in `description`.
+
 Secret-typed entries carry no `value` in `profile.json`; the value lives under the same name in `secrets.json` as `{"SLACK_WEBHOOK": "https://..."}`.
 
 Variable names: `^[A-Z][A-Z0-9_]*$`. Types and their Python representation:

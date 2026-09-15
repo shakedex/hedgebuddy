@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/shakedex/hedgebuddy/schema/run-record.schema.json",
+  "title": "HedgeBuddy run record (one JSONL line)",
+  "type": "object",
+  "required": ["ts", "run_id", "phase"],
+  "properties": {
+    "ts": { "type": "string", "format": "date-time" },
+    "run_id": { "type": "string", "minLength": 1 },
+    "phase": { "enum": ["start", "log", "end"] }
+  },
+  "allOf": [
+    { "if": { "properties": { "phase": { "const": "start" } } },
+      "then": {
+        "required": ["script", "profile"],
+        "properties": {
+          "app": { "type": "string" },
+          "event": { "type": "string" },
+          "script": { "type": "string", "minLength": 1 },
+          "profile": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,63}$" }
+        }
+      } },
+    { "if": { "properties": { "phase": { "const": "log" } } },
+      "then": { "required": ["message"], "properties": { "message": { "type": "string" } } } },
+    { "if": { "properties": { "phase": { "const": "end" } } },
+      "then": {
+        "required": ["status", "exit_code"],
+        "properties": {
+          "status": { "enum": ["ok", "failed", "error"] },
+          "exit_code": { "type": "integer" },
+          "traceback": { "type": "string" }
+        }
+      } }
+  ]
+}

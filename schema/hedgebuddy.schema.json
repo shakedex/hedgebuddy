@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/shakedex/hedgebuddy/schema/hedgebuddy.schema.json",
+  "title": "HedgeBuddy data directory index",
+  "type": "object",
+  "required": ["version", "active_profile"],
+  "additionalProperties": false,
+  "properties": {
+    "version": { "const": 1 },
+    "active_profile": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,63}$" }
+  }
+}
