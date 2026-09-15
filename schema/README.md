@@ -12,13 +12,15 @@ The JSON Schemas here (draft 2020-12) are the contract between the Rust core and
 
 ## Fixture convention
 
-`fixtures/valid/<case>/` is a complete data directory. Every file in it must validate:
+`fixtures/valid/<case>/` is a data directory. `hedgebuddy.json` is always present; `profiles/` and `runs/` may be absent (the `empty` case has neither, because a fresh install has no profiles yet and `active_profile` is `null`). Every file that is present must validate:
 
 - `hedgebuddy.json` against `hedgebuddy.schema.json`
 - `profiles/*/profile.json` against `profile.schema.json`
 - `profiles/*/secrets.json` against `secrets.schema.json`, when the file exists (a profile with no secret-typed variables has none)
 - every line of `runs/*.jsonl` against `run-record.schema.json`
 - the manifest extracted from every `profiles/*/scripts/*.py` against `script-manifest.schema.json`
+
+Across all valid cases together there must be at least one profile, one script, and one run-record line, so that every schema is exercised by a valid instance and not only by invalid ones.
 
 `fixtures/invalid/<schema-stem>/*.json` are single documents that must **fail** validation against `<schema-stem>.schema.json`.
 

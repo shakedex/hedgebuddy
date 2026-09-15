@@ -55,7 +55,8 @@ def test_valid_fixture_data_dir_validates(case: Path):
 
     assert_valid(hedgebuddy, load_json(case / "hedgebuddy.json"), f"{case.name}/hedgebuddy.json")
 
-    for prof in sorted(p for p in (case / "profiles").iterdir() if p.is_dir()):
+    profiles_dir = case / "profiles"
+    for prof in sorted(p for p in profiles_dir.iterdir() if p.is_dir()) if profiles_dir.exists() else []:
         assert_valid(profile, load_json(prof / "profile.json"), f"{case.name}/{prof.name}/profile.json")
         if (prof / "secrets.json").exists():
             assert_valid(secrets, load_json(prof / "secrets.json"), f"{case.name}/{prof.name}/secrets.json")
@@ -70,6 +71,21 @@ def test_valid_fixture_data_dir_validates(case: Path):
                     assert_valid(run_record, json.loads(line), f"{log}:{i}")
 
 
+def test_valid_fixtures_exercise_every_schema():
+    profiles = scripts = run_lines = 0
+    for case in valid_cases():
+        profiles_dir = case / "profiles"
+        if profiles_dir.exists():
+            for prof in (p for p in profiles_dir.iterdir() if p.is_dir()):
+                profiles += 1
+                scripts += len(list((prof / "scripts").glob("*.py")))
+        runs = case / "runs"
+        if runs.exists():
+            for log in runs.glob("*.jsonl"):
+                run_lines += sum(1 for l in log.read_text(encoding="utf-8").splitlines() if l.strip())
+    assert profiles >= 1 and scripts >= 1 and run_lines >= 1
+
+
 def invalid_files():
     root = SCHEMA_ROOT / "fixtures" / "invalid"
     return sorted((group.name, f) for group in root.iterdir() if group.is_dir() for f in group.glob("*.json"))
@@ -82,4 +98,4 @@ def test_invalid_fixture_fails_its_schema(stem: str, file: Path):
 
 
 def test_there_are_invalid_fixtures():
-    assert len(invalid_files()) >= 6
+    assert len(invalid_files()) >= 7
