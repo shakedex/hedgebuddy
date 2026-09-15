@@ -14,6 +14,7 @@ pub mod scripts;
 pub mod secrets;
 pub mod store;
 pub mod variable;
+pub mod watch;
 
 pub use error::{CoreError, Result};
 pub use manifest::{
@@ -27,3 +28,4 @@ pub use scripts::{validate_script_name, ScriptCheck, ScriptInfo};
 pub use secrets::{ResolvedVariable, VariableInput};
 pub use store::{Index, Store};
 pub use variable::{VarType, VarValue, Variable};
+pub use watch::{watch, Change, ChangeKind, WatchHandle};

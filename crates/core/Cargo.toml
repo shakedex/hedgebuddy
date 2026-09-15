@@ -9,6 +9,7 @@ description = "Core logic for HedgeBuddy: storage, profiles, catalog, and Hedge 
 [dependencies]
 directories = { workspace = true }
 jiff = "0.2"
+notify = "8"
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
