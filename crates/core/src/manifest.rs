@@ -11,6 +11,7 @@ use crate::variable::{validate_var_name, VarType};
 
 /// One entry of a manifest's `requires` map.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Requirement {
     #[serde(rename = "type")]
     pub ty: VarType,
@@ -21,7 +22,13 @@ pub struct Requirement {
 }
 
 /// The parsed manifest block from a script's module docstring (spec section 6).
+///
+/// `app` and `event` are free-form strings here; the schema's stricter
+/// patterns for known apps and events (`^[a-z][a-z0-9-]*$` and
+/// `^[A-Za-z][A-Za-z0-9]*$`) are enforced against the phase 2B catalog, not
+/// by this type.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Manifest {
     pub hedgebuddy: u32,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -187,6 +194,15 @@ mod tests {
         let bad_type = "\"\"\"\n{\"hedgebuddy\": 1, \"requires\": {\"A\": {\"type\": \"date\"}}}\n---\n\"\"\"\n";
         assert!(matches!(
             parse_manifest(bad_type).unwrap_err(),
+            CoreError::Manifest(_)
+        ));
+    }
+
+    #[test]
+    fn manifest_rejects_unknown_keys() {
+        let src = "\"\"\"\n{\"hedgebuddy\": 1, \"extra\": 1}\n---\n\"\"\"\n";
+        assert!(matches!(
+            parse_manifest(src).unwrap_err(),
             CoreError::Manifest(_)
         ));
     }

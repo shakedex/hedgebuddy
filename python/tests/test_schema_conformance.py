@@ -29,10 +29,33 @@ def assert_valid(v: Draft202012Validator, instance, what: str) -> None:
 
 
 def extract_manifest(py_source: str):
-    """Manifest extraction per schema/README.md. Phase 4 moves this into the package."""
-    start = py_source.index('"""') + 3
-    end = py_source.index('"""', start)
-    doc = py_source[start:end]
+    """Manifest extraction per schema/README.md. Phase 4 moves this into the package.
+
+    The module docstring is the first statement in the file after any blank
+    lines and `#` comment lines; it may use `\"\"\"` or `'''`. The text before
+    the first line that is `---` (trailing whitespace ignored) is the
+    manifest when it starts with `{`; otherwise there is no manifest and
+    this returns `None`.
+    """
+    lines = py_source.splitlines(keepends=True)
+    i = 0
+    while i < len(lines) and (lines[i].strip() == "" or lines[i].lstrip().startswith("#")):
+        i += 1
+    body = "".join(lines[i:])
+
+    if body.lstrip().startswith('"""'):
+        quote = '"""'
+    elif body.lstrip().startswith("'''"):
+        quote = "'''"
+    else:
+        return None
+
+    start = body.index(quote) + 3
+    end = body.index(quote, start)
+    doc = body[start:end]
+    if not doc.lstrip().startswith("{"):
+        return None
+
     json_lines = []
     for line in doc.splitlines():
         if line.rstrip() == "---":
@@ -61,7 +84,9 @@ def test_valid_fixture_data_dir_validates(case: Path):
         if (prof / "secrets.json").exists():
             assert_valid(secrets, load_json(prof / "secrets.json"), f"{case.name}/{prof.name}/secrets.json")
         for script in sorted((prof / "scripts").glob("*.py")):
-            assert_valid(manifest, extract_manifest(script.read_text(encoding="utf-8")), str(script))
+            parsed = extract_manifest(script.read_text(encoding="utf-8"))
+            if parsed is not None:
+                assert_valid(manifest, parsed, str(script))
 
     runs = case / "runs"
     if runs.exists():

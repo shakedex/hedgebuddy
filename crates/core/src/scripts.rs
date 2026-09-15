@@ -275,8 +275,10 @@ mod tests {
         let list = Store::open(root)
             .list_scripts("commercial-one-day")
             .unwrap();
-        assert_eq!(list.len(), 1);
-        assert_eq!(list[0].name, "on_copy_complete.py");
+        assert_eq!(
+            list.iter().map(|s| s.name.as_str()).collect::<Vec<_>>(),
+            vec!["on_copy_complete.py", "on_disk_added.py"]
+        );
     }
 
     #[test]

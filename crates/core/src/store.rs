@@ -9,6 +9,7 @@ use crate::fs_util;
 
 /// Contents of `hedgebuddy.json`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Index {
     /// Storage format version; always 1.
     pub version: u32,
@@ -139,6 +140,18 @@ mod tests {
     fn malformed_index_is_a_json_error() {
         let dir = tempfile::tempdir().unwrap();
         std::fs::write(dir.path().join("hedgebuddy.json"), "{ nope").unwrap();
+        let err = Store::open(dir.path()).index().unwrap_err();
+        assert!(matches!(err, CoreError::Json { .. }), "{err}");
+    }
+
+    #[test]
+    fn index_rejects_unknown_keys() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("hedgebuddy.json"),
+            r#"{"version":1,"active_profile":null,"extra":1}"#,
+        )
+        .unwrap();
         let err = Store::open(dir.path()).index().unwrap_err();
         assert!(matches!(err, CoreError::Json { .. }), "{err}");
     }

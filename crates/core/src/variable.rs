@@ -72,11 +72,16 @@ impl FromStr for VarType {
 
 /// One entry in `profile.json`'s `variables` map.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Variable {
+    /// The variable's declared type.
     #[serde(rename = "type")]
     pub ty: VarType,
+    /// The variable's value, typed per `ty`. `None` for a secret (whose
+    /// value lives in `secrets.json`) or a variable with no value yet.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub value: Option<Value>,
+    /// Free-text description shown to whoever edits the profile.
     #[serde(default)]
     pub description: String,
 }

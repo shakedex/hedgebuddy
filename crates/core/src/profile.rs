@@ -13,6 +13,7 @@ use crate::variable::{validate_slug, validate_var_name, Variable};
 
 /// Contents of `profile.json`. Variables are kept sorted by name.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Profile {
     pub version: u32,
     pub name: String,
@@ -357,6 +358,21 @@ mod tests {
         assert!(store.root().join("hedgebuddy.json").exists());
         assert!(store.profiles_dir().is_dir());
         assert!(store.profile_dir("p").join("profile.json").is_file());
+    }
+
+    #[test]
+    fn profile_rejects_unknown_keys() {
+        let (_d, store) = temp_store();
+        store.create_profile("p", "").unwrap();
+        fs::write(
+            store.profile_path("p").unwrap(),
+            r#"{"version":1,"name":"p","variables":{},"extra":1}"#,
+        )
+        .unwrap();
+        assert!(matches!(
+            store.load_profile("p").unwrap_err(),
+            CoreError::Json { .. }
+        ));
     }
 
     #[test]
