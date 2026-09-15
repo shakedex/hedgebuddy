@@ -16,7 +16,7 @@ The JSON Schemas here (draft 2020-12) are the contract between the Rust core and
 
 - `hedgebuddy.json` against `hedgebuddy.schema.json`
 - `profiles/*/profile.json` against `profile.schema.json`
-- `profiles/*/secrets.json` against `secrets.schema.json`
+- `profiles/*/secrets.json` against `secrets.schema.json`, when the file exists (a profile with no secret-typed variables has none)
 - every line of `runs/*.jsonl` against `run-record.schema.json`
 - the manifest extracted from every `profiles/*/scripts/*.py` against `script-manifest.schema.json`
 
