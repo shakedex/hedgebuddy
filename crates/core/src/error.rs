@@ -42,4 +42,5 @@ impl CoreError {
     }
 }
 
+/// Core operation result type.
 pub type Result<T> = std::result::Result<T, CoreError>;

@@ -10,7 +10,9 @@ use crate::fs_util;
 /// Contents of `hedgebuddy.json`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Index {
+    /// Storage format version; always 1.
     pub version: u32,
+    /// Name of the active profile, or `None` on a fresh install.
     pub active_profile: Option<String>,
 }
 
@@ -40,26 +42,32 @@ impl Store {
         Ok(Store::open(crate::paths::data_dir()?))
     }
 
+    /// Root path of the data directory.
     pub fn root(&self) -> &Path {
         &self.root
     }
 
+    /// Path to hedgebuddy.json.
     pub fn index_path(&self) -> PathBuf {
         self.root.join("hedgebuddy.json")
     }
 
+    /// Path to the profiles directory.
     pub fn profiles_dir(&self) -> PathBuf {
         self.root.join("profiles")
     }
 
+    /// Path to a specific profile directory.
     pub fn profile_dir(&self, name: &str) -> PathBuf {
         self.profiles_dir().join(name)
     }
 
+    /// Path to a profile's scripts directory.
     pub fn scripts_dir(&self, name: &str) -> PathBuf {
         self.profile_dir(name).join("scripts")
     }
 
+    /// Path to the runs directory.
     pub fn runs_dir(&self) -> PathBuf {
         self.root.join("runs")
     }
