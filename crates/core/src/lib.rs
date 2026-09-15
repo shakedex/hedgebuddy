@@ -3,6 +3,11 @@
 //! Everything HedgeBuddy does lives here. The CLI, the MCP server, and the
 //! desktop app are thin front ends over this crate. This crate has no UI and
 //! never parses command-line arguments.
+//!
+//! Entry point: [`Store`], opened on a data directory ([`Store::at_default`]
+//! for the platform location). Profiles, variables, secrets, scripts, and run
+//! records are all methods on `Store`; [`watch`] reports external changes.
+//! Every file `Store` writes conforms to the JSON Schemas under `schema/`.
 
 pub mod error;
 pub mod fs_util;

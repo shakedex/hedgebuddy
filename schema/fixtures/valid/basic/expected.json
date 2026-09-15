@@ -1,0 +1,12 @@
+{
+  "active_profile": "commercial-one-day",
+  "profiles": {
+    "commercial-one-day": {
+      "variable_count": 9,
+      "types": {"PROJECT_NAME": "string", "DEST_ROOTS": "path[]", "NOTIFY": "bool", "RETRIES": "int", "THRESHOLD": "float", "REPORT_DIR": "path", "API_URL": "url", "CAMERAS": "string[]", "SLACK_WEBHOOK": "secret"},
+      "secret_names": ["SLACK_WEBHOOK"],
+      "scripts": {"on_copy_complete.py": {"app": "offshoot", "event": "FileCopyCompleted", "requires": ["PROJECT_NAME", "SLACK_WEBHOOK"], "unmet": []}}
+    }
+  },
+  "runs": [{"run_id": "01J7ZK3Q8R", "script": "on_copy_complete.py", "status": "ok", "log_count": 1}]
+}
