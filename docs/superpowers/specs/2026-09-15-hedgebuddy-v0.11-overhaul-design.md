@@ -309,6 +309,8 @@ Errors: `VariableNotFoundError`, `VariableTypeError`, `StorageNotFoundError`, `S
 
 Tauri v2, Vite + React + TypeScript, one window with sidebar navigation. Visual design is a fresh pass in phase 5 with mockups; the only constraint is that it must remain usable at a small window size beside OffShoot.
 
+Platform floor: macOS 12.0 or newer, declared as `bundle.macOS.minimumSystemVersion` in `tauri.conf.json`, matching the frontend's `safari15` build target (WKWebView on macOS 12 is the Safari 15 engine). Windows 10 or newer with the WebView2 runtime. Revisit both before the first release.
+
 Views:
 
 1. **Variables** — profile switcher in the toolbar; typed editors per type; "required by" badge from script manifests; import/export (secrets excluded unless opted in).

@@ -12,3 +12,4 @@ All notable changes to this project are documented here. Versioning follows [Zer
 - Python package skeleton at `python/`.
 - Shared JSON Schemas and conformance fixtures at `schema/`.
 - CI on Windows and macOS.
+- Desktop app declares macOS 12.0 as its minimum system version.

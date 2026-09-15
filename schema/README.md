@@ -22,4 +22,4 @@ The JSON Schemas here (draft 2020-12) are the contract between the Rust core and
 
 `fixtures/invalid/<schema-stem>/*.json` are single documents that must **fail** validation against `<schema-stem>.schema.json`.
 
-Manifest extraction: take the module docstring (the first `"""..."""` block in the file), keep the text before the first line that is exactly `---`, parse it as JSON.
+Manifest extraction: take the module docstring (the first `"""..."""` block in the file), keep the text before the first line that is `---` (trailing whitespace on that line is ignored), parse it as JSON.
