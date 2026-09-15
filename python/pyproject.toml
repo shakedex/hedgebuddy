@@ -1,0 +1,42 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "hedgebuddy"
+version = "0.11.0"
+description = "Read HedgeBuddy variables and Hedge app events from Python scripts"
+readme = "README.md"
+requires-python = ">=3.9"
+license = "MIT"
+authors = [{ name = "Shaked Lipszyc", email = "shakedl@gmail.com" }]
+keywords = ["hedge", "offshoot", "foolcat", "editready", "dit", "environment", "variables"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: End Users/Desktop",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Operating System :: Microsoft :: Windows",
+  "Operating System :: MacOS",
+  "Topic :: Multimedia :: Video",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/shakedex/hedgebuddy"
+Repository = "https://github.com/shakedex/hedgebuddy"
+Issues = "https://github.com/shakedex/hedgebuddy/issues"
+
+[dependency-groups]
+dev = ["pytest>=8", "jsonschema>=4.23"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["hedgebuddy"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
