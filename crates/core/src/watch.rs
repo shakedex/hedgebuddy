@@ -30,8 +30,14 @@ pub struct WatchHandle {
 }
 
 /// Start watching `root` recursively. The directory is created if missing.
+///
+/// Reported paths are expressed under `root` exactly as the caller passed
+/// it, even on platforms whose watcher backend canonicalizes (macOS).
 pub fn watch(root: &Path) -> Result<(WatchHandle, Receiver<Change>)> {
     std::fs::create_dir_all(root).map_err(|e| CoreError::io(root, e))?;
+    let canonical = root.canonicalize().map_err(|e| CoreError::io(root, e))?;
+    let root_owned = root.to_path_buf();
+    let canonical_for_events = canonical.clone();
     let (tx, rx) = channel::<Change>();
     let mut watcher = notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
         let Ok(event) = res else { return };
@@ -45,13 +51,20 @@ pub fn watch(root: &Path) -> Result<(WatchHandle, Receiver<Change>)> {
             if path.extension().map(|e| e == "tmp").unwrap_or(false) {
                 continue;
             }
+            // The watcher backend may report a canonicalized path (notably
+            // FSEvents on macOS); rebase it under the root the caller passed
+            // in so paths compare equal to what the caller expects.
+            let path = match path.strip_prefix(&canonical_for_events) {
+                Ok(rel) => root_owned.join(rel),
+                Err(_) => path,
+            };
             // A closed receiver just means nobody is listening any more.
             let _ = tx.send(Change { path, kind });
         }
     })
     .map_err(|e| CoreError::Watch(format!("cannot start file watcher: {e}")))?;
     watcher
-        .watch(root, RecursiveMode::Recursive)
+        .watch(&canonical, RecursiveMode::Recursive)
         .map_err(|e| CoreError::Watch(format!("cannot watch {}: {e}", root.display())))?;
     Ok((WatchHandle { _watcher: watcher }, rx))
 }
