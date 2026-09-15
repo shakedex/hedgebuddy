@@ -29,6 +29,9 @@ pub enum CoreError {
     ScriptNotFound(String),
     #[error("invalid script manifest: {0}")]
     Manifest(String),
+    /// The file watcher could not be started or could not watch the data directory.
+    #[error("file watcher: {0}")]
+    Watch(String),
     #[error(transparent)]
     Path(#[from] crate::paths::PathError),
 }

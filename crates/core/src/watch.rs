@@ -49,10 +49,10 @@ pub fn watch(root: &Path) -> Result<(WatchHandle, Receiver<Change>)> {
             let _ = tx.send(Change { path, kind });
         }
     })
-    .map_err(|e| CoreError::Validation(format!("cannot start file watcher: {e}")))?;
+    .map_err(|e| CoreError::Watch(format!("cannot start file watcher: {e}")))?;
     watcher
         .watch(root, RecursiveMode::Recursive)
-        .map_err(|e| CoreError::Validation(format!("cannot watch {}: {e}", root.display())))?;
+        .map_err(|e| CoreError::Watch(format!("cannot watch {}: {e}", root.display())))?;
     Ok((WatchHandle { _watcher: watcher }, rx))
 }
 
