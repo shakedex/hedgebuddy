@@ -107,11 +107,15 @@ impl Store {
         if self.profile_dir(name).exists() {
             return Err(CoreError::ProfileExists(name.to_owned()));
         }
-        let profile = Profile::new(name, description);
-        self.save_profile(&profile)?;
+        // Read index BEFORE any writes so corrupt hedgebuddy.json fails first
+        let mut index = self.index()?;
+        // Create scripts directory
         let scripts = self.scripts_dir(name);
         fs::create_dir_all(&scripts).map_err(|e| CoreError::io(&scripts, e))?;
-        let mut index = self.index()?;
+        // Write profile
+        let profile = Profile::new(name, description);
+        self.save_profile(&profile)?;
+        // Update index if this is the first profile
         if index.active_profile.is_none() {
             index.active_profile = Some(name.to_owned());
             self.write_index(&index)?;
@@ -125,12 +129,14 @@ impl Store {
         if !dir.is_dir() {
             return Err(CoreError::ProfileNotFound(name.to_owned()));
         }
-        fs::remove_dir_all(&dir).map_err(|e| CoreError::io(&dir, e))?;
+        // Clear active pointer BEFORE removing directory for safe failure
         let mut index = self.index()?;
         if index.active_profile.as_deref() == Some(name) {
             index.active_profile = None;
             self.write_index(&index)?;
         }
+        // Now remove the directory
+        fs::remove_dir_all(&dir).map_err(|e| CoreError::io(&dir, e))?;
         Ok(())
     }
 
@@ -314,6 +320,19 @@ mod tests {
             store.set_active_profile("ghost").unwrap_err(),
             CoreError::ProfileNotFound(_)
         ));
+    }
+
+    #[test]
+    fn create_profile_fails_before_writing_when_index_is_corrupt() {
+        let dir = tempfile::tempdir().unwrap();
+        // Write corrupt JSON to hedgebuddy.json
+        fs::write(dir.path().join("hedgebuddy.json"), "{ nope").unwrap();
+        let store = Store::open(dir.path());
+        // create_profile should fail when reading the corrupt index
+        let result = store.create_profile("p", "");
+        assert!(matches!(result.unwrap_err(), CoreError::Json { .. }));
+        // Profile directory should not be created
+        assert!(!store.profile_dir("p").exists());
     }
 
     #[test]
