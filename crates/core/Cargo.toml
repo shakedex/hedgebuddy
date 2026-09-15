@@ -8,6 +8,8 @@ description = "Core logic for HedgeBuddy: storage, profiles, catalog, and Hedge 
 
 [dependencies]
 directories = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
