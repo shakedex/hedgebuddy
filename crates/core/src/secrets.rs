@@ -78,10 +78,10 @@ impl Store {
         variable.validate(name)?;
 
         prof.variables.insert(name.to_owned(), variable);
-        self.save_profile(&prof)?;
         if !secrets.is_empty() || self.secrets_path(profile).exists() {
             self.save_secrets(profile, &secrets)?;
         }
+        self.save_profile(&prof)?;
         Ok(())
     }
 
@@ -108,13 +108,17 @@ impl Store {
     /// Delete a variable from a profile.
     pub fn delete_variable(&self, profile: &str, name: &str) -> Result<()> {
         let mut prof = self.load_profile(profile)?;
-        if prof.variables.remove(name).is_none() {
+        let mut secrets = self.load_secrets(profile)?;
+        let in_profile = prof.variables.remove(name).is_some();
+        let in_secrets = secrets.remove(name).is_some();
+        if !in_profile && !in_secrets {
             return Err(CoreError::VariableNotFound(name.to_owned()));
         }
-        self.save_profile(&prof)?;
-        let mut secrets = self.load_secrets(profile)?;
-        if secrets.remove(name).is_some() {
+        if in_secrets {
             self.save_secrets(profile, &secrets)?;
+        }
+        if in_profile {
+            self.save_profile(&prof)?;
         }
         Ok(())
     }
@@ -307,5 +311,30 @@ mod tests {
             v.value,
             Some(json!("https://hooks.slack.com/services/T000/B000/XXXX"))
         );
+    }
+
+    #[test]
+    fn delete_variable_cleans_an_orphaned_secret() {
+        let (_d, store) = temp_store();
+        // Write an orphaned secret directly to secrets.json (not in profile.json)
+        let mut map = BTreeMap::new();
+        map.insert("ORPHAN".to_string(), "x".to_string());
+        store.save_secrets("p", &map).unwrap();
+
+        // Verify get_variable fails for the orphaned secret
+        assert!(matches!(
+            store.get_variable("p", "ORPHAN").unwrap_err(),
+            CoreError::VariableNotFound(_)
+        ));
+
+        // delete_variable should successfully clean it up
+        store.delete_variable("p", "ORPHAN").unwrap();
+        assert!(store.load_secrets("p").unwrap().is_empty());
+
+        // Subsequent delete should fail
+        assert!(matches!(
+            store.delete_variable("p", "ORPHAN").unwrap_err(),
+            CoreError::VariableNotFound(_)
+        ));
     }
 }
