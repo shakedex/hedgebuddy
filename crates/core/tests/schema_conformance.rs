@@ -31,20 +31,6 @@ fn assert_valid(v: &Validator, instance: &Value, what: &str) {
     );
 }
 
-/// Manifest extraction as documented in schema/README.md. Phase 2 moves this
-/// into the core crate proper; until then the test owns it.
-fn extract_manifest(py_source: &str) -> Value {
-    let start = py_source.find("\"\"\"").expect("docstring start") + 3;
-    let end = py_source[start..].find("\"\"\"").expect("docstring end") + start;
-    let doc = &py_source[start..end];
-    let json_part = doc
-        .lines()
-        .take_while(|line| line.trim_end() != "---")
-        .collect::<Vec<_>>()
-        .join("\n");
-    serde_json::from_str(json_part.trim()).expect("manifest JSON")
-}
-
 fn dirs_in(path: &Path) -> Vec<PathBuf> {
     let mut v: Vec<PathBuf> = match fs::read_dir(path) {
         Ok(rd) => rd
@@ -109,11 +95,10 @@ fn every_valid_fixture_data_dir_validates() {
             for script in files_in(&prof.join("scripts"), "py") {
                 scripts_seen += 1;
                 let src = fs::read_to_string(&script).unwrap();
-                assert_valid(
-                    &manifest,
-                    &extract_manifest(&src),
-                    &script.display().to_string(),
-                );
+                let text = hedgebuddy_core::manifest::extract_manifest_text(&src)
+                    .unwrap_or_else(|| panic!("{} has no manifest block", script.display()));
+                let value: Value = serde_json::from_str(text.trim()).expect("manifest JSON");
+                assert_valid(&manifest, &value, &script.display().to_string());
             }
         }
 
