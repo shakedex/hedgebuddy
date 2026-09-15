@@ -8,11 +8,13 @@ pub mod error;
 pub mod fs_util;
 pub mod paths;
 pub mod profile;
+pub mod secrets;
 pub mod store;
 pub mod variable;
 
 pub use error::{CoreError, Result};
 pub use paths::{data_dir, PathError, DATA_DIR_ENV};
 pub use profile::Profile;
+pub use secrets::{ResolvedVariable, VariableInput};
 pub use store::{Index, Store};
 pub use variable::{VarType, VarValue, Variable};
