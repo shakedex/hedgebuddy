@@ -1,0 +1,31 @@
+# Rust
+/target/
+**/target/
+
+# Tauri
+/crates/app/gen/
+
+# Node / Vite
+node_modules/
+/crates/app/ui/dist/
+*.local
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+/python/dist/
+/python/build/
+*.egg-info/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Local only
+.env
+.worktrees/
+outside-resources/
