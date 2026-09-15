@@ -9,6 +9,7 @@ pub mod fs_util;
 pub mod manifest;
 pub mod paths;
 pub mod profile;
+pub mod runs;
 pub mod scripts;
 pub mod secrets;
 pub mod store;
@@ -21,6 +22,7 @@ pub use manifest::{
 };
 pub use paths::{data_dir, PathError, DATA_DIR_ENV};
 pub use profile::Profile;
+pub use runs::{Run, RunFilter, RunRecord, RunStatus, RUN_RETENTION_DAYS};
 pub use scripts::{validate_script_name, ScriptCheck, ScriptInfo};
 pub use secrets::{ResolvedVariable, VariableInput};
 pub use store::{Index, Store};

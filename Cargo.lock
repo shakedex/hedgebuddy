@@ -1559,6 +1559,7 @@ name = "hedgebuddy-core"
 version = "0.11.0"
 dependencies = [
  "directories",
+ "jiff",
  "jsonschema",
  "serde",
  "serde_json",
