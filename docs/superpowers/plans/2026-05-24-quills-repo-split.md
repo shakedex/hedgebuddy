@@ -675,6 +675,42 @@ skills-lock.json
 Run from `E:/Coding/quills`: `git status --short`
 Expected: no `bin/`, no `web/dist/`, no `node_modules/` listed (these may or may not exist depending on whether you've already built, but they should never appear in `git status`).
 
+### Task 2.10: Repoint update-checker URLs to shakedex/quills (added during execution)
+
+The plan originally only called out `DefaultRepoURL`, but a code scan during execution surfaced two more `shakedex/hedgebuddy` URLs in the runtime binary: the tray's "open releases page" link and the update checker's GitHub API base. After the split, both should point at `shakedex/quills`. The HedgeBuddy update-check code path also becomes dead (it queries the same repo as Quills with a `v*`-tag regex, which would falsely flag Quills releases as HedgeBuddy updates), so delete it.
+
+**Files:**
+- Modify: `E:\Coding\quills\internal\updatecheck\checker.go`
+- Modify: `E:\Coding\quills\internal\tray\manager.go`
+- Modify: `E:\Coding\quills\internal\tray\tray.go`
+
+- [ ] **Step 1: In `internal/updatecheck/checker.go`**
+
+  - Line 15: change `apiBase` to `"https://api.github.com/repos/shakedex/quills"`.
+  - Line 21 comment: change `"tagged quills-v* on GitHub"` to `"tagged v* on GitHub"`.
+  - Line 23: change the regex from `` `^quills-v(\d.*)` `` to `` `^v(\d.*)` ``, and the prefix from `"quills-v"` to `"v"`.
+  - Delete `CheckHedgeBuddyUpdate` entirely (the comment block + function, lines 26-33 inclusive).
+
+- [ ] **Step 2: In `internal/tray/manager.go`**
+
+  - Line 16: change `releasesURL` to `"https://github.com/shakedex/quills/releases"`.
+  - In `checkForUpdate`, delete the `CheckHedgeBuddyUpdate` call block (the comment + the call + the if-outdated branch), leaving only the Quills check.
+
+- [ ] **Step 3: In `internal/tray/tray.go`**
+
+  - In `launchUpdater`, delete the `case "HedgeBuddy"` branch in the `switch app` (lines around 72-73).
+  - Adjust the trailing comment `// For a Quills self-update the updater will kill this process. // For a HedgeBuddy update we just let the updater handle it.` to reflect that only Quills self-updates are handled now.
+
+- [ ] **Step 4: Verify no stragglers**
+
+Run: `grep -rn 'shakedex/hedgebuddy\|quills-v\|CheckHedgeBuddyUpdate' E:/Coding/quills/internal/ --include='*.go'`
+Expected: empty output.
+
+- [ ] **Step 5: Build check**
+
+Run from `E:\Coding\quills` (PowerShell): `$env:PATH = 'C:\msys64\ucrt64\bin;' + $env:PATH; $env:CGO_ENABLED = '1'; go vet ./...`
+Expected: no errors (catches any orphaned references to the deleted function).
+
 ### Task 2.9: Add docs/hedgebuddy-integration.md
 
 **Files:**
