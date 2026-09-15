@@ -38,11 +38,13 @@ impl Store {
 
     /// Load secrets from a profile. Missing file means no secrets.
     pub fn load_secrets(&self, profile: &str) -> Result<BTreeMap<String, String>> {
+        self.checked_profile_dir(profile)?;
         fs_util::read_json_or(&self.secrets_path(profile), BTreeMap::new())
     }
 
     /// Save secrets to a profile file. Written with mode 0600 on Unix.
     pub fn save_secrets(&self, profile: &str, secrets: &BTreeMap<String, String>) -> Result<()> {
+        self.checked_profile_dir(profile)?;
         fs_util::write_json_atomic(&self.secrets_path(profile), secrets, true)
     }
 

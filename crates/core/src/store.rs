@@ -67,6 +67,16 @@ impl Store {
         self.profile_dir(name).join("scripts")
     }
 
+    /// Validate `name` as a profile slug, then return its directory.
+    /// Every method that takes a profile name from a caller must route
+    /// through this before touching the filesystem, so that an invalid
+    /// name (for example `""` or `".."`) can never resolve outside
+    /// `profiles/`.
+    pub(crate) fn checked_profile_dir(&self, name: &str) -> Result<PathBuf> {
+        crate::variable::validate_slug(name)?;
+        Ok(self.profile_dir(name))
+    }
+
     /// Path to the runs directory.
     pub fn runs_dir(&self) -> PathBuf {
         self.root.join("runs")
@@ -117,7 +127,12 @@ mod tests {
             text,
             "{\n  \"version\": 1,\n  \"active_profile\": \"commercial-one-day\"\n}\n"
         );
-        assert!(!store.index_path().with_extension("json.tmp").exists());
+        let leaked: Vec<_> = std::fs::read_dir(dir.path())
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.path().extension().map(|x| x == "tmp").unwrap_or(false))
+            .collect();
+        assert!(leaked.is_empty(), "temp file(s) leaked: {leaked:?}");
     }
 
     #[test]

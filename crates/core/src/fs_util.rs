@@ -2,11 +2,16 @@
 
 use std::fs;
 use std::path::Path;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
 use crate::error::{CoreError, Result};
+
+/// Per-process counter mixed into every temp file name so that two
+/// concurrent writers of the same target file never collide.
+static COUNTER: AtomicU64 = AtomicU64::new(0);
 
 /// Write `bytes` to `path` atomically: write to a sibling temp file, then
 /// rename over the target. Creates parent directories. When `private` is
@@ -15,8 +20,10 @@ pub fn write_atomic(path: &Path, bytes: &[u8], private: bool) -> Result<()> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|e| CoreError::io(parent, e))?;
     }
+    let pid = std::process::id();
+    let count = COUNTER.fetch_add(1, Ordering::Relaxed);
     let mut tmp = path.as_os_str().to_owned();
-    tmp.push(".tmp");
+    tmp.push(format!(".{pid}.{count}.tmp"));
     let tmp = Path::new(&tmp);
 
     let mut opts = fs::OpenOptions::new();
@@ -98,11 +105,16 @@ mod tests {
         // The result should be an Io error
         assert!(matches!(result.unwrap_err(), CoreError::Io { .. }));
 
-        // Verify the temp file was cleaned up (no .tmp file exists)
-        let tmp_path = target.with_extension("json.tmp");
+        // Verify the temp file was cleaned up (no file ending in .tmp exists
+        // in the parent directory; the exact name includes pid and counter).
+        let leaked: Vec<_> = fs::read_dir(dir.path())
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.path().extension().map(|x| x == "tmp").unwrap_or(false))
+            .collect();
         assert!(
-            !tmp_path.exists(),
-            "temp file should be removed after failed rename"
+            leaked.is_empty(),
+            "temp file(s) should be removed after failed rename: {leaked:?}"
         );
 
         // Verify the target directory still exists

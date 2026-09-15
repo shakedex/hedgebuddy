@@ -49,6 +49,7 @@ impl Store {
     }
 
     fn require_profile(&self, profile: &str) -> Result<()> {
+        self.checked_profile_dir(profile)?;
         if self.profile_exists(profile) {
             Ok(())
         } else {

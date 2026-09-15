@@ -51,14 +51,14 @@ impl Profile {
 }
 
 impl Store {
-    /// Path to a profile's JSON file.
-    pub fn profile_path(&self, name: &str) -> PathBuf {
-        self.profile_dir(name).join("profile.json")
+    /// Path to a profile's JSON file. Errs if `name` is not a valid slug.
+    pub fn profile_path(&self, name: &str) -> Result<PathBuf> {
+        Ok(self.checked_profile_dir(name)?.join("profile.json"))
     }
 
-    /// Check if a profile exists.
+    /// Check if a profile exists. `false` for an invalid slug.
     pub fn profile_exists(&self, name: &str) -> bool {
-        self.profile_path(name).is_file()
+        matches!(self.profile_path(name), Ok(path) if path.is_file())
     }
 
     /// Names of every directory under `profiles/` that holds a `profile.json`, sorted.
@@ -79,7 +79,7 @@ impl Store {
 
     /// Load and validate a profile by name.
     pub fn load_profile(&self, name: &str) -> Result<Profile> {
-        let path = self.profile_path(name);
+        let path = self.profile_path(name)?;
         if !path.is_file() {
             return Err(CoreError::ProfileNotFound(name.to_owned()));
         }
@@ -97,7 +97,8 @@ impl Store {
     /// Validate and write `profile.json` atomically. Does not touch secrets or scripts.
     pub fn save_profile(&self, profile: &Profile) -> Result<()> {
         profile.validate()?;
-        fs_util::write_json_atomic(&self.profile_path(&profile.name), profile, false)
+        let path = self.profile_path(&profile.name)?;
+        fs_util::write_json_atomic(&path, profile, false)
     }
 
     /// Create an empty profile (with its `scripts/` directory). Becomes active
@@ -125,7 +126,7 @@ impl Store {
 
     /// Remove the whole profile directory. Clears `active_profile` if it pointed here.
     pub fn delete_profile(&self, name: &str) -> Result<()> {
-        let dir = self.profile_dir(name);
+        let dir = self.checked_profile_dir(name)?;
         if !dir.is_dir() {
             return Err(CoreError::ProfileNotFound(name.to_owned()));
         }
@@ -142,6 +143,7 @@ impl Store {
 
     /// Set the active profile by name.
     pub fn set_active_profile(&self, name: &str) -> Result<()> {
+        self.checked_profile_dir(name)?;
         if !self.profile_exists(name) {
             return Err(CoreError::ProfileNotFound(name.to_owned()));
         }
@@ -244,7 +246,7 @@ mod tests {
         store.save_profile(&p).unwrap();
         let loaded = store.load_profile("p").unwrap();
         assert_eq!(loaded, p);
-        let text = fs::read_to_string(store.profile_path("p")).unwrap();
+        let text = fs::read_to_string(store.profile_path("p").unwrap()).unwrap();
         assert!(text.find("ALPHA").unwrap() < text.find("ZED").unwrap());
         assert!(text.ends_with("}\n"));
     }
@@ -284,9 +286,9 @@ mod tests {
     fn load_rejects_name_mismatch_and_missing_profile() {
         let (_d, store) = temp_store();
         store.create_profile("real", "").unwrap();
-        let text = fs::read_to_string(store.profile_path("real")).unwrap();
+        let text = fs::read_to_string(store.profile_path("real").unwrap()).unwrap();
         fs::create_dir_all(store.profile_dir("other")).unwrap();
-        fs::write(store.profile_path("other"), text).unwrap();
+        fs::write(store.profile_path("other").unwrap(), text).unwrap();
         assert!(matches!(
             store.load_profile("other").unwrap_err(),
             CoreError::Validation(_)
@@ -320,6 +322,41 @@ mod tests {
             store.set_active_profile("ghost").unwrap_err(),
             CoreError::ProfileNotFound(_)
         ));
+    }
+
+    #[test]
+    fn invalid_profile_names_never_touch_the_filesystem() {
+        let (_d, store) = temp_store();
+        store.create_profile("p", "").unwrap();
+        fs::write(store.root().join("hedgebuddy.json"), "{}").unwrap();
+
+        for bad in ["", "..", "Bad Name"] {
+            assert!(
+                matches!(
+                    store.delete_profile(bad).unwrap_err(),
+                    CoreError::Validation(_)
+                ),
+                "delete_profile({bad:?})"
+            );
+        }
+        assert!(matches!(
+            store.load_profile("..").unwrap_err(),
+            CoreError::Validation(_)
+        ));
+        assert!(matches!(
+            store.set_active_profile("..").unwrap_err(),
+            CoreError::Validation(_)
+        ));
+        assert!(!store.profile_exists(".."));
+        assert!(matches!(
+            store.save_secrets("../x", &BTreeMap::new()).unwrap_err(),
+            CoreError::Validation(_)
+        ));
+
+        // Nothing outside profiles/p/ was touched.
+        assert!(store.root().join("hedgebuddy.json").exists());
+        assert!(store.profiles_dir().is_dir());
+        assert!(store.profile_dir("p").join("profile.json").is_file());
     }
 
     #[test]
