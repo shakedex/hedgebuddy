@@ -8,6 +8,7 @@ use crate::fs_util;
 use crate::manifest::{check_requirements, parse_manifest, Manifest, RequirementIssue};
 use crate::store::Store;
 
+/// One entry of a profile's `scripts/` folder with its parsed manifest, if any.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ScriptInfo {
     pub name: String,
@@ -16,6 +17,7 @@ pub struct ScriptInfo {
     pub manifest_error: Option<String>,
 }
 
+/// Result of comparing a script's manifest against its profile.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ScriptCheck {
     pub name: String,
@@ -274,5 +276,36 @@ mod tests {
             .unwrap();
         assert_eq!(list.len(), 1);
         assert_eq!(list[0].name, "on_copy_complete.py");
+    }
+
+    #[test]
+    fn check_script_without_manifest_has_no_issues() {
+        let (_d, store) = temp_store();
+        store
+            .write_script("p", "plain.py", "print('hi')\n")
+            .unwrap();
+        let check = store.check_script("p", "plain.py").unwrap();
+        assert!(check.manifest.is_none());
+        assert!(check.issues.is_empty());
+    }
+
+    #[test]
+    fn tricky_names() {
+        for ok in [".hidden.py", "a.py.py", "a b.py"] {
+            validate_script_name(ok).unwrap();
+        }
+        for bad in ["a..b.py", "..py"] {
+            assert!(validate_script_name(bad).is_err(), "{bad:?}");
+        }
+
+        let (_d, store) = temp_store();
+        assert!(matches!(
+            store.read_script("p", "../x.py").unwrap_err(),
+            CoreError::Validation(_)
+        ));
+        assert!(matches!(
+            store.delete_script("p", "../x.py").unwrap_err(),
+            CoreError::Validation(_)
+        ));
     }
 }

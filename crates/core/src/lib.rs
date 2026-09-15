@@ -21,7 +21,7 @@ pub use manifest::{
 };
 pub use paths::{data_dir, PathError, DATA_DIR_ENV};
 pub use profile::Profile;
-pub use scripts::{ScriptCheck, ScriptInfo};
+pub use scripts::{validate_script_name, ScriptCheck, ScriptInfo};
 pub use secrets::{ResolvedVariable, VariableInput};
 pub use store::{Index, Store};
 pub use variable::{VarType, VarValue, Variable};
