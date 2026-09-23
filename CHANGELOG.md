@@ -19,3 +19,6 @@ All notable changes to this project are documented here. Versioning follows [Zer
 - Hedge app catalog (`catalog/*.toml`) for OffShoot, FoolCat, EditReady, and Canister, overridable from `<data>/catalog/`.
 - Core Hedge integration: app detection with version warnings, script attachment state, attach/detach with dry runs, profile-wide attachment sync, URL-scheme commands with callback-log responses, OffShoot presets, and app log tails.
 - Camera-card volume inspection and Python interpreter discovery.
+- `hedgebuddy mcp`: an MCP server over stdio with 31 tools (profiles, variables, scripts, attachments, Hedge app commands and presets, runs, volumes, environment), catalog and schema resources, and an `author_script` prompt.
+- `hedgebuddy tools` and `hedgebuddy call <tool> <json>` run the same tools from a shell.
+- Manual smoke checklist for real Hedge apps (`docs/smoke-checklist.md`).
