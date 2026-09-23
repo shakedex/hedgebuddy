@@ -107,8 +107,9 @@ fn run_call(tool: &str, args: &str) -> ExitCode {
     } else {
         args.to_owned()
     };
-    let args: Value = match serde_json::from_str(if text.trim().is_empty() { "{}" } else { &text })
-    {
+    // Windows PowerShell can prefix piped text with a UTF-8 byte order mark.
+    let text = text.strip_prefix('\u{feff}').unwrap_or(&text);
+    let args: Value = match serde_json::from_str(if text.trim().is_empty() { "{}" } else { text }) {
         Ok(v) => v,
         Err(e) => {
             eprintln!("error: arguments are not JSON: {e}");

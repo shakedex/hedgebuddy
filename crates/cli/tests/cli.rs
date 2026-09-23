@@ -60,6 +60,18 @@ fn call_runs_a_tool_and_prints_json() {
 }
 
 #[test]
+fn call_ignores_a_leading_bom_in_piped_arguments() {
+    // Windows PowerShell can prefix piped text with a UTF-8 BOM.
+    let dir = tempfile::tempdir().unwrap();
+    hb().env("HEDGEBUDDY_DATA_DIR", dir.path())
+        .args(["call", "create_profile", "-"])
+        .write_stdin("\u{feff}{\"name\": \"p\"}")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("\"active\": true"));
+}
+
+#[test]
 fn call_reports_errors_on_stderr() {
     let dir = tempfile::tempdir().unwrap();
     hb().env("HEDGEBUDDY_DATA_DIR", dir.path())
