@@ -22,3 +22,7 @@ All notable changes to this project are documented here. Versioning follows [Zer
 - `hedgebuddy mcp`: an MCP server over stdio with 31 tools (profiles, variables, scripts, attachments, Hedge app commands and presets, runs, volumes, environment), catalog and schema resources, and an `author_script` prompt.
 - `hedgebuddy tools` and `hedgebuddy call <tool> <json>` run the same tools from a shell.
 - Manual smoke checklist for real Hedge apps (`docs/smoke-checklist.md`).
+- Python package `hedgebuddy` 0.11.0: `@hb.script` (manifest, requirement checks, run records, exit codes), typed `vars`, the `event` payload, `hb.var`, `hb.exists`, `hb.all_vars`, `hb.inject_env`, `hb.log`, and `hb.event`.
+- Python conformance tests assert the shared `expected.json` fixtures, like core.
+- `check_script` reports a missing or mismatched `hedgebuddy` package; manifests may start with a UTF-8 BOM.
+- Manual PyPI publish workflow with trusted publishing (`docs/releasing-python.md`).

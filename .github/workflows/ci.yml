@@ -63,3 +63,5 @@ jobs:
           python-version: ${{ matrix.python }}
       - run: uv sync --frozen
       - run: uv run pytest -v
+      - run: uv build
+      - run: uv run python scripts/check_dist.py
