@@ -63,6 +63,8 @@ cargo test --workspace
 cd python && uv sync && uv run pytest
 ```
 
+See `crates/app/ui/README.md` for running the desktop app, the browser preview, and regenerating types.
+
 ## License
 
 MIT. HedgeBuddy is an independent, open-source project, not affiliated with Hedge (hedge.co).

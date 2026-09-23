@@ -65,7 +65,7 @@ The frontend-design skill shaped these rules. Every UI implementer loads and fol
 
 **Avoid.** Default-looking shadcn (restyle to tokens), generic card grids with shadows, coloured status dots, emoji, purple, centred page layouts, oversized paddings, spinners as the only loading state, "Lorem ipsum", and any copy that is not plain short sentences.
 
-**Visual checks.** Each UI task and review runs the browser preview (`bun run dev:mock`, port 5174, launch config `ui-mock`) and checks the changed screens at about 960×640 and 480×640 in the built-in browser pane, in the `problems`, `healthy` and `empty` scenarios (`http://localhost:5174/?scenario=problems#/`), and `error` where the screen loads data.
+**Visual checks.** Each UI task and review runs the browser preview (`bun run dev:mock`, port 5199, launch config `ui-mock`) and checks the changed screens at about 960×640 and 480×640 in the built-in browser pane, in the `problems`, `healthy` and `empty` scenarios (`http://localhost:5199/?scenario=problems#/`), and `error` where the screen loads data.
 
 ## Rulings made while planning
 
@@ -3761,7 +3761,7 @@ Everything the screens call goes through one typed bridge. In the browser previe
   - `@/api/bridge`: `callTool(name, args)`, `callApp(name, args)`, `class BridgeError { kind: "busy" | "error"; message }`, `isPreview: boolean`.
   - `@/api/queries`: `queryClient`, `queryKey`, `invalidateFor(categories: string[])`, `useHomeSummary()`, `useProfiles()`, `useRuns(profile: string | null)`, `useRun(runId: string | null)`, `useActivateProfile()`, `useCreateProfile()`.
   - `@/api/events`: `useDataChanged()`, `MOCK_EVENT = "hb:data-changed"`.
-  - Preview: `bun run dev:mock` serves on port 5174; `?scenario=problems|healthy|empty|error|busy` (default `problems`) before the hash, for example `http://localhost:5174/?scenario=empty#/`; `window.__hb.emit(["runs"])` fires a fake `data-changed`.
+  - Preview: `bun run dev:mock` serves on port 5199; `?scenario=problems|healthy|empty|error|busy` (default `problems`) before the hash, for example `http://localhost:5199/?scenario=empty#/`; `window.__hb.emit(["runs"])` fires a fake `data-changed`.
 
 - [ ] **Step 1: Dependencies, scripts, alias**
 
@@ -3800,8 +3800,8 @@ export default defineConfig(({ mode }) => ({
   resolve: { alias: { "@": path.resolve(import.meta.dirname, "src") } },
   clearScreen: false,
   server: {
-    // Tauri's devUrl is 5173; the browser preview with mock data uses 5174.
-    port: mode === "mock" ? 5174 : 5173,
+    // Tauri's devUrl is 5173; the browser preview with mock data uses 5199.
+    port: mode === "mock" ? 5199 : 5173,
     strictPort: true,
     host: host || false,
     hmr: host ? { protocol: "ws", host, port: 1421 } : undefined,
@@ -3827,7 +3827,7 @@ export default defineConfig(({ mode }) => ({
       "name": "ui-mock",
       "runtimeExecutable": "bun",
       "runtimeArgs": ["run", "--cwd", "crates/app/ui", "dev:mock"],
-      "port": 5174
+      "port": 5199
     }
   ]
 }
@@ -4414,7 +4414,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
 Run: `cd crates/app/ui && bun run gen && bun run gen:check && bun run build`
 Expected: "up to date"; the build passes. Confirm the production bundle has no mock code: `grep -l "not available in the preview" dist/assets/*.js` prints nothing.
 
-Run the preview (`preview_start` with `ui-mock`, or `bun run dev:mock`) and open `http://localhost:5174/?scenario=problems#/`: the page prints the summary JSON after a short delay; `?scenario=error` prints the error; in the browser console `window.__hb.emit(["runs"])` refetches (the network-free mock logs nothing; watch the JSON's `recent_runs` stay consistent).
+Run the preview (`preview_start` with `ui-mock`, or `bun run dev:mock`) and open `http://localhost:5199/?scenario=problems#/`: the page prints the summary JSON after a short delay; `?scenario=error` prints the error; in the browser console `window.__hb.emit(["runs"])` refetches (the network-free mock logs nothing; watch the JSON's `recent_runs` stay consistent).
 
 Run: `cd /e/Coding/hedgebuddy && cargo build -p hedgebuddy-app`
 Expected: builds (the app embeds the new `dist`).
@@ -5006,7 +5006,7 @@ export function ListDetail({ list, detail, selected, onBack, backLabel }: {
 Run: `cd crates/app/ui && bun run build`
 Expected: passes.
 
-Open the preview at `http://localhost:5174/?scenario=problems#/_design` in the built-in browser pane at about 960×640 and 480×640. Check against the Design direction: token colours exact, only red and amber carry hue (plus primary on buttons and focus), Inter and JetBrains Mono render (not a fallback font), numerals tabular, focus rings visible when tabbing, no drop shadows, `ListDetail` switches to one pane below 640 px. Fix what does not match. If the browser pane is not available to you, say so in the report.
+Open the preview at `http://localhost:5199/?scenario=problems#/_design` in the built-in browser pane at about 960×640 and 480×640. Check against the Design direction: token colours exact, only red and amber carry hue (plus primary on buttons and focus), Inter and JetBrains Mono render (not a fallback font), numerals tabular, focus rings visible when tabbing, no drop shadows, `ListDetail` switches to one pane below 640 px. Fix what does not match. If the browser pane is not available to you, say so in the report.
 
 - [ ] **Step 8: Commit**
 
