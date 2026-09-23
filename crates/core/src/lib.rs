@@ -8,6 +8,12 @@
 //! for the platform location). Profiles, variables, secrets, scripts, and run
 //! records are all methods on `Store`; [`watch()`] reports external changes.
 //! Every file `Store` writes conforms to the JSON Schemas under `schema/`.
+//!
+//! Hedge app integration lives in [`hedge::Hedge`] (a [`host::Host`] plus a
+//! [`catalog::Catalog`]); every change outside the data directory is planned
+//! as a list of [`hedge::Action`]s and executed only by [`hedge::Hedge::apply`].
+//! [`volumes::inspect_volume`] and [`python_env::find_python`] cover camera
+//! cards and the Python interpreter.
 
 pub mod catalog;
 pub mod error;
