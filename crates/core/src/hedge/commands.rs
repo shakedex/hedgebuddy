@@ -1,8 +1,10 @@
 //! Hedge app URL-scheme commands (`offshoot://...`).
 
 use std::fs;
+use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
-use std::time::{Duration, Instant};
+use std::thread;
+use std::time::{Duration, Instant, SystemTime};
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -101,11 +103,68 @@ fn flush(pending: &mut Vec<Value>, urls: &mut Vec<String>, scheme: &str) {
     urls.push(format!("{scheme}://actions?json={}", percent_encode(&json)));
 }
 
-fn read_new_lines(path: &Path, from: u64) -> Vec<String> {
-    let bytes = fs::read(path).unwrap_or_default();
-    let start = usize::try_from(from).unwrap_or(usize::MAX);
-    let slice = bytes.get(start..).unwrap_or(&[]);
-    String::from_utf8_lossy(slice)
+/// How often the callback log is polled while waiting for a response.
+const POLL: Duration = Duration::from_millis(100);
+/// How long the callback log must stay unchanged before a response counts
+/// as complete.
+const QUIET: Duration = Duration::from_millis(400);
+/// Pause between URLs when there is no response to wait for.
+const URL_GAP: Duration = Duration::from_millis(500);
+/// The most of a rewritten (or hugely grown) callback log that is read back.
+const MAX_RESPONSE_BYTES: u64 = 1_048_576;
+
+/// Length and modification time of a log file; a missing file is `(0, None)`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct LogState {
+    len: u64,
+    modified: Option<SystemTime>,
+}
+
+impl LogState {
+    fn of(path: &Path) -> LogState {
+        match fs::metadata(path) {
+            Ok(m) => LogState {
+                len: m.len(),
+                modified: m.modified().ok(),
+            },
+            Err(_) => LogState {
+                len: 0,
+                modified: None,
+            },
+        }
+    }
+}
+
+/// The non-empty, trimmed lines of `path` from byte `from` to the end,
+/// reading at most the last `max` bytes. When that cap cuts into a line, the
+/// partial line is dropped. A `from` past the end (the file shrank) reads
+/// from the start. Unreadable files have no lines.
+fn read_lines_from(path: &Path, from: u64, max: u64) -> Vec<String> {
+    let Ok(mut file) = fs::File::open(path) else {
+        return Vec::new();
+    };
+    let len = file.metadata().map_or(0, |m| m.len());
+    let from = if from > len { 0 } else { from };
+    let capped = len.saturating_sub(max) > from;
+    // When capped, start one byte early: if that byte is the newline ending
+    // the previous line, only it is dropped and no line is lost.
+    let start = if capped { len - max - 1 } else { from };
+    if start > 0 && file.seek(SeekFrom::Start(start)).is_err() {
+        return Vec::new();
+    }
+    let mut bytes = Vec::new();
+    if file.read_to_end(&mut bytes).is_err() {
+        return Vec::new();
+    }
+    if capped {
+        match bytes.iter().position(|&b| b == b'\n') {
+            Some(nl) => {
+                bytes.drain(..=nl);
+            }
+            None => bytes.clear(),
+        }
+    }
+    String::from_utf8_lossy(&bytes)
         .lines()
         .map(str::trim)
         .filter(|l| !l.is_empty())
@@ -113,20 +172,36 @@ fn read_new_lines(path: &Path, from: u64) -> Vec<String> {
         .collect()
 }
 
-fn wait_for_growth(path: &Path, before: u64, wait: Duration) -> Vec<String> {
+/// Wait for the app's response in its callback log: up to `wait` for the log
+/// to differ from `before`, then until it has been unchanged for `QUIET`
+/// (still within `wait`). Returns the new lines: what was appended when the
+/// log grew, else (it shrank, or was rewritten at the same length) the whole
+/// log, capped to its last `MAX_RESPONSE_BYTES`.
+fn wait_for_response(path: &Path, before: LogState, wait: Duration) -> Vec<String> {
     let deadline = Instant::now() + wait;
-    loop {
-        let len = fs::metadata(path).map(|m| m.len()).unwrap_or(0);
-        if len != before {
-            // Give the writer a moment to finish its line.
-            std::thread::sleep(Duration::from_millis(100));
-            return read_new_lines(path, if len < before { 0 } else { before });
-        }
+    let mut current = LogState::of(path);
+    while current == before {
         if Instant::now() >= deadline {
             return Vec::new();
         }
-        std::thread::sleep(Duration::from_millis(100));
+        thread::sleep(POLL);
+        current = LogState::of(path);
     }
+    let mut quiet_since = Instant::now();
+    while quiet_since.elapsed() < QUIET && Instant::now() < deadline {
+        thread::sleep(POLL);
+        let next = LogState::of(path);
+        if next != current {
+            current = next;
+            quiet_since = Instant::now();
+        }
+    }
+    let from = if current.len > before.len {
+        before.len
+    } else {
+        0
+    };
+    read_lines_from(path, from, MAX_RESPONSE_BYTES)
 }
 
 impl Hedge {
@@ -222,8 +297,16 @@ impl Hedge {
         })
     }
 
-    /// Open the URLs of `calls` in order, then wait up to `wait` for the
-    /// app's callback log to record a response.
+    /// Open the URLs of `calls` one at a time, in order.
+    ///
+    /// When `wait` is non-zero and the app has a callback log on this
+    /// platform, each URL's response is awaited before the next URL opens:
+    /// up to `wait` (per URL) for the log to change, then until it has been
+    /// unchanged for 400 ms. The new log lines of every URL are collected in
+    /// `responses`, in order. Without a callback log, or with a zero `wait`,
+    /// URLs open 500 ms apart and `responses` is empty.
+    ///
+    /// If a URL cannot be opened, the error says how many were opened before it.
     pub fn run_commands(
         &self,
         app: &str,
@@ -239,11 +322,12 @@ impl Hedge {
         } else {
             self.callback_log(app)?
         };
-        let before = log
-            .as_ref()
-            .and_then(|p| fs::metadata(p).ok())
-            .map_or(0, |m| m.len());
+        let mut responses = Vec::new();
         for (i, url) in plan.urls.iter().enumerate() {
+            if i > 0 && log.is_none() {
+                thread::sleep(URL_GAP);
+            }
+            let before = log.as_deref().map(LogState::of);
             if let Err(e) = self.host.open_url(url) {
                 return Err(CoreError::Host(format!(
                     "opened {i} of {} URLs before failing ({e}); already opened: {}",
@@ -251,11 +335,10 @@ impl Hedge {
                     plan.urls[..i].join(" ")
                 )));
             }
+            if let (Some(path), Some(before)) = (&log, before) {
+                responses.extend(wait_for_response(path, before, wait));
+            }
         }
-        let responses = match &log {
-            Some(path) => wait_for_growth(path, before, wait),
-            None => Vec::new(),
-        };
         Ok(CommandOutcome { plan, responses })
     }
 
@@ -485,24 +568,30 @@ mod tests {
         assert!(out.responses.is_empty());
     }
 
-    #[test]
-    fn run_waits_for_the_callback_log() {
+    /// A Windows host whose OffShoot callback log exists with `initial`.
+    fn with_callback_log(initial: &str) -> (tempfile::TempDir, PathBuf, Arc<FakeHost>, Hedge) {
         let appdata = tempfile::tempdir().unwrap();
         let log = appdata.path().join("Hedge").join("HedgeCallback.log");
         fs::create_dir_all(log.parent().unwrap()).unwrap();
-        fs::write(&log, "old line\n").unwrap();
-        let (_fake, h) = hedge(
+        fs::write(&log, initial).unwrap();
+        let (fake, h) = hedge(
             FakeHost::new(Os::Windows).with_env("APPDATA", &appdata.path().display().to_string()),
         );
-        let writer_log = log.clone();
+        (appdata, log, fake, h)
+    }
+
+    fn append(path: &Path, line: &str) {
+        use std::io::Write;
+        let mut f = fs::OpenOptions::new().append(true).open(path).unwrap();
+        f.write_all(format!("{line}\n").as_bytes()).unwrap();
+    }
+
+    #[test]
+    fn run_waits_for_the_callback_log() {
+        let (_appdata, log, _fake, h) = with_callback_log("old line\n");
         let writer = std::thread::spawn(move || {
             std::thread::sleep(Duration::from_millis(200));
-            use std::io::Write;
-            let mut f = fs::OpenOptions::new()
-                .append(true)
-                .open(writer_log)
-                .unwrap();
-            f.write_all(b"2026-09-23 10:00:00 | 1 | open\n").unwrap();
+            append(&log, "2026-09-23 10:00:00 | 1 | open");
         });
         let out = h
             .run_commands(
@@ -513,5 +602,110 @@ mod tests {
             .unwrap();
         writer.join().unwrap();
         assert_eq!(out.responses, vec!["2026-09-23 10:00:00 | 1 | open"]);
+    }
+
+    #[test]
+    fn run_sequences_urls_and_collects_each_response() {
+        let (_appdata, log, fake, h) = with_callback_log("old line\n");
+        let writer_fake = fake.clone();
+        // Answer each URL ~200 ms after it opens, noting how many URLs were
+        // open at the time: the second must not open before the first answer.
+        let writer = std::thread::spawn(move || {
+            let mut opened_when_answering = Vec::new();
+            for (n, line) in ["line one", "line two"].into_iter().enumerate() {
+                let deadline = Instant::now() + Duration::from_secs(10);
+                while writer_fake.opened_urls().len() <= n {
+                    assert!(Instant::now() < deadline, "URL {} never opened", n + 1);
+                    thread::sleep(Duration::from_millis(10));
+                }
+                thread::sleep(Duration::from_millis(200));
+                opened_when_answering.push(writer_fake.opened_urls().len());
+                append(&log, line);
+            }
+            opened_when_answering
+        });
+        let out = h
+            .run_commands(
+                "offshoot",
+                &[call("open", json!({})), call("reloadPresets", json!({}))],
+                Duration::from_secs(3),
+            )
+            .unwrap();
+        let opened_when_answering = writer.join().unwrap();
+        assert_eq!(out.responses, vec!["line one", "line two"]);
+        assert_eq!(
+            fake.opened_urls(),
+            vec!["offshoot://open", "offshoot://reloadPresets"]
+        );
+        assert_eq!(opened_when_answering, vec![1, 2]);
+    }
+
+    #[test]
+    fn run_detects_a_same_length_rewrite() {
+        let (_appdata, log, _fake, h) = with_callback_log("aaaa\n");
+        let writer = std::thread::spawn(move || {
+            thread::sleep(Duration::from_millis(200));
+            fs::write(&log, "bbbb\n").unwrap();
+        });
+        let out = h
+            .run_commands(
+                "offshoot",
+                &[call("open", json!({}))],
+                Duration::from_secs(3),
+            )
+            .unwrap();
+        writer.join().unwrap();
+        assert_eq!(out.responses, vec!["bbbb"]);
+    }
+
+    #[test]
+    fn run_reads_a_shrunken_log_from_the_start() {
+        let (_appdata, log, _fake, h) = with_callback_log("old one\nold two\n");
+        let writer = std::thread::spawn(move || {
+            thread::sleep(Duration::from_millis(200));
+            fs::write(&log, "new\n").unwrap();
+        });
+        let out = h
+            .run_commands(
+                "offshoot",
+                &[call("open", json!({}))],
+                Duration::from_secs(3),
+            )
+            .unwrap();
+        writer.join().unwrap();
+        assert_eq!(out.responses, vec!["new"]);
+    }
+
+    #[test]
+    fn run_without_a_response_returns_after_the_wait() {
+        let (_appdata, _log, _fake, h) = with_callback_log("old line\n");
+        let started = Instant::now();
+        let out = h
+            .run_commands(
+                "offshoot",
+                &[call("open", json!({}))],
+                Duration::from_millis(300),
+            )
+            .unwrap();
+        assert!(out.responses.is_empty());
+        assert!(started.elapsed() >= Duration::from_millis(300));
+    }
+
+    #[test]
+    fn reading_lines_caps_and_drops_the_partial_first_line() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("log.txt");
+        // 24 bytes: "first line\n" (0..11), "second\n" (11..18), "third\n" (18..24).
+        fs::write(&path, "first line\nsecond\nthird\n").unwrap();
+        assert_eq!(read_lines_from(&path, 11, 100), vec!["second", "third"]);
+        assert_eq!(read_lines_from(&path, 0, 10), vec!["third"]);
+        assert_eq!(read_lines_from(&path, 0, 13), vec!["second", "third"]);
+        assert_eq!(read_lines_from(&path, 0, 100).len(), 3);
+        assert_eq!(
+            read_lines_from(&path, 99, 100).len(),
+            3,
+            "shrank: from start"
+        );
+        assert!(read_lines_from(&dir.path().join("missing"), 0, 100).is_empty());
     }
 }
