@@ -31,26 +31,14 @@ fn assert_valid(v: &Validator, instance: &Value, what: &str) {
     );
 }
 
-/// Manifest extraction as documented in schema/README.md. Phase 2 moves this
-/// into the core crate proper; until then the test owns it.
-fn extract_manifest(py_source: &str) -> Value {
-    let start = py_source.find("\"\"\"").expect("docstring start") + 3;
-    let end = py_source[start..].find("\"\"\"").expect("docstring end") + start;
-    let doc = &py_source[start..end];
-    let json_part = doc
-        .lines()
-        .take_while(|line| line.trim_end() != "---")
-        .collect::<Vec<_>>()
-        .join("\n");
-    serde_json::from_str(json_part.trim()).expect("manifest JSON")
-}
-
 fn dirs_in(path: &Path) -> Vec<PathBuf> {
-    let mut v: Vec<PathBuf> = fs::read_dir(path)
-        .unwrap_or_else(|e| panic!("read_dir {}: {e}", path.display()))
-        .map(|e| e.unwrap().path())
-        .filter(|p| p.is_dir())
-        .collect();
+    let mut v: Vec<PathBuf> = match fs::read_dir(path) {
+        Ok(rd) => rd
+            .map(|e| e.unwrap().path())
+            .filter(|p| p.is_dir())
+            .collect(),
+        Err(_) => Vec::new(),
+    };
     v.sort();
     v
 }
@@ -78,6 +66,8 @@ fn every_valid_fixture_data_dir_validates() {
     let cases = dirs_in(&schema_root().join("fixtures/valid"));
     assert!(!cases.is_empty(), "no valid fixture cases found");
 
+    let (mut profiles_seen, mut scripts_seen, mut run_lines_seen) = (0, 0, 0);
+
     for case in cases {
         let name = case.file_name().unwrap().to_string_lossy().to_string();
 
@@ -88,6 +78,7 @@ fn every_valid_fixture_data_dir_validates() {
         );
 
         for prof in dirs_in(&case.join("profiles")) {
+            profiles_seen += 1;
             let pname = prof.file_name().unwrap().to_string_lossy().to_string();
             assert_valid(
                 &profile,
@@ -102,23 +93,37 @@ fn every_valid_fixture_data_dir_validates() {
                 );
             }
             for script in files_in(&prof.join("scripts"), "py") {
+                scripts_seen += 1;
                 let src = fs::read_to_string(&script).unwrap();
-                assert_valid(
-                    &manifest,
-                    &extract_manifest(&src),
-                    &script.display().to_string(),
-                );
+                let text = hedgebuddy_core::manifest::extract_manifest_text(&src)
+                    .unwrap_or_else(|| panic!("{} has no manifest block", script.display()));
+                let value: Value = serde_json::from_str(text.trim()).expect("manifest JSON");
+                assert_valid(&manifest, &value, &script.display().to_string());
             }
         }
 
         for log in files_in(&case.join("runs"), "jsonl") {
             let text = fs::read_to_string(&log).unwrap();
             for (i, line) in text.lines().filter(|l| !l.trim().is_empty()).enumerate() {
+                run_lines_seen += 1;
                 let v: Value = serde_json::from_str(line).unwrap();
                 assert_valid(&run_record, &v, &format!("{}:{}", log.display(), i + 1));
             }
         }
     }
+
+    assert!(
+        profiles_seen >= 1,
+        "valid fixtures must contain at least one profile"
+    );
+    assert!(
+        scripts_seen >= 1,
+        "valid fixtures must contain at least one script"
+    );
+    assert!(
+        run_lines_seen >= 1,
+        "valid fixtures must contain at least one run record"
+    );
 }
 
 #[test]
@@ -140,7 +145,7 @@ fn every_invalid_fixture_fails_its_schema() {
         }
     }
     assert!(
-        checked >= 6,
-        "expected at least 6 invalid fixtures, checked {checked}"
+        checked >= 7,
+        "expected at least 7 invalid fixtures, checked {checked}"
     );
 }

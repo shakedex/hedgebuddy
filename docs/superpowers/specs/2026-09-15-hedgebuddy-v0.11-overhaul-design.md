@@ -91,7 +91,7 @@ Data directory: `%APPDATA%\HedgeBuddy` on Windows, `~/Library/Application Suppor
 
 ```
 HedgeBuddy/
-├── hedgebuddy.json          {"version": 1, "active_profile": "<name>"}
+├── hedgebuddy.json          {"version": 1, "active_profile": "<name>" | null}
 ├── profiles/<name>/
 │   ├── profile.json         variables + metadata
 │   ├── secrets.json         secret-typed values only; file mode 0600; excluded from export by default
@@ -100,6 +100,8 @@ HedgeBuddy/
 ├── runs/YYYY-MM-DD.jsonl    append-only run records
 └── preferences.json         GUI preferences
 ```
+
+`active_profile` is `null` when no profile exists (a fresh install). A missing `hedgebuddy.json` is read as `{"version": 1, "active_profile": null}`; `profiles/` and `runs/` are created on first write.
 
 `profile.json`:
 

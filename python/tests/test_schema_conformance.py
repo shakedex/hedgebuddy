@@ -29,10 +29,33 @@ def assert_valid(v: Draft202012Validator, instance, what: str) -> None:
 
 
 def extract_manifest(py_source: str):
-    """Manifest extraction per schema/README.md. Phase 4 moves this into the package."""
-    start = py_source.index('"""') + 3
-    end = py_source.index('"""', start)
-    doc = py_source[start:end]
+    """Manifest extraction per schema/README.md. Phase 4 moves this into the package.
+
+    The module docstring is the first statement in the file after any blank
+    lines and `#` comment lines; it may use `\"\"\"` or `'''`. The text before
+    the first line that is `---` (trailing whitespace ignored) is the
+    manifest when it starts with `{`; otherwise there is no manifest and
+    this returns `None`.
+    """
+    lines = py_source.splitlines(keepends=True)
+    i = 0
+    while i < len(lines) and (lines[i].strip() == "" or lines[i].lstrip().startswith("#")):
+        i += 1
+    body = "".join(lines[i:])
+
+    if body.lstrip().startswith('"""'):
+        quote = '"""'
+    elif body.lstrip().startswith("'''"):
+        quote = "'''"
+    else:
+        return None
+
+    start = body.index(quote) + 3
+    end = body.index(quote, start)
+    doc = body[start:end]
+    if not doc.lstrip().startswith("{"):
+        return None
+
     json_lines = []
     for line in doc.splitlines():
         if line.rstrip() == "---":
@@ -55,12 +78,15 @@ def test_valid_fixture_data_dir_validates(case: Path):
 
     assert_valid(hedgebuddy, load_json(case / "hedgebuddy.json"), f"{case.name}/hedgebuddy.json")
 
-    for prof in sorted(p for p in (case / "profiles").iterdir() if p.is_dir()):
+    profiles_dir = case / "profiles"
+    for prof in sorted(p for p in profiles_dir.iterdir() if p.is_dir()) if profiles_dir.exists() else []:
         assert_valid(profile, load_json(prof / "profile.json"), f"{case.name}/{prof.name}/profile.json")
         if (prof / "secrets.json").exists():
             assert_valid(secrets, load_json(prof / "secrets.json"), f"{case.name}/{prof.name}/secrets.json")
         for script in sorted((prof / "scripts").glob("*.py")):
-            assert_valid(manifest, extract_manifest(script.read_text(encoding="utf-8")), str(script))
+            parsed = extract_manifest(script.read_text(encoding="utf-8"))
+            if parsed is not None:
+                assert_valid(manifest, parsed, str(script))
 
     runs = case / "runs"
     if runs.exists():
@@ -68,6 +94,21 @@ def test_valid_fixture_data_dir_validates(case: Path):
             for i, line in enumerate(log.read_text(encoding="utf-8").splitlines(), start=1):
                 if line.strip():
                     assert_valid(run_record, json.loads(line), f"{log}:{i}")
+
+
+def test_valid_fixtures_exercise_every_schema():
+    profiles = scripts = run_lines = 0
+    for case in valid_cases():
+        profiles_dir = case / "profiles"
+        if profiles_dir.exists():
+            for prof in (p for p in profiles_dir.iterdir() if p.is_dir()):
+                profiles += 1
+                scripts += len(list((prof / "scripts").glob("*.py")))
+        runs = case / "runs"
+        if runs.exists():
+            for log in runs.glob("*.jsonl"):
+                run_lines += sum(1 for l in log.read_text(encoding="utf-8").splitlines() if l.strip())
+    assert profiles >= 1 and scripts >= 1 and run_lines >= 1
 
 
 def invalid_files():
@@ -82,4 +123,4 @@ def test_invalid_fixture_fails_its_schema(stem: str, file: Path):
 
 
 def test_there_are_invalid_fixtures():
-    assert len(invalid_files()) >= 6
+    assert len(invalid_files()) >= 7
