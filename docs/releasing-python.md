@@ -6,6 +6,7 @@ The `hedgebuddy` package on PyPI is published by the **Publish Python package** 
 
 1. On pypi.org, open the `hedgebuddy` project, then Publishing, and add a GitHub trusted publisher: owner `shakedex`, repository `hedgebuddy`, workflow `publish-python.yml`, environment `pypi`.
 2. In the GitHub repository settings, create an environment named `pypi`. Adding yourself as a required reviewer makes every publish wait for your approval.
+3. In the same environment, under Deployment branches and tags, choose Selected branches and tags and allow only `main`. A run started from any other branch then cannot publish.
 
 ## Each release
 

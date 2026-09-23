@@ -16,6 +16,8 @@ py -3 -m pip install hedgebuddy        # Windows
 python3 -m pip install hedgebuddy      # macOS
 ```
 
+Until 0.11.0 is on PyPI, install it from a checkout of this repository with `py -3 -m pip install ./python`.
+
 HedgeBuddy's `check_script` tool tells you when it is missing.
 
 ## A script
@@ -91,6 +93,8 @@ Put imports and helper functions above the decorated `main`, and keep `main` las
 
 Secrets come from the profile's secrets file. `vars.get("NAME", default)` and `"NAME" in vars` work too.
 
+Inside a script, `vars.NAME` falls back to the manifest `default`, while `hb.var("NAME")` reads only the profile.
+
 ### `event`
 
 The payload's keys, without the `<EventName>_` prefix: `event.state`, `event.destinationPath`. A value that holds a JSON object or array is decoded for you. Other attributes:
@@ -114,8 +118,16 @@ Errors: `VariableNotFoundError`, `VariableTypeError`, `StorageNotFoundError`, `S
 
 ## Trying a script by hand
 
-Pass the payload as the first argument. Point `HEDGEBUDDY_DATA_DIR` at a test data folder if you do not want the run recorded in your real one:
+Pass the payload as the first argument. Point `HEDGEBUDDY_DATA_DIR` at a test data folder if you do not want the run recorded in your real one.
+
+On Windows, in `cmd`:
+
+```bat
+py -3 on_copy_complete.py "{\"FileCopyCompleted_state\": \"Success\"}"
+```
+
+On macOS:
 
 ```bash
-py -3 on_copy_complete.py "{\"FileCopyCompleted_state\": \"Success\", \"FileCopyCompleted_destinationPath\": \"D:/Offload/A003\"}"
+python3 on_copy_complete.py '{"FileCopyCompleted_state": "Success"}'
 ```

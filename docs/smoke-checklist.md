@@ -1,4 +1,4 @@
-# Manual smoke checklist (phase 3)
+# Manual smoke checklist (phases 3 and 4)
 
 These steps change real Hedge app settings and need a machine with OffShoot Pro (and optionally FoolCat Pro). Run them from Claude Desktop or Claude Code with the HedgeBuddy MCP server connected, or with `hedgebuddy call`. Record results in the boxes.
 
@@ -12,9 +12,12 @@ These steps change real Hedge app settings and need a machine with OffShoot Pro 
 - [ ] For each: `clear_stale_attachment` with `dry_run: true`, then without. Afterwards `list_attachments` shows `detached`. Result:
 
 ## 3. Attach a real script
-- [ ] `create_profile` `smoke`, then `write_script` `log_copy.py` with manifest app offshoot, event FileCopyCompleted, whose body appends `sys.argv[1]` to a text file in your home folder (plain Python; the hedgebuddy package is phase 4).
+- [ ] Install the hedgebuddy package for the Python OffShoot uses, from a checkout of this repository: `py -3 -m pip install ./python`.
+- [ ] `create_profile` `smoke`, then `write_script` `log_copy.py` with manifest app offshoot, event FileCopyCompleted. Make it an `@hb.script` script whose `main` calls `hb.log(f"{event.name}: {event.raw}")`. `check_script` reports no issues and does not say the package is missing. Result:
 - [ ] `attach_script` with `dry_run`, then for real. `list_attachments` shows `attached`.
 - [ ] Copy a small folder with OffShoot **without restarting it**. Did the script run? (If not, restart OffShoot and repeat.) Result — do attachments apply live or only after a restart?:
+- [ ] `list_runs` shows the run of `log_copy.py` with status `ok`. Its log line holds the payload fields, such as `FileCopyCompleted_state`. Result:
+- [ ] Make the script fail: `write_script` `log_copy.py` again with `raise RuntimeError("smoke test")` as the last line of `main`, then copy again. `list_runs` (or `get_run`) shows the new run with status `error` and a traceback ending in `RuntimeError: smoke test`. Restore the script afterwards. Result:
 - [ ] If FoolCat is installed: `write_script` `log_report.py` with manifest app foolcat, event ReportCreated, and the same body. `attach_script` with `dry_run` first, then for real. Create a report in FoolCat. Did the script run? Result:
 
 ## 4. Commands
