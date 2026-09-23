@@ -12,6 +12,7 @@
 pub mod catalog;
 pub mod error;
 pub(crate) mod fs_util;
+pub mod hedge;
 pub mod host;
 pub mod manifest;
 pub mod paths;
@@ -25,6 +26,7 @@ pub mod watch;
 
 pub use catalog::Catalog;
 pub use error::{CoreError, Result};
+pub use hedge::Hedge;
 pub use host::{FakeHost, Host, Os, RealHost};
 pub use manifest::{
     check_requirements, extract_manifest_text, parse_manifest, Manifest, Requirement,
