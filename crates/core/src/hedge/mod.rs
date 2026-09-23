@@ -10,8 +10,10 @@ use crate::error::Result;
 use crate::host::Host;
 
 mod apps;
+mod attach;
 
 pub use apps::{compare_versions, AppDescription, AppStatus, ResolvedFiles, ScriptingSupport};
+pub use attach::{managed_script, Action, AttachState, EventAttachment};
 
 /// Hedge app operations on one machine.
 pub struct Hedge {
