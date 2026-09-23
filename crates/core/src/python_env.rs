@@ -15,7 +15,7 @@ use crate::host::{Host, Os};
 pub(crate) const PROBE: &str = "import json, sys\ntry:\n    from importlib import metadata\n    v = metadata.version('hedgebuddy')\nexcept Exception:\n    v = None\nprint(json.dumps({'executable': sys.executable, 'version': '%d.%d.%d' % tuple(sys.version_info[:3]), 'hedgebuddy': v}))\n";
 
 pub(crate) const SYNTAX_CHECK: &str =
-    "import ast, sys\nsrc = open(sys.argv[1], encoding='utf-8').read()\nast.parse(src, sys.argv[1])\n";
+    "import ast, sys\nsrc = open(sys.argv[1], 'rb').read()\nast.parse(src, sys.argv[1])\n";
 
 /// The interpreter Hedge apps use.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
