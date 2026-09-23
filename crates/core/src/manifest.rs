@@ -63,8 +63,9 @@ pub enum RequirementIssue {
 
 /// The text before the `---` line of the first `"""` or `'''` docstring, when that
 /// text begins with `{`. Leading blank lines and comment lines (`#`) are skipped.
-/// Trailing whitespace on the `---` line is ignored.
+/// Trailing whitespace on the `---` line is ignored. A leading UTF-8 BOM is skipped.
 pub fn extract_manifest_text(source: &str) -> Option<String> {
+    let source = source.strip_prefix('\u{feff}').unwrap_or(source);
     // The module docstring is the first statement: skip blank lines and
     // comments, then require the file to open with a triple quote.
     let body = source
@@ -154,6 +155,16 @@ mod tests {
         assert_eq!(m.event.as_deref(), Some("FileCopyCompleted"));
         assert_eq!(m.requires["SLACK_WEBHOOK"].ty, VarType::Secret);
         assert_eq!(m.requires["PROJECT_NAME"].default, Some(json!("Untitled")));
+    }
+
+    #[test]
+    fn a_leading_bom_is_skipped() {
+        let src = "\u{feff}\"\"\"\n{\"hedgebuddy\": 1}\n---\n\"\"\"\n";
+        // The docstring text starts with the newline after the quotes, as in Python.
+        assert_eq!(
+            extract_manifest_text(src).as_deref(),
+            Some("\n{\"hedgebuddy\": 1}")
+        );
     }
 
     #[test]
