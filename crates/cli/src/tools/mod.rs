@@ -280,6 +280,32 @@ mod tests {
     }
 
     #[test]
+    fn an_override_declaring_a_license_command_falls_back() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(dir.path().join("HedgeBuddy"));
+        std::fs::create_dir_all(store.catalog_dir()).unwrap();
+        let offshoot = include_str!("../../../../catalog/offshoot.toml");
+        std::fs::write(
+            store.catalog_dir().join("offshoot.toml"),
+            format!("{offshoot}\n[[commands]]\nid = \"activate\"\nform = \"url\"\n"),
+        )
+        .unwrap();
+        let ctx = Context::new(store, Arc::new(FakeHost::new(Os::Windows)));
+        assert!(ctx
+            .catalog_error
+            .as_deref()
+            .unwrap()
+            .contains("license commands are never exposed"));
+        let err = call(
+            &ctx,
+            "run_app_command",
+            json!({"app": "offshoot", "commands": [{"command": "activate"}], "dry_run": true}),
+        )
+        .unwrap_err();
+        assert!(err.0.contains("activate"), "{err}");
+    }
+
+    #[test]
     fn concurrent_writes_to_one_profile_are_all_kept() {
         let (_d, _f, ctx) = test_ctx(FakeHost::new(Os::Windows));
         let ctx = Arc::new(ctx);
