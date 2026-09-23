@@ -16,6 +16,7 @@ use serde_json::{json, Value};
 // legacy textual scoping (which would otherwise make that re-export, or the
 // group modules' own `use super::tool;`, look unused to `unused_imports`).
 mod profiles;
+mod variables;
 
 /// Build a [`ToolDef`] from a name, description, hints, parameter type, and
 /// handler `fn(&Context, Params) -> ToolResult`.
@@ -175,6 +176,7 @@ pub struct NoParams {}
 pub fn all() -> Vec<ToolDef> {
     let mut tools = Vec::new();
     tools.extend(profiles::tools());
+    tools.extend(variables::tools());
     tools
 }
 
