@@ -44,3 +44,4 @@ id = "gettapes"
 description = "Write the tape list as JSON to a file. The path is required on macOS."
 form = "url"
 params = { path = "path?" }
+confirm = true

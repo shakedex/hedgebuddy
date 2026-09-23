@@ -4,12 +4,13 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
+use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
 use crate::error::{CoreError, Result};
-use crate::host::{Host, Os};
+use crate::host::{split_registry_key, Host, Os};
 use crate::variable::validate_slug;
 
 const EMBEDDED: [(&str, &str); 4] = [
@@ -336,6 +337,37 @@ impl AppManifest {
                 _ => {}
             }
         }
+        self.validate_registry_keys()
+    }
+
+    /// Every registry key the manifest declares, in either OS slot, must look
+    /// like `HKCU\Software\Name`, the form the Windows host accepts.
+    fn validate_registry_keys(&self) -> Result<()> {
+        let mut keys: Vec<(String, &str)> = Vec::new();
+        for os in [Os::Windows, Os::Macos] {
+            let slot = os.as_str();
+            if let Some(key) = self.detect.get(os).and_then(|d| d.registry_key.as_deref()) {
+                keys.push((format!("detect.{slot}.registry_key"), key));
+            }
+            if let Some(Scripting::Registry { key, .. }) = self.scripting.get(os) {
+                keys.push((format!("scripting.{slot}.key"), key));
+            }
+            if let Some(key) = self.presets.get(os).and_then(|p| p.registry_key.as_deref()) {
+                keys.push((format!("presets.{slot}.registry_key"), key));
+            }
+        }
+        for (field, key) in keys {
+            if let Err(e) = split_registry_key(key) {
+                let message = match e {
+                    CoreError::Validation(m) => m,
+                    other => other.to_string(),
+                };
+                return Err(CoreError::Catalog(format!(
+                    "{}: {field}: {message}",
+                    self.app.id
+                )));
+            }
+        }
         Ok(())
     }
 }
@@ -372,14 +404,17 @@ impl Catalog {
     }
 
     /// The embedded manifests, with every `<id>.toml` in `overrides_dir`
-    /// replacing or adding the app of the same id. A missing folder is fine.
+    /// replacing or adding the app of the same id. A missing folder means no
+    /// overrides; any other error reading it is reported.
     pub fn load(overrides_dir: Option<&Path>) -> Result<Catalog> {
         let mut catalog = Catalog::embedded()?;
         let Some(dir) = overrides_dir else {
             return Ok(catalog);
         };
-        let Ok(entries) = fs::read_dir(dir) else {
-            return Ok(catalog);
+        let entries = match fs::read_dir(dir) {
+            Ok(entries) => entries,
+            Err(e) if e.kind() == ErrorKind::NotFound => return Ok(catalog),
+            Err(e) => return Err(CoreError::io(dir, e)),
         };
         let mut files: Vec<PathBuf> = entries
             .filter_map(|e| e.ok())
@@ -427,7 +462,11 @@ impl Catalog {
 }
 
 /// Expand a leading `~` (home directory) and `%NAME%` environment variables.
-/// On non-Windows builds, backslashes become slashes.
+/// When `host` is Windows but this build is not (a Windows [`FakeHost`] in a
+/// test on macOS), backslashes become slashes; otherwise the result keeps the
+/// template's separators, so real macOS values containing `\` are untouched.
+///
+/// [`FakeHost`]: crate::host::FakeHost
 pub fn expand_path(host: &dyn Host, template: &str) -> Result<PathBuf> {
     let mut out = String::new();
     let mut rest = template;
@@ -454,10 +493,11 @@ pub fn expand_path(host: &dyn Host, template: &str) -> Result<PathBuf> {
         rest = &after[end + 1..];
     }
     out.push_str(rest);
-    // Windows catalog templates use backslashes. On non-Windows builds they
-    // are only reached from tests with a Windows FakeHost, and those tests
-    // still touch the real Unix filesystem, so make them usable there.
-    if !cfg!(windows) {
+    // Windows catalog templates use backslashes. A Windows host on a
+    // non-Windows build only happens in tests with a Windows FakeHost, and
+    // those tests still touch the real Unix filesystem, so make them usable
+    // there.
+    if host.os() == Os::Windows && !cfg!(windows) {
         out = out.replace('\\', "/");
     }
     Ok(PathBuf::from(out))
@@ -612,6 +652,18 @@ docs = "https://example.com"
     }
 
     #[test]
+    fn unreadable_overrides_folder_is_an_error() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("not-a-folder");
+        fs::write(&file, "x").unwrap();
+        let err = Catalog::load(Some(&file)).unwrap_err();
+        assert!(
+            matches!(&err, CoreError::Io { path, .. } if path == &file),
+            "{err}"
+        );
+    }
+
+    #[test]
     fn invalid_overrides_are_reported_with_the_file_name() {
         let dir = tempfile::tempdir().unwrap();
         fs::write(dir.path().join("broken.toml"), "catalog_version = [").unwrap();
@@ -669,6 +721,29 @@ docs = "https://example.com"
     }
 
     #[test]
+    fn registry_keys_must_name_a_supported_root() {
+        let parse = |extra: &str| parse_app_manifest(&format!("{MINIMAL}{extra}"), "t");
+        for extra in [
+            "\n[detect.windows]\nregistry_key = 'Software\\Hedge'\n",
+            "\n[detect.macos]\nregistry_key = 'HKCR\\Hedge'\n",
+            "\n[scripting.windows]\nkind = \"registry\"\nkey = 'HKCU'\nenable_value = \"E\"\nvalue_pattern = \"S{registry_name}\"\n",
+            "\n[presets.windows]\ndir = \"x\"\nregistry_key = 'Software\\Hedge'\n",
+            "\n[presets.macos]\ndir = \"x\"\nregistry_key = 'HKLM\\'\n",
+        ] {
+            let err = parse(extra).unwrap_err();
+            assert!(
+                matches!(&err, CoreError::Catalog(m) if m.contains("newapp") && m.contains("registry")),
+                "{extra}: {err}"
+            );
+        }
+        let ok = parse(
+            "\n[detect.windows]\nregistry_key = 'HKCU\\Software\\Hedge'\n\
+             [presets.windows]\ndir = \"x\"\nregistry_key = 'HKEY_LOCAL_MACHINE\\Software\\Hedge'\n",
+        );
+        assert!(ok.is_ok(), "{ok:?}");
+    }
+
+    #[test]
     fn paths_expand_env_and_home() {
         let host = FakeHost::new(Os::Windows)
             .with_env("APPDATA", "C:\\Users\\x\\AppData\\Roaming")
@@ -694,5 +769,12 @@ docs = "https://example.com"
             expand_path(&host, "%APPDATA\\x").unwrap_err(),
             CoreError::Catalog(_)
         ));
+
+        // A macOS host keeps a backslash that is part of a file name.
+        let mac = FakeHost::new(Os::Macos).with_home("/Users/x");
+        assert_eq!(
+            expand_path(&mac, "~/Logs/a\\b.txt").unwrap(),
+            PathBuf::from("/Users/x/Logs/a\\b.txt")
+        );
     }
 }

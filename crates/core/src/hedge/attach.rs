@@ -261,9 +261,14 @@ impl Hedge {
     }
 
     /// The actions that attach `script_path` to `app`'s `event`. Reads only.
+    /// A relative `script_path` is made absolute against the current
+    /// directory first, since the app resolves the stored path on its own.
     pub fn plan_attach(&self, app: &str, event: &str, script_path: &Path) -> Result<Vec<Action>> {
         let m = self.catalog.app(app)?;
         let e = m.event(event)?;
+        let script_path =
+            std::path::absolute(script_path).map_err(|err| CoreError::io(script_path, err))?;
+        let script_path = script_path.as_path();
         let target = script_path.display().to_string();
         let scripting = m.scripting.get(self.host.os());
         match scripting {
@@ -674,6 +679,24 @@ mod tests {
             arr[1]["setPreferences"]["scripting_events_disk_added"],
             path.display().to_string()
         );
+    }
+
+    #[test]
+    fn relative_script_paths_are_stored_absolute() {
+        let (_d, _store, _fake, hedge) = setup(FakeHost::new(Os::Windows));
+        // `cargo test` runs in the package directory, where Cargo.toml exists.
+        let plan = hedge
+            .plan_attach("offshoot", "DiskAdded", Path::new("Cargo.toml"))
+            .unwrap();
+        let Action::RegistrySet {
+            data: RegValue::String(stored),
+            ..
+        } = &plan[1]
+        else {
+            panic!("{plan:?}");
+        };
+        assert!(Path::new(stored).is_absolute(), "{stored}");
+        assert!(Path::new(stored).ends_with("Cargo.toml"), "{stored}");
     }
 
     #[test]

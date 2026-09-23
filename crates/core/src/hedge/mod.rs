@@ -27,6 +27,12 @@ pub struct Hedge {
     catalog: Catalog,
 }
 
+// Front ends share one `Hedge` across threads (async runtimes, MCP handlers).
+const _: fn() = || {
+    fn assert_send_sync<T: Send + Sync>() {}
+    assert_send_sync::<Hedge>();
+};
+
 impl Hedge {
     /// Combine a host and a catalog.
     pub fn new(host: Arc<dyn Host>, catalog: Catalog) -> Hedge {
