@@ -1,27 +1,32 @@
-import { useSyncExternalStore } from "react";
+import { Route, Router, Switch } from "wouter";
+import { useHashLocation } from "wouter/use-hash-location";
+import { isPreview } from "@/api/bridge";
 import { useDataChanged } from "@/api/events";
-import { useHomeSummary } from "@/api/queries";
+import { AppShell } from "@/components/app/app-shell";
 import { DesignGallery } from "@/screens/design/design-gallery";
+import { Placeholder } from "@/screens/placeholder";
 
-const subscribeHash = (onChange: () => void) => {
-  window.addEventListener("hashchange", onChange);
-  return () => window.removeEventListener("hashchange", onChange);
-};
-
-/** Temporary until Task 13's router: `#/_design` shows the design gallery, anything else the smoke page. */
 export default function App() {
-  const hash = useSyncExternalStore(subscribeHash, () => window.location.hash);
-  return hash === "#/_design" ? <DesignGallery /> : <Smoke />;
-}
-
-function Smoke() {
   useDataChanged();
-  const summary = useHomeSummary();
   return (
-    <main className="h-full overflow-auto p-4">
-      <pre className="font-mono text-xs">
-        {summary.isPending ? "loading…" : summary.isError ? `error: ${summary.error.message}` : JSON.stringify(summary.data, null, 2)}
-      </pre>
-    </main>
+    <Router hook={useHashLocation}>
+      <AppShell>
+        <Switch>
+          <Route path="/">{/* Task 14: <HomeScreen /> */}<Placeholder screen="home" /></Route>
+          <Route path="/runs">{/* Task 15 */}<Placeholder screen="runs" /></Route>
+          <Route path="/runs/:runId">{() => <Placeholder screen="runs" />}</Route>
+          <Route path="/variables">{() => <Placeholder screen="variables" />}</Route>
+          <Route path="/variables/:name">{(p) => <Placeholder screen="variables" name={decodeURIComponent(p.name)} />}</Route>
+          <Route path="/scripts">{() => <Placeholder screen="scripts" />}</Route>
+          <Route path="/scripts/:name">{(p) => <Placeholder screen="scripts" name={decodeURIComponent(p.name)} />}</Route>
+          <Route path="/apps">{() => <Placeholder screen="apps" />}</Route>
+          <Route path="/apps/:id">{(p) => <Placeholder screen="apps" name={p.id} />}</Route>
+          <Route path="/connect">{() => <Placeholder screen="connect" />}</Route>
+          <Route path="/settings">{() => <Placeholder screen="settings" />}</Route>
+          {isPreview && <Route path="/_design"><DesignGallery /></Route>}
+          <Route><Placeholder screen="home" /></Route>
+        </Switch>
+      </AppShell>
+    </Router>
   );
 }
