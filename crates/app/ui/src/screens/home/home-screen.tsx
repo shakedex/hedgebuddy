@@ -21,14 +21,24 @@ export function HomeScreen() {
   else if (summary.isSuccess) lastError.current = null;
 
   // Once there's an active profile, `FirstRun` (and its "Create profile" button) unmounts as this screen
-  // swaps to the dashboard. Land focus on the dashboard's first heading instead of losing it to <body>.
+  // swaps to the dashboard. Land focus on the dashboard's first heading instead of losing it to <body> —
+  // but only for that actual first-run-finished transition, not for an ordinary mount that already has an
+  // active profile (a fresh page load, or navigating to Home from another screen: the shell keys this
+  // screen's subtree on its route, so `HomeScreen` fully remounts every time, and every `useRef` starts
+  // over). `sawFirstRun` only ever becomes true once *this* mount has actually observed a successful load
+  // with no active profile (i.e. it rendered `FirstRun`), so an ordinary mount — where the very first
+  // successful read already has a profile — never sets it and so never steals focus.
   const attentionHeadingRef = useRef<HTMLHeadingElement>(null);
-  const hadProfile = useRef(false);
+  const sawFirstRun = useRef(false);
   useEffect(() => {
-    const hasProfile = Boolean(summary.data?.active_profile);
-    if (hasProfile && !hadProfile.current) attentionHeadingRef.current?.focus();
-    hadProfile.current = hasProfile;
-  }, [summary.data?.active_profile]);
+    if (!summary.isSuccess) return;
+    if (!summary.data.active_profile) {
+      sawFirstRun.current = true;
+    } else if (sawFirstRun.current) {
+      attentionHeadingRef.current?.focus();
+      sawFirstRun.current = false;
+    }
+  }, [summary.isSuccess, summary.data?.active_profile]);
 
   if (summary.isPending && lastError.current === null) return <HomeSkeleton />;
 
