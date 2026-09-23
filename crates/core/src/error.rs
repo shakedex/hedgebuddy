@@ -63,6 +63,10 @@ pub enum CoreError {
     /// The app has no command with this id.
     #[error("{app} has no command '{command}'")]
     CommandNotFound { app: String, command: String },
+    /// Another HedgeBuddy process held the data folder's write lock for the
+    /// whole wait.
+    #[error("another HedgeBuddy is busy; try again")]
+    Busy,
     /// The data directory's location could not be determined.
     #[error(transparent)]
     Path(#[from] crate::paths::PathError),

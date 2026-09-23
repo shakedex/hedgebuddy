@@ -3,9 +3,10 @@
 //! a JSON result over a [`Context`]; the MCP server, `hedgebuddy call` and the
 //! desktop app all dispatch through [`call`].
 
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
+use std::time::Duration;
 
-use hedgebuddy_core::{Catalog, CoreError, Hedge, Host, RealHost, Store};
+use hedgebuddy_core::{Catalog, CoreError, DataLock, Hedge, Host, RealHost, Store, LOCK_TIMEOUT};
 use schemars::generate::SchemaSettings;
 use schemars::JsonSchema;
 use serde::de::DeserializeOwned;
@@ -55,8 +56,13 @@ pub struct Context {
     /// Held by [`call`] around every tool that is not read-only, so writes
     /// within this process run one at a time: the store's read-modify-write
     /// updates don't lose each other's changes, and two `run_app_command`
-    /// calls don't drive a Hedge app at the same time.
+    /// calls don't drive a Hedge app at the same time. [`Context::write_guard`]
+    /// takes it together with the data folder's cross-process lock, which
+    /// does the same across HedgeBuddy processes.
     pub(crate) write_lock: Mutex<()>,
+    /// How long a write waits for another HedgeBuddy process to release the
+    /// data folder's lock.
+    pub(crate) lock_timeout: Duration,
 }
 
 impl Context {
@@ -75,7 +81,28 @@ impl Context {
             hedge: Hedge::new(host, catalog),
             catalog_error,
             write_lock: Mutex::new(()),
+            lock_timeout: LOCK_TIMEOUT,
         }
+    }
+
+    /// The same context with a different wait for the data folder's lock
+    /// (tests use a short one).
+    pub fn with_lock_timeout(mut self, timeout: Duration) -> Context {
+        self.lock_timeout = timeout;
+        self
+    }
+
+    /// Serialise a write: this process's mutex first, then the data folder's
+    /// cross-process lock. Hold the guard for the whole write.
+    pub fn write_guard(&self) -> Result<WriteGuard<'_>, ToolError> {
+        // A tool that panicked while holding the mutex leaves nothing
+        // half-held in `()`, so a poisoned mutex is still safe to take.
+        let process = self.write_lock.lock().unwrap_or_else(|e| e.into_inner());
+        let data = self.store.lock_within(self.lock_timeout)?;
+        Ok(WriteGuard {
+            _data: data,
+            _process: process,
+        })
     }
 
     /// The real machine and the platform data directory.
@@ -96,6 +123,13 @@ impl Context {
     }
 }
 
+/// Held while a write runs; see [`Context::write_guard`]. Fields drop in
+/// order, so the cross-process lock is released first.
+pub struct WriteGuard<'a> {
+    _data: DataLock,
+    _process: MutexGuard<'a, ()>,
+}
+
 /// A tool failure, reported to the caller as text.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ToolError(pub String);
@@ -104,6 +138,12 @@ impl ToolError {
     /// A tool error with this message.
     pub fn new(message: impl Into<String>) -> ToolError {
         ToolError(message.into())
+    }
+
+    /// Whether this is the "another HedgeBuddy is busy" error, which the
+    /// caller can offer to retry.
+    pub fn is_busy(&self) -> bool {
+        self.0 == hedgebuddy_core::BUSY_MESSAGE
     }
 }
 
@@ -241,7 +281,7 @@ pub fn all() -> Vec<ToolDef> {
 }
 
 /// Run one tool by name. Tools that are not read-only run under
-/// [`Context::write_lock`], one at a time.
+/// [`Context::write_guard`], one at a time across every HedgeBuddy process.
 pub fn call(ctx: &Context, name: &str, args: Value) -> ToolResult {
     let def = all()
         .into_iter()
@@ -250,9 +290,7 @@ pub fn call(ctx: &Context, name: &str, args: Value) -> ToolResult {
     let result = if def.hints.read_only {
         (def.run)(ctx, args)
     } else {
-        // A tool that panicked while holding the lock leaves nothing half-held
-        // in `()`, so a poisoned lock is still safe to take.
-        let _guard = ctx.write_lock.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = ctx.write_guard()?;
         (def.run)(ctx, args)
     };
     #[cfg(test)]
@@ -467,5 +505,22 @@ mod tests {
             .unwrap();
             assert_eq!(v["value"], format!("v{i}"), "{v}");
         }
+    }
+
+    #[test]
+    fn writes_wait_for_another_holder_and_report_busy() {
+        let (_d, _f, ctx) = test_ctx(FakeHost::new(Os::Windows));
+        let ctx = ctx.with_lock_timeout(std::time::Duration::from_millis(200));
+        call(&ctx, "create_profile", json!({"name": "p"})).unwrap();
+        let other = Store::open(ctx.store.root());
+        let held = other.lock().unwrap();
+        let set = json!({"name": "A", "type": "string", "value": "x"});
+        let err = call(&ctx, "set_var", set.clone()).unwrap_err();
+        assert!(err.is_busy(), "{err}");
+        assert_eq!(err.0, hedgebuddy_core::BUSY_MESSAGE);
+        // Read-only tools never wait for the lock.
+        call(&ctx, "list_vars", json!({})).unwrap();
+        drop(held);
+        call(&ctx, "set_var", set).unwrap();
     }
 }

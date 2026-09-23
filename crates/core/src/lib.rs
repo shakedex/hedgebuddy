@@ -20,6 +20,7 @@ pub mod error;
 pub(crate) mod fs_util;
 pub mod hedge;
 pub mod host;
+pub mod lock;
 pub mod manifest;
 pub mod paths;
 pub mod profile;
@@ -36,6 +37,7 @@ pub use catalog::Catalog;
 pub use error::{CoreError, Result};
 pub use hedge::Hedge;
 pub use host::{FakeHost, Host, Os, RealHost};
+pub use lock::{DataLock, BUSY_MESSAGE, LOCK_TIMEOUT};
 pub use manifest::{
     check_requirements, extract_manifest_text, parse_manifest, Manifest, Requirement,
     RequirementIssue,
