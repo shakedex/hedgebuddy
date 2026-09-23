@@ -31,20 +31,22 @@ impl Server {
 }
 
 fn tool_list() -> Vec<Tool> {
+    let object = |v: serde_json::Value| match v {
+        serde_json::Value::Object(map) => map,
+        _ => serde_json::Map::new(),
+    };
     tools::all()
         .into_iter()
         .map(|t| {
-            let schema = match (t.schema)() {
-                serde_json::Value::Object(map) => map,
-                _ => serde_json::Map::new(),
-            };
-            Tool::new(t.name, t.description, Arc::new(schema)).with_annotations(
-                ToolAnnotations::new()
-                    .read_only(t.hints.read_only)
-                    .destructive(t.hints.destructive)
-                    .idempotent(t.hints.idempotent)
-                    .open_world(false),
-            )
+            Tool::new(t.name, t.description, Arc::new(object((t.schema)())))
+                .with_raw_output_schema(Arc::new(object((t.output_schema)())))
+                .with_annotations(
+                    ToolAnnotations::new()
+                        .read_only(t.hints.read_only)
+                        .destructive(t.hints.destructive)
+                        .idempotent(t.hints.idempotent)
+                        .open_world(false),
+                )
         })
         .collect()
 }
@@ -91,9 +93,13 @@ impl ServerHandler for Server {
             .await
             .map_err(|e| McpError::internal_error(format!("tool panicked: {e}"), None))?;
         let result = match result {
-            Ok(value) => CallToolResult::success(vec![ContentBlock::text(
-                serde_json::to_string_pretty(&value).expect("JSON values serialize"),
-            )]),
+            Ok(value) => {
+                let mut ok = CallToolResult::success(vec![ContentBlock::text(
+                    serde_json::to_string_pretty(&value).expect("JSON values serialize"),
+                )]);
+                ok.structured_content = Some(value);
+                ok
+            }
             Err(e) => CallToolResult::error(vec![ContentBlock::text(e.0)]),
         };
         Ok(result.into())

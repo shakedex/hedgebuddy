@@ -39,6 +39,17 @@ fn tools_lists_every_tool() {
 }
 
 #[test]
+fn tools_schemas_prints_input_and_output_for_every_tool() {
+    let out = hb().args(["tools", "--schemas"]).output().unwrap();
+    assert!(out.status.success());
+    let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    let map = v.as_object().unwrap();
+    assert_eq!(map.len(), hedgebuddy_tools::all().len());
+    assert_eq!(map["list_runs"]["input"]["type"], "object");
+    assert_eq!(map["list_runs"]["output"]["type"], "object");
+}
+
+#[test]
 fn call_runs_a_tool_and_prints_json() {
     let dir = tempfile::tempdir().unwrap();
     hb().env("HEDGEBUDDY_DATA_DIR", dir.path())
