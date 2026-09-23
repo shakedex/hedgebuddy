@@ -7,7 +7,7 @@ use serde::Serialize;
 
 use super::Hedge;
 use crate::catalog::{AppManifest, Scripting};
-use crate::error::Result;
+use crate::error::{CoreError, Result};
 use crate::host::{Os, RegValue};
 
 /// How scripts are attached for an app on this platform.
@@ -96,6 +96,14 @@ impl Hedge {
         let os = self.host.os();
         let files = manifest.files.get(os);
         let mut status = self.status_of(manifest);
+        let presets_dir = match self.presets_dir(id) {
+            Ok(p) => Some(p),
+            Err(CoreError::Unsupported(_)) => None,
+            Err(e) => {
+                status.warnings.push(e.to_string());
+                None
+            }
+        };
         let mut resolve = |t: Option<&String>| match t {
             Some(t) => match self.expand(t) {
                 Ok(p) => Some(p),
@@ -108,7 +116,6 @@ impl Hedge {
         };
         let callback_log = resolve(files.and_then(|f| f.callback_log.as_ref()));
         let event_log = resolve(files.and_then(|f| f.event_log.as_ref()));
-        let presets_dir = resolve(manifest.presets.get(os).map(|p| &p.dir));
         Ok(AppDescription {
             status,
             manifest: manifest.clone(),
