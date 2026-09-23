@@ -19,6 +19,7 @@ pub(crate) mod apps;
 pub(crate) mod attachments;
 pub(crate) mod profiles;
 pub(crate) mod scripts;
+pub(crate) mod system;
 pub(crate) mod variables;
 
 /// Build a [`ToolDef`] from a name, description, hints, parameter type, and
@@ -180,6 +181,7 @@ pub fn all() -> Vec<ToolDef> {
     tools.extend(attachments::tools());
     tools.extend(profiles::tools());
     tools.extend(scripts::tools());
+    tools.extend(system::tools());
     tools.extend(variables::tools());
     tools
 }
