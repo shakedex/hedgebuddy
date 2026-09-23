@@ -63,6 +63,7 @@ fn every_valid_fixture_data_dir_validates() {
     let run_record = validator("run-record");
     let manifest = validator("script-manifest");
     let activity_record = validator("activity-record");
+    let preferences = validator("preferences");
 
     let cases = dirs_in(&schema_root().join("fixtures/valid"));
     assert!(!cases.is_empty(), "no valid fixture cases found");
@@ -124,6 +125,15 @@ fn every_valid_fixture_data_dir_validates() {
                 );
             }
         }
+
+        let prefs = case.join("preferences.json");
+        if prefs.exists() {
+            assert_valid(
+                &preferences,
+                &load_json(&prefs),
+                &format!("{name}/preferences.json"),
+            );
+        }
     }
 
     assert!(
@@ -182,4 +192,20 @@ fn activity_records_core_writes_conform() {
     {
         assert_valid(&v, &serde_json::from_str(line).unwrap(), "activity line");
     }
+}
+
+#[test]
+fn preferences_core_writes_conform() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = hedgebuddy_core::Store::open(dir.path());
+    let patch: hedgebuddy_core::PreferencesPatch =
+        serde_json::from_str(r#"{"last_opened": "2026-09-23T10:00:00.000Z"}"#).unwrap();
+    store.update_preferences(&patch).unwrap();
+    let v = validator("preferences");
+    let text = std::fs::read_to_string(store.preferences_path()).unwrap();
+    assert_valid(
+        &v,
+        &serde_json::from_str(&text).unwrap(),
+        "preferences.json",
+    );
 }

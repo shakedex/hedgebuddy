@@ -1,6 +1,6 @@
 //! The MCP server: an `rmcp` `ServerHandler` over `hedgebuddy_tools`'
 //! [`tools`] and [`resources`]. Nothing here contains HedgeBuddy logic.
-//! Every tool call is appended to the Claude activity log.
+//! Every call of a known tool is appended to the Claude activity log.
 
 use std::sync::Arc;
 

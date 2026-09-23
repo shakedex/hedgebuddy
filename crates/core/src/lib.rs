@@ -25,6 +25,7 @@ pub mod host;
 pub mod lock;
 pub mod manifest;
 pub mod paths;
+pub mod preferences;
 pub mod profile;
 pub mod python_env;
 pub mod runs;
@@ -49,6 +50,7 @@ pub use manifest::{
     RequirementIssue,
 };
 pub use paths::{data_dir, PathError, DATA_DIR_ENV};
+pub use preferences::{Preferences, PreferencesPatch};
 pub use profile::Profile;
 pub use runs::{LogLine, Run, RunFilter, RunRecord, RunStatus, RUN_RETENTION_DAYS};
 pub use scripts::{validate_script_name, ScriptCheck, ScriptInfo};

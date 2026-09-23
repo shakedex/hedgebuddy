@@ -41,6 +41,8 @@ def test_valid_fixture_data_dir_validates(case: Path):
     secrets = validator("secrets")
     run_record = validator("run-record")
     manifest = validator("script-manifest")
+    activity_record = validator("activity-record")
+    preferences = validator("preferences")
 
     assert_valid(hedgebuddy, load_json(case / "hedgebuddy.json"), f"{case.name}/hedgebuddy.json")
 
@@ -60,6 +62,16 @@ def test_valid_fixture_data_dir_validates(case: Path):
             for i, line in enumerate(log.read_text(encoding="utf-8").splitlines(), start=1):
                 if line.strip():
                     assert_valid(run_record, json.loads(line), f"{log}:{i}")
+
+    activity = case / "activity.jsonl"
+    if activity.exists():
+        for i, line in enumerate(activity.read_text(encoding="utf-8").splitlines(), start=1):
+            if line.strip():
+                assert_valid(activity_record, json.loads(line), f"{activity}:{i}")
+
+    prefs = case / "preferences.json"
+    if prefs.exists():
+        assert_valid(preferences, load_json(prefs), f"{case.name}/preferences.json")
 
 
 def test_valid_fixtures_exercise_every_schema():
@@ -89,4 +101,4 @@ def test_invalid_fixture_fails_its_schema(stem: str, file: Path):
 
 
 def test_there_are_invalid_fixtures():
-    assert len(invalid_files()) >= 7
+    assert len(invalid_files()) >= 11

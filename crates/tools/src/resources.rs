@@ -3,7 +3,7 @@
 
 use crate::{Context, ToolError};
 
-const SCHEMAS: [(&str, &str); 6] = [
+const SCHEMAS: [(&str, &str); 7] = [
     (
         "hedgebuddy",
         include_str!("../../../schema/hedgebuddy.schema.json"),
@@ -28,6 +28,10 @@ const SCHEMAS: [(&str, &str); 6] = [
         "activity-record",
         include_str!("../../../schema/activity-record.schema.json"),
     ),
+    (
+        "preferences",
+        include_str!("../../../schema/preferences.schema.json"),
+    ),
 ];
 
 const HEDGE_LLMS: &str = "Hedge's own documentation for AI agents: https://docs.hedge.video/llms.txt\nOffShoot automation: https://docs.hedge.video/offshoot/features/automation\n";
@@ -41,7 +45,7 @@ pub struct ResourceInfo {
     pub mime_type: &'static str,
 }
 
-/// Every resource: one per catalog app, the five schemas, and the Hedge docs pointer.
+/// Every resource: one per catalog app, one per schema, and the Hedge docs pointer.
 pub fn list(ctx: &Context) -> Vec<ResourceInfo> {
     let mut out: Vec<ResourceInfo> = ctx
         .hedge
@@ -133,7 +137,7 @@ mod tests {
     fn resources_cover_catalog_schemas_and_docs() {
         let (_d, _f, ctx) = test_ctx(FakeHost::new(Os::Windows));
         let all = list(&ctx);
-        assert_eq!(all.len(), 11);
+        assert_eq!(all.len(), 12);
         let (mime, text) = read(&ctx, "hedgebuddy://catalog/offshoot").unwrap();
         assert_eq!(mime, "application/json");
         let v: serde_json::Value = serde_json::from_str(&text).unwrap();
