@@ -241,6 +241,7 @@ impl Hedge {
     ) -> Result<SyncReport> {
         let scripts = store.list_scripts(profile)?;
         let profile_data = store.load_profile(profile)?;
+        let secrets = store.load_secrets(profile)?;
         let mut report = SyncReport {
             profile: profile.to_owned(),
             attach: Vec::new(),
@@ -273,7 +274,7 @@ impl Hedge {
                 });
                 continue;
             }
-            let issues = check_requirements(&manifest, &profile_data);
+            let issues = check_requirements(&manifest, &profile_data, &secrets);
             if !issues.is_empty() {
                 report.skipped.push(SyncSkip {
                     script: info.name,

@@ -110,7 +110,8 @@ pub struct RunFilter {
 impl Store {
     /// All runs, newest first. A run file that cannot be read is skipped,
     /// lines that do not parse are skipped, and a `log`/`end` without a
-    /// matching `start` is skipped.
+    /// matching `start` is skipped. Invalid UTF-8 in a file is replaced
+    /// (`U+FFFD`) rather than fatal, so a bad byte costs at most its own line.
     pub fn list_runs(&self, filter: &RunFilter) -> Result<Vec<Run>> {
         let dir = self.runs_dir();
         if !dir.exists() {
@@ -127,11 +128,13 @@ impl Store {
         // Group by run_id. Ties on started_at are broken by run_id order (BTreeMap) so the result is deterministic.
         let mut runs: BTreeMap<String, Run> = BTreeMap::new();
         for file in files {
-            // Skip a file that cannot be read (locked by a writer, not UTF-8,
-            // a folder) rather than failing the whole listing.
-            let Ok(text) = fs::read_to_string(&file) else {
+            // Skip a file that cannot be read (locked by a writer, a folder)
+            // rather than failing the whole listing. Decode lossily: a bad
+            // byte turns into U+FFFD, so at most its own line fails to parse.
+            let Ok(bytes) = fs::read(&file) else {
                 continue;
             };
+            let text = String::from_utf8_lossy(&bytes);
             for line in text.lines().filter(|l| !l.trim().is_empty()) {
                 let Ok(record) = serde_json::from_str::<RunRecord>(line) else {
                     continue;
@@ -521,6 +524,30 @@ mod tests {
             runs.iter().map(|r| r.run_id.as_str()).collect::<Vec<_>>(),
             vec!["ok"]
         );
+    }
+
+    #[test]
+    fn a_bad_byte_costs_at_most_its_line_not_the_day() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(dir.path());
+        fs::create_dir_all(store.runs_dir()).unwrap();
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(
+            br#"{"ts":"2026-09-14T10:00:00Z","run_id":"a","phase":"start","script":"x.py","profile":"p"}"#,
+        );
+        bytes.push(b'\n');
+        // Latin-1 "caf\xe9": not UTF-8.
+        bytes.extend_from_slice(b"{\"ts\":\"2026-09-14T10:00:01Z\",\"run_id\":\"a\",\"phase\":\"log\",\"message\":\"caf\xe9\"}\n");
+        bytes.extend_from_slice(b"{\"ts\":\xff\xfe broken\n");
+        bytes.extend_from_slice(
+            br#"{"ts":"2026-09-14T11:00:00Z","run_id":"b","phase":"start","script":"y.py","profile":"p"}"#,
+        );
+        bytes.push(b'\n');
+        fs::write(store.runs_dir().join("2026-09-14.jsonl"), bytes).unwrap();
+        let runs = store.list_runs(&RunFilter::default()).unwrap();
+        let ids: Vec<&str> = runs.iter().map(|r| r.run_id.as_str()).collect();
+        assert_eq!(ids, ["b", "a"]);
+        assert_eq!(runs[1].logs[0].message, "caf\u{fffd}");
     }
 
     #[test]

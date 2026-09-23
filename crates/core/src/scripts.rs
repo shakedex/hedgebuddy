@@ -149,7 +149,11 @@ impl Store {
         let source = self.read_script(profile, name)?;
         let manifest = parse_manifest(&source)?;
         let issues = match &manifest {
-            Some(m) => check_requirements(m, &self.load_profile(profile)?),
+            Some(m) => check_requirements(
+                m,
+                &self.load_profile(profile)?,
+                &self.load_secrets(profile)?,
+            ),
             None => Vec::new(),
         };
         Ok(ScriptCheck {
