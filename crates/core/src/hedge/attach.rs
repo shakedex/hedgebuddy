@@ -1,7 +1,7 @@
 //! Attaching scripts to Hedge app events, and reading what is attached now.
 
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
@@ -83,16 +83,43 @@ pub struct EventAttachment {
 }
 
 /// `Some((profile, script))` when `path` is `<store>/profiles/<profile>/scripts/<script>`.
+/// Compared component-wise against `store.profiles_dir()`, and the `scripts`
+/// segment, case-insensitively on Windows (NTFS) and exactly elsewhere.
 pub fn managed_script(store: &Store, path: &Path) -> Option<(String, String)> {
-    let rel = path.strip_prefix(store.profiles_dir()).ok()?;
-    let parts: Vec<&str> = rel
-        .components()
-        .map(|c| c.as_os_str().to_str())
-        .collect::<Option<Vec<&str>>>()?;
-    match parts.as_slice() {
-        [profile, "scripts", script] => Some((profile.to_string(), script.to_string())),
-        _ => None,
+    fn component_eq(a: &Component, b: &Component) -> bool {
+        if cfg!(windows) {
+            a.as_os_str()
+                .to_string_lossy()
+                .eq_ignore_ascii_case(&b.as_os_str().to_string_lossy())
+        } else {
+            a == b
+        }
     }
+
+    let profiles_dir = store.profiles_dir();
+    let base: Vec<Component> = profiles_dir.components().collect();
+    let full: Vec<Component> = path.components().collect();
+    if full.len() != base.len() + 3 {
+        return None;
+    }
+    if !base.iter().zip(&full).all(|(a, b)| component_eq(a, b)) {
+        return None;
+    }
+    let scripts = full[base.len() + 1];
+    let is_scripts = if cfg!(windows) {
+        scripts
+            .as_os_str()
+            .to_string_lossy()
+            .eq_ignore_ascii_case("scripts")
+    } else {
+        scripts.as_os_str() == "scripts"
+    };
+    if !is_scripts {
+        return None;
+    }
+    let profile = full[base.len()].as_os_str().to_str()?;
+    let script = full[base.len() + 2].as_os_str().to_str()?;
+    Some((profile.to_string(), script.to_string()))
 }
 
 fn classify(store: &Store, path: PathBuf) -> AttachState {
@@ -238,32 +265,18 @@ impl Hedge {
         let m = self.catalog.app(app)?;
         let e = m.event(event)?;
         let target = script_path.display().to_string();
-        match m.scripting.get(self.host.os()) {
-            None => {
-                return Err(CoreError::Unsupported(format!(
-                    "{} has no script attachment on this platform",
-                    m.app.name
-                )))
-            }
-            Some(Scripting::Manual { note }) => {
-                return Err(CoreError::Unsupported(format!(
-                    "{} scripts are attached by hand on this platform: {note}. Script to attach: {target}",
-                    m.app.name
-                )))
-            }
-            _ => {}
-        }
-        if !script_path.is_file() {
-            return Err(CoreError::Validation(format!(
-                "script {target} does not exist"
-            )));
-        }
-        match m.scripting.get(self.host.os()) {
+        let scripting = m.scripting.get(self.host.os());
+        match scripting {
             Some(Scripting::Registry {
                 key,
                 enable_value,
                 value_pattern,
             }) => {
+                if !script_path.is_file() {
+                    return Err(CoreError::Validation(format!(
+                        "script {target} does not exist"
+                    )));
+                }
                 let name = e.registry_name.as_ref().ok_or_else(|| no_location(m, e))?;
                 Ok(vec![
                     Action::RegistrySet {
@@ -284,6 +297,11 @@ impl Hedge {
                 enable_pref,
                 pref_pattern,
             }) => {
+                if !script_path.is_file() {
+                    return Err(CoreError::Validation(format!(
+                        "script {target} does not exist"
+                    )));
+                }
                 let name = e.pref_name.as_ref().ok_or_else(|| no_location(m, e))?;
                 let mut set = Map::new();
                 set.insert(enable_pref.clone(), Value::Bool(true));
@@ -296,7 +314,14 @@ impl Hedge {
                     set,
                 }])
             }
-            _ => unreachable!("manual and missing scripting returned above"),
+            Some(Scripting::Manual { note }) => Err(CoreError::Unsupported(format!(
+                "{} scripts are attached by hand on this platform: {note}. Script to attach: {target}",
+                m.app.name
+            ))),
+            None => Err(CoreError::Unsupported(format!(
+                "{} has no script attachment on this platform",
+                m.app.name
+            ))),
         }
     }
 
@@ -629,6 +654,29 @@ mod tests {
     }
 
     #[test]
+    fn workspace_without_set_preferences_gets_one_appended() {
+        let home = tempfile::tempdir().unwrap();
+        let (_d, store, _fake, hedge) = setup(FakeHost::new(Os::Macos).with_home(home.path()));
+        let workspace = home
+            .path()
+            .join("Library/Preferences/Hedge/Workspaces/HedgeBuddy.json");
+        fs::create_dir_all(workspace.parent().unwrap()).unwrap();
+        fs::write(&workspace, r#"[{"setSources": ["/Volumes/X"]}]"#).unwrap();
+        let path = store.script_path("p", "copy.py");
+        hedge
+            .apply(&hedge.plan_attach("offshoot", "DiskAdded", &path).unwrap())
+            .unwrap();
+        let doc: Value = serde_json::from_str(&fs::read_to_string(&workspace).unwrap()).unwrap();
+        let arr = doc.as_array().unwrap();
+        assert_eq!(arr.len(), 2);
+        assert_eq!(arr[0]["setSources"], json!(["/Volumes/X"]));
+        assert_eq!(
+            arr[1]["setPreferences"]["scripting_events_disk_added"],
+            path.display().to_string()
+        );
+    }
+
+    #[test]
     fn managed_script_paths() {
         let store = Store::open("/data/HedgeBuddy");
         assert_eq!(
@@ -639,6 +687,19 @@ mod tests {
         assert_eq!(
             managed_script(&store, &store.profile_dir("p").join("profile.json")),
             None
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn managed_script_ignores_case_on_windows() {
+        let store = Store::open("C:\\Data\\HedgeBuddy");
+        assert_eq!(
+            managed_script(
+                &store,
+                Path::new("c:\\data\\hedgebuddy\\profiles\\p\\SCRIPTS\\a.py")
+            ),
+            Some(("p".to_string(), "a.py".to_string()))
         );
     }
 
