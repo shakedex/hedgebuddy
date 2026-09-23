@@ -150,15 +150,15 @@ pub fn inspect_volume(root: &Path) -> Result<VolumeReport> {
                     .extension()
                     .map(|e| e.to_string_lossy().to_ascii_lowercase())
                     .unwrap_or_default();
-                let size = entry.metadata().map(|m| m.len()).unwrap_or(0);
+                let size = || entry.metadata().map(|m| m.len()).unwrap_or(0);
                 if VIDEO.contains(&ext.as_str()) {
                     clips += 1;
-                    bytes += size;
+                    bytes += size();
                 } else if FRAMES.contains(&ext.as_str()) {
                     frame_dirs.insert(dir.clone());
-                    bytes += size;
+                    bytes += size();
                 } else if AUDIO.contains(&ext.as_str()) {
-                    bytes += size;
+                    bytes += size();
                 }
                 if !ext.is_empty() {
                     exts.insert(ext);
@@ -292,5 +292,26 @@ mod tests {
         let r = inspect_volume(d.path()).unwrap();
         assert!(r.truncated);
         assert_eq!(r.clip_count, 0);
+    }
+
+    #[test]
+    fn more_card_kinds_and_first_match_wins() {
+        let pana = tempfile::tempdir().unwrap();
+        touch(pana.path(), "PRIVATE/PANA_GRP/001RAAAA/CLIP/A001.MOV", 5);
+        assert_eq!(card(pana.path()).as_deref(), Some("panasonic"));
+
+        let avchd = tempfile::tempdir().unwrap();
+        touch(avchd.path(), "PRIVATE/AVCHD/BDMV/STREAM/00000.MTS", 7);
+        assert_eq!(card(avchd.path()).as_deref(), Some("avchd"));
+
+        let sony_wins = tempfile::tempdir().unwrap();
+        touch(sony_wins.path(), "PRIVATE/M4ROOT/CLIP/C0001.MP4", 10);
+        touch(sony_wins.path(), "A001_C001.R3D", 4);
+        assert_eq!(card(sony_wins.path()).as_deref(), Some("sony"));
+
+        let braw_wins = tempfile::tempdir().unwrap();
+        touch(braw_wins.path(), "DCIM/100MEDIA/C0001.MP4", 10);
+        touch(braw_wins.path(), "x.braw", 5);
+        assert_eq!(card(braw_wins.path()).as_deref(), Some("blackmagic"));
     }
 }
