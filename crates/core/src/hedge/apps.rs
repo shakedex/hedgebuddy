@@ -200,18 +200,22 @@ impl Hedge {
                         return (false, None);
                     }
                 }
-                let version = match d.version_value.as_ref() {
-                    Some(v) => match self.host.registry_read(key, v) {
-                        Ok(Some(RegValue::String(s))) => Some(s.trim().to_owned()),
-                        Ok(_) => None,
-                        Err(e) => {
-                            warnings.push(format!("cannot read {key}\\{v}: {e}"));
-                            None
-                        }
-                    },
-                    None => None,
+                // Attaching a script creates the app's key, so when the
+                // catalog names a version value, only that value proves the
+                // app is installed; a bare key is not enough.
+                let Some(v) = d.version_value.as_ref() else {
+                    return (true, None);
                 };
-                (true, version)
+                match self.host.registry_read(key, v) {
+                    Ok(Some(RegValue::String(s))) if !s.trim().is_empty() => {
+                        (true, Some(s.trim().to_owned()))
+                    }
+                    Ok(_) => (false, None),
+                    Err(e) => {
+                        warnings.push(format!("cannot read {key}\\{v}: {e}"));
+                        (false, None)
+                    }
+                }
             }
             Os::Macos => {
                 let Some(app_path) = &d.app_path else {
@@ -302,6 +306,29 @@ mod tests {
 
         let ids: Vec<String> = h.apps().unwrap().into_iter().map(|s| s.id).collect();
         assert_eq!(ids, vec!["canister", "editready", "foolcat", "offshoot"]);
+    }
+
+    #[test]
+    fn a_bare_registry_key_is_not_an_installed_app() {
+        // What attaching a FoolCat script leaves behind when FoolCat itself
+        // was never installed: the key and the script value, no BuildVersion.
+        let h = hedge(FakeHost::new(Os::Windows).with_registry_value(
+            "HKCU\\Software\\FoolCat",
+            "EventScriptReportCreated",
+            RegValue::String("C:\\x.py".into()),
+        ));
+        let f = h.app_status("foolcat").unwrap();
+        assert!(!f.installed);
+        assert_eq!(f.version, None);
+        assert_eq!(f.scripting_enabled, None);
+        assert!(f.warnings.is_empty(), "{:?}", f.warnings);
+
+        let blank = hedge(FakeHost::new(Os::Windows).with_registry_value(
+            "HKCU\\Software\\FoolCat",
+            "BuildVersion",
+            RegValue::String("  ".into()),
+        ));
+        assert!(!blank.app_status("foolcat").unwrap().installed);
     }
 
     #[test]

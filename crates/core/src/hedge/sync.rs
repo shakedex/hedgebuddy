@@ -27,6 +27,24 @@ pub struct SyncItem {
     pub app: String,
     pub event: String,
     pub script: String,
+    /// For an attach: what the event pointed at before (another script, an
+    /// operator's own file, a missing file, or a staged workspace entry).
+    /// Absent when the event was free, and for detaches.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub replaces: Option<AttachState>,
+}
+
+/// Result of [`Hedge::attach_script`]: the script, the event it targets,
+/// what attaching replaces, and the actions (applied unless it was a dry run).
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct AttachPlan {
+    pub app: String,
+    pub event: String,
+    pub script: String,
+    /// What the event pointed at before; absent when it was free.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub replaces: Option<AttachState>,
+    pub actions: Vec<Action>,
 }
 
 /// Several scripts of one profile target the same app event.
@@ -54,6 +72,15 @@ pub struct SyncReport {
     pub skipped: Vec<SyncSkip>,
     pub actions: Vec<Action>,
     pub applied: bool,
+}
+
+/// The state an attach would replace: `None` when the event is free or
+/// cannot hold a script here.
+fn replaced(state: AttachState) -> Option<AttachState> {
+    match state {
+        AttachState::Detached | AttachState::Unsupported | AttachState::Manual { .. } => None,
+        other => Some(other),
+    }
 }
 
 fn push_unique(actions: &mut Vec<Action>, new: Vec<Action>) {
@@ -88,14 +115,16 @@ fn describe_issues(issues: &[RequirementIssue]) -> String {
 impl Hedge {
     /// Attach one script to the app event its manifest names. Refuses scripts
     /// without an app/event, unknown to the catalog, or with unmet
-    /// requirements. With `dry_run` the actions are returned but not applied.
+    /// requirements. The plan reports what the event pointed at before
+    /// (`replaces`), including an operator's own script. With `dry_run` the
+    /// actions are returned but not applied.
     pub fn attach_script(
         &self,
         store: &Store,
         profile: &str,
         script: &str,
         dry_run: bool,
-    ) -> Result<Vec<Action>> {
+    ) -> Result<AttachPlan> {
         let check = store.check_script(profile, script)?;
         let manifest = check.manifest.ok_or_else(|| {
             CoreError::Validation(format!(
@@ -114,11 +143,18 @@ impl Hedge {
                 describe_issues(&check.issues)
             )));
         }
+        let replaces = replaced(self.attachment(app, event, store)?.state);
         let actions = self.plan_attach(app, event, &store.script_path(profile, script))?;
         if !dry_run {
             self.apply(&actions)?;
         }
-        Ok(actions)
+        Ok(AttachPlan {
+            app: app.to_owned(),
+            event: event.to_owned(),
+            script: script.to_owned(),
+            replaces,
+            actions,
+        })
     }
 
     /// Detach whatever is attached to an app event.
@@ -132,10 +168,17 @@ impl Hedge {
 
     /// Make Hedge app attachments reflect `profile`:
     /// 1. Each of the profile's scripts whose manifest names a known app and
-    ///    event, with met requirements, is a candidate; others are skipped.
+    ///    event, with met requirements, is a candidate. Scripts without a
+    ///    manifest, or whose manifest does not name both an app and an
+    ///    event, are ignored (not listed anywhere).
+    ///    Scripts with an invalid manifest, an app or event unknown to the
+    ///    catalog, or unmet requirements are listed in `skipped`.
     /// 2. Two or more candidates for the same app event is a conflict; none
     ///    of them is attached.
-    /// 3. A single candidate is attached, unless it already is.
+    /// 3. A single candidate is attached, unless it already is. Its item
+    ///    reports what the event pointed at before (`replaces`), including an
+    ///    operator's own script. A candidate whose event has no attachment
+    ///    location on this platform is listed in `skipped`.
     /// 4. Any other event currently pointing at a HedgeBuddy-managed script
     ///    (any profile) and not claimed by rule 1-2 is detached.
     /// 5. Attach actions run before detach actions; `dry_run = false` applies them.
@@ -217,6 +260,7 @@ impl Hedge {
                         app: app.clone(),
                         event: event.clone(),
                         script: script.clone(),
+                        replaces: replaced(current),
                     });
                 }
                 Err(CoreError::Unsupported(reason)) => {
@@ -249,6 +293,7 @@ impl Hedge {
                     app: m.app.id.clone(),
                     event: e.id.clone(),
                     script: format!("{other_profile}/{other_script}"),
+                    replaces: None,
                 });
             }
         }
@@ -370,8 +415,13 @@ mod tests {
                 },
             )
             .unwrap();
-        let actions = hedge.attach_script(&store, "p", "copy.py", true).unwrap();
-        assert_eq!(actions.len(), 2);
+        let plan = hedge.attach_script(&store, "p", "copy.py", true).unwrap();
+        assert_eq!(
+            (plan.app.as_str(), plan.event.as_str(), plan.script.as_str()),
+            ("offshoot", "FileCopyCompleted", "copy.py")
+        );
+        assert_eq!(plan.replaces, None);
+        assert_eq!(plan.actions.len(), 2);
         assert_eq!(
             reg(&fake, "EventScriptFileCopyCompleted"),
             None,
@@ -439,20 +489,26 @@ mod tests {
 
         let before_busy = reg(&fake, "EventScriptDiskBusy");
         let dry = hedge.sync_attachments(&store, "p", true).unwrap();
-        let item = |event: &str, script: &str| SyncItem {
+        let item = |event: &str, script: &str, replaces: Option<AttachState>| SyncItem {
             app: "offshoot".into(),
             event: event.into(),
             script: script.into(),
+            replaces,
+        };
+        let q_copy = AttachState::Attached {
+            path: store.script_path("q", "q_copy.py"),
+            profile: "q".into(),
+            script: "q_copy.py".into(),
         };
         assert_eq!(dry.profile, "p");
         assert_eq!(
             dry.attach,
             vec![
-                item("DiskAdded", "disk.py"),
-                item("FileCopyCompleted", "copy.py")
+                item("DiskAdded", "disk.py", None),
+                item("FileCopyCompleted", "copy.py", Some(q_copy))
             ]
         );
-        assert_eq!(dry.detach, vec![item("DiskBusy", "q/q_busy.py")]);
+        assert_eq!(dry.detach, vec![item("DiskBusy", "q/q_busy.py", None)]);
         assert_eq!(
             dry.conflicts,
             vec![SyncConflict {
@@ -526,5 +582,48 @@ mod tests {
             hedge.sync_attachments(&store, "ghost", true).unwrap_err(),
             CoreError::ProfileNotFound(_)
         ));
+    }
+
+    #[test]
+    fn sync_reports_replacing_an_external_attachment() {
+        let (_d, store, fake, hedge) = setup();
+        let outside = tempfile::tempdir().unwrap();
+        let external = outside.path().join("mine.py");
+        std::fs::write(&external, "print(1)\n").unwrap();
+        hedge
+            .apply(&[Action::RegistrySet {
+                key: KEY.into(),
+                value: "EventScriptDiskAdded".into(),
+                data: RegValue::String(external.display().to_string()),
+            }])
+            .unwrap();
+        store.create_profile("p", "").unwrap();
+        store
+            .write_script("p", "disk.py", &script("DiskAdded", ""))
+            .unwrap();
+        let was = AttachState::External {
+            path: external.clone(),
+        };
+
+        let report = hedge.sync_attachments(&store, "p", true).unwrap();
+        assert_eq!(
+            report.attach,
+            vec![SyncItem {
+                app: "offshoot".into(),
+                event: "DiskAdded".into(),
+                script: "disk.py".into(),
+                replaces: Some(was.clone()),
+            }]
+        );
+        let json = serde_json::to_value(&report.attach[0]).unwrap();
+        assert_eq!(json["replaces"]["state"], "external");
+
+        let plan = hedge.attach_script(&store, "p", "disk.py", true).unwrap();
+        assert_eq!(plan.replaces, Some(was));
+        assert_eq!(
+            reg(&fake, "EventScriptDiskAdded"),
+            Some(external.display().to_string()),
+            "dry runs must not write"
+        );
     }
 }

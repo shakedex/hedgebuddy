@@ -14,8 +14,10 @@ use crate::host::{Host, Os};
 
 pub(crate) const PROBE: &str = "import json, sys\ntry:\n    from importlib import metadata\n    v = metadata.version('hedgebuddy')\nexcept Exception:\n    v = None\nprint(json.dumps({'executable': sys.executable, 'version': '%d.%d.%d' % tuple(sys.version_info[:3]), 'hedgebuddy': v}))\n";
 
-pub(crate) const SYNTAX_CHECK: &str =
-    "import ast, sys\nsrc = open(sys.argv[1], 'rb').read()\nast.parse(src, sys.argv[1])\n";
+/// Compiles (never runs) the script, reading bytes so a BOM or coding cookie
+/// is honoured. `compile` also rejects code `ast.parse` accepts, such as a
+/// top-level `return` or a `break` outside a loop.
+pub(crate) const SYNTAX_CHECK: &str = "import sys\nsrc = open(sys.argv[1], 'rb').read()\ncompile(src, sys.argv[1], 'exec', dont_inherit=True)\n";
 
 /// The interpreter Hedge apps use.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

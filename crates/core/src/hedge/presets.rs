@@ -191,6 +191,9 @@ impl Hedge {
     }
 
     /// Make an existing preset the selected one.
+    ///
+    /// Unverified: whether a running OffShoot picks up the new selection or
+    /// needs a restart.
     pub fn plan_select_preset(&self, app: &str, name: &str) -> Result<Vec<Action>> {
         validate_preset_name(name)?;
         let spec = self.presets_spec(app)?;

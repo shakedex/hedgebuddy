@@ -19,7 +19,7 @@ pub use apps::{compare_versions, AppDescription, AppStatus, ResolvedFiles, Scrip
 pub use attach::{managed_script, Action, AttachState, EventAttachment};
 pub use commands::{percent_encode, CommandCall, CommandOutcome, CommandPlan};
 pub use presets::{validate_preset_name, LogKind, Preset};
-pub use sync::{validate_manifest, SyncConflict, SyncItem, SyncReport, SyncSkip};
+pub use sync::{validate_manifest, AttachPlan, SyncConflict, SyncItem, SyncReport, SyncSkip};
 
 /// Hedge app operations on one machine.
 pub struct Hedge {

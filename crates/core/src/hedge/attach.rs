@@ -16,7 +16,11 @@ use crate::store::Store;
 /// One change HedgeBuddy would make outside its data directory. Plans return
 /// lists of these; nothing happens until [`Hedge::apply`] runs them, so every
 /// plan doubles as a dry run.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+///
+/// Actions serialize (to show a dry run) but deliberately do not
+/// deserialize. Plans are produced by core; front ends must re-plan from the
+/// original arguments rather than accepting actions from a client.
+#[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(tag = "action", rename_all = "snake_case")]
 pub enum Action {
     RegistrySet {
@@ -36,13 +40,10 @@ pub enum Action {
         path: PathBuf,
         contents: String,
     },
-    OpenUrl {
-        url: String,
-    },
 }
 
 /// What an app event is attached to right now.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "state", rename_all = "snake_case")]
 pub enum AttachState {
     /// A script in this HedgeBuddy data directory.
@@ -74,11 +75,13 @@ pub enum AttachState {
     Unsupported,
 }
 
-/// One event's attachment.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+/// One event's attachment. The state is flattened into the same object:
+/// `{"app": ..., "event": ..., "state": "attached", "path": ..., ...}`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EventAttachment {
     pub app: String,
     pub event: String,
+    #[serde(flatten)]
     pub state: AttachState,
 }
 
@@ -384,7 +387,6 @@ impl Hedge {
                 Action::WriteFile { path, contents } => {
                     fs_util::write_atomic(path, contents.as_bytes(), false)?
                 }
-                Action::OpenUrl { url } => self.host.open_url(url)?,
             }
         }
         Ok(())
@@ -728,12 +730,13 @@ mod tests {
 
     #[test]
     fn actions_serialize_with_a_tag() {
-        let a = Action::OpenUrl {
-            url: "offshoot://open".into(),
+        let a = Action::RegistryDelete {
+            key: KEY.into(),
+            value: "EventScriptDiskAdded".into(),
         };
         assert_eq!(
             serde_json::to_value(&a).unwrap(),
-            json!({"action": "open_url", "url": "offshoot://open"})
+            json!({"action": "registry_delete", "key": KEY, "value": "EventScriptDiskAdded"})
         );
         let s = AttachState::Stale {
             path: PathBuf::from("x"),
@@ -741,6 +744,69 @@ mod tests {
         assert_eq!(
             serde_json::to_value(&s).unwrap(),
             json!({"state": "stale", "path": "x"})
+        );
+        let attached = EventAttachment {
+            app: "offshoot".into(),
+            event: "DiskAdded".into(),
+            state: AttachState::Attached {
+                path: PathBuf::from("x"),
+                profile: "p".into(),
+                script: "a.py".into(),
+            },
+        };
+        assert_eq!(
+            serde_json::to_value(&attached).unwrap(),
+            json!({
+                "app": "offshoot",
+                "event": "DiskAdded",
+                "state": "attached",
+                "path": "x",
+                "profile": "p",
+                "script": "a.py"
+            })
+        );
+    }
+
+    #[test]
+    fn event_attachments_round_trip_through_json() {
+        let states = [
+            AttachState::Attached {
+                path: PathBuf::from("x"),
+                profile: "p".into(),
+                script: "a.py".into(),
+            },
+            AttachState::External {
+                path: PathBuf::from("x"),
+            },
+            AttachState::Stale {
+                path: PathBuf::from("x"),
+            },
+            AttachState::Staged {
+                path: PathBuf::from("x"),
+                workspace: PathBuf::from("w.json"),
+            },
+            AttachState::Detached,
+            AttachState::Manual { note: "n".into() },
+            AttachState::Unsupported,
+        ];
+        for state in states {
+            let a = EventAttachment {
+                app: "offshoot".into(),
+                event: "DiskAdded".into(),
+                state,
+            };
+            let text = serde_json::to_string(&a).unwrap();
+            let back: EventAttachment = serde_json::from_str(&text).unwrap();
+            assert_eq!(back, a, "{text}");
+        }
+        assert_eq!(
+            serde_json::to_value(EventAttachment {
+                app: "offshoot".into(),
+                event: "DiskAdded".into(),
+                state: AttachState::Detached,
+            })
+            .unwrap(),
+            json!({"app": "offshoot", "event": "DiskAdded", "state": "detached"})
         );
     }
 }
