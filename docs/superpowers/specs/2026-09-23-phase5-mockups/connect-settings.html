@@ -1,0 +1,63 @@
+<h2>Connect and Settings</h2>
+<p class="subtitle">Both are simple pages rather than list-and-detail. Does each show the right things? One open question sits under Connect.</p>
+
+<div class="mockup" style="margin-bottom:10px">
+  <div class="mockup-header">Connect</div>
+  <div class="mockup-body" style="padding:0">
+    <div style="background:#0f151d;color:#c9d4e0;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;font-size:11.5px;padding:14px 16px;display:flex;flex-direction:column;gap:10px">
+      <div style="font-size:14px;color:#fff;font-weight:600">Connect</div>
+      <div style="background:#141c26;border:1px solid #1f2a38;border-radius:8px;padding:10px 12px;display:flex;justify-content:space-between;align-items:center">
+        <div><div style="color:#fff">Claude Desktop</div><div style="color:#6f7f93">HedgeBuddy is set up in claude_desktop_config.json. Restart Claude Desktop after changes.</div></div>
+        <span style="background:#123a36;color:#3dd6c6;border-radius:999px;padding:1px 8px;white-space:nowrap">connected</span>
+      </div>
+      <div style="background:#141c26;border:1px solid #1f2a38;border-radius:8px;padding:10px 12px">
+        <div style="color:#fff;margin-bottom:5px">Claude Code</div>
+        <div style="display:flex;gap:6px;align-items:center"><code style="flex:1;background:#0b1016;border:1px solid #1c2633;border-radius:6px;padding:5px 8px;font-family:ui-monospace,Consolas,monospace;font-size:10.5px;color:#c9d4e0">claude mcp add hedgebuddy -- "C:\Program Files\HedgeBuddy\hedgebuddy.exe" mcp</code><span style="border:1px solid #243244;border-radius:6px;padding:3px 9px">Copy</span></div>
+      </div>
+      <div style="background:#141c26;border:1px solid #1f2a38;border-radius:8px;padding:10px 12px">
+        <div style="color:#fff;margin-bottom:5px">Other MCP clients</div>
+        <div style="color:#6f7f93">Command <code style="font-family:ui-monospace,Consolas,monospace;color:#c9d4e0">hedgebuddy.exe mcp</code>, stdio transport · <u>Copy JSON config</u></div>
+      </div>
+      <div style="background:#141c26;border:1px solid #1f2a38;border-radius:8px;padding:10px 12px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="color:#fff">Recent Claude activity</span><span style="color:#6f7f93">tool names only, never values</span></div>
+        <div style="display:grid;grid-template-columns:auto 1fr auto;column-gap:10px;row-gap:3px;font-family:ui-monospace,Consolas,monospace;font-size:10.5px">
+          <span style="color:#6f7f93">14:02</span><span>sync_attachments</span><span style="color:#3dd6c6">ok</span>
+          <span style="color:#6f7f93">14:01</span><span>write_script on_copy_complete.py</span><span style="color:#3dd6c6">ok</span>
+          <span style="color:#6f7f93">14:01</span><span>set_var SLACK_WEBHOOK</span><span style="color:#3dd6c6">ok</span>
+          <span style="color:#6f7f93">13:58</span><span>run_app_command offshoot</span><span style="color:#f5b73b">needs confirm</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="background:#16202c;border:1px solid #2a3a50;border-radius:8px;padding:10px 12px;margin-bottom:18px">
+  <h3 style="margin-top:0">Open question: how much Claude activity to keep?</h3>
+  <p>The spec asks for "the last MCP call". The MCP server runs as its own process, so it has to write calls somewhere for the app to show them. The recommendation: the server appends one line per tool call (time, tool, the target's name, ok or error, never argument values or secrets) to a small file in the data folder, kept to the last 200 calls. The app shows the latest few here. The alternative is a single "last call" line with no history.</p>
+</div>
+
+<div class="mockup">
+  <div class="mockup-header">Settings</div>
+  <div class="mockup-body" style="padding:0">
+    <div style="background:#0f151d;color:#c9d4e0;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;font-size:11.5px;padding:14px 16px;display:flex;flex-direction:column;gap:10px">
+      <div style="font-size:14px;color:#fff;font-weight:600">Settings</div>
+      <div style="background:#141c26;border:1px solid #1f2a38;border-radius:8px;padding:10px 12px;display:flex;flex-direction:column;gap:6px">
+        <div style="color:#fff">Python the Hedge apps use</div>
+        <div style="display:grid;grid-template-columns:auto 1fr;column-gap:12px;row-gap:3px">
+          <span style="color:#6f7f93">Interpreter</span><span style="font-family:ui-monospace,Consolas,monospace">C:\Python313\python.exe <span style="color:#6f7f93">(py -3, 3.13.5)</span></span>
+          <span style="color:#6f7f93">hedgebuddy package</span><span>0.10.0 installed · <span style="color:#f5c26b">needs 0.11.0</span></span>
+        </div>
+        <div style="display:flex;gap:6px"><span style="background:#2a7cf7;color:#fff;border-radius:6px;padding:3px 10px">Install hedgebuddy 0.11.0</span><span style="color:#6f7f93;align-self:center">runs py -3 -m pip install hedgebuddy==0.11.0 and shows the output</span></div>
+      </div>
+      <div style="background:#141c26;border:1px solid #1f2a38;border-radius:8px;padding:10px 12px;display:flex;justify-content:space-between;align-items:center">
+        <div><div style="color:#fff">Updates</div><div style="color:#6f7f93">HedgeBuddy 0.11.0 · checked today, up to date</div></div>
+        <span style="border:1px solid #243244;border-radius:6px;padding:3px 10px">Check now</span>
+      </div>
+      <div style="background:#141c26;border:1px solid #1f2a38;border-radius:8px;padding:10px 12px;display:flex;flex-direction:column;gap:4px">
+        <div style="display:flex;justify-content:space-between;align-items:center"><span style="color:#fff">Data folder</span><span style="border:1px solid #243244;border-radius:6px;padding:3px 10px">Reveal</span></div>
+        <div style="font-family:ui-monospace,Consolas,monospace;color:#6f7f93">C:\Users\shake\AppData\Roaming\HedgeBuddy</div>
+        <div style="color:#6f7f93">Catalog overrides: none</div>
+      </div>
+    </div>
+  </div>
+</div>

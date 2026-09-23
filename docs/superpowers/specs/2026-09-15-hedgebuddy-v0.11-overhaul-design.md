@@ -63,8 +63,9 @@ hedgebuddy/
 ├── Cargo.toml               # workspace
 ├── crates/
 │   ├── core/                # all logic; no UI, no argument parsing
+│   ├── tools/               # the MCP tools, resources and prompt, shared by cli and app
 │   ├── cli/                 # `hedgebuddy` binary; `mcp` subcommand
-│   └── app/                 # Tauri v2 app; links core; bundles cli as sidecar
+│   └── app/                 # Tauri v2 app; links tools and core; bundles cli as sidecar
 │       └── ui/              # Vite + React + TypeScript
 ├── catalog/                 # offshoot.toml, foolcat.toml, editready.toml, canister.toml
 ├── python/                  # pure-Python `hedgebuddy` package + tests
@@ -79,8 +80,9 @@ Deleted from the old tree: `app/`, `updater/`, `python-lib/`, `tests/`, `example
 ### Components
 
 - **core** owns storage, profiles, variables and validation, script manifest parsing, catalog loading, attach/detach/state, app commands, volume inspection, run-record reading, and the data-directory watcher. OS-specific integration (registry, plist/Helper workspace, `start`/`open`, volume enumeration) sits behind a trait with Windows and macOS implementations and a fake for tests.
-- **cli** is a thin layer over core. `hedgebuddy mcp` serves MCP over stdio using the official Rust MCP SDK (`rmcp`). Every MCP tool is defined once in the crate's tool layer and also runs from the shell as `hedgebuddy call <tool> <json>`; `hedgebuddy tools` lists them.
-- **app** is a Tauri v2 shell. Tauri commands call core directly. The CLI binary is bundled as a sidecar so hosts can reach the MCP server whether or not the window is open.
+- **tools** (`hedgebuddy-tools`, from phase 5) defines every MCP tool once, with typed parameters and typed results that both have JSON Schemas, plus the MCP resources and the `author_script` prompt.
+- **cli** is a thin layer over tools and core. `hedgebuddy mcp` serves MCP over stdio using the official Rust MCP SDK (`rmcp`). Every tool also runs from the shell as `hedgebuddy call <tool> <json>`, and `hedgebuddy tools` lists them.
+- **app** is a Tauri v2 shell. It calls the same tools as Claude through one generic command, plus a few app-only commands for OS actions and the home summary (phase 5 design: `2026-09-23-phase5-desktop-app-design.md`). The CLI binary is bundled as a sidecar so hosts can reach the MCP server whether or not the window is open.
 - **catalog** manifests are embedded in both binaries and can be overridden per file from `<data>/catalog/`.
 - **python** reads the data directory directly and never invokes Rust.
 - **schema** holds JSON Schemas for `hedgebuddy.json`, `profile.json`, `secrets.json`, run records, and the script manifest, plus fixtures both Rust and Python test against.
@@ -98,7 +100,9 @@ HedgeBuddy/
 │   └── scripts/*.py
 ├── catalog/                 optional manifest overrides
 ├── runs/YYYY-MM-DD.jsonl    append-only run records
-└── preferences.json         GUI preferences
+├── activity.jsonl           Claude's last 200 MCP tool calls (phase 5)
+├── .hedgebuddy.lock         cross-process write lock (phase 5)
+└── preferences.json         GUI preferences: {"version": 1, "last_opened": ts | null, "editor_command": string | null}
 ```
 
 `active_profile` is `null` when no profile exists (a fresh install). A missing `hedgebuddy.json` is read as `{"version": 1, "active_profile": null}`; `profiles/` and `runs/` are created on first write.
@@ -272,21 +276,23 @@ Decisions made in phase 4:
 
 ## 10. Desktop app
 
-Tauri v2, Vite + React + TypeScript, one window with sidebar navigation. Visual design is a fresh pass in phase 5 with mockups; the only constraint is that it must remain usable at a small window size beside OffShoot.
+Tauri v2, Vite + React + TypeScript, one window with an adaptive sidebar. The full design is `2026-09-23-phase5-desktop-app-design.md`, with mockups in `2026-09-23-phase5-mockups/`. In short, the app is dark only, uses the "instrument panel" visual direction, shadcn/ui with Tailwind v4, and Lucide icons, and colours only problems. It must stay usable at a small window size beside OffShoot.
 
-Platform floor: macOS 12.0 or newer, declared as `bundle.macOS.minimumSystemVersion` in `tauri.conf.json`, matching the frontend's `safari15` build target (WKWebView on macOS 12 is the Safari 15 engine). Windows 10 or newer with the WebView2 runtime. Revisit both before the first release.
+Platform floor: macOS 26.0 or newer, declared as `bundle.macOS.minimumSystemVersion` in `tauri.conf.json`, and Windows 10 or newer with the WebView2 runtime.
 
 Views:
 
-1. **Variables** — profile switcher in the toolbar; typed editors per type; "required by" badge from script manifests; import/export (secrets excluded unless opted in).
-2. **Scripts** — the profile's scripts folder; target app/event, attachment state, unmet requirements; attach, detach, new from template, open in external editor, delete; "sync attachments to this profile."
-3. **Hedge apps** — installed apps and versions, Pro scripting flag, `tested_against` warnings, matrix of events versus attached scripts, stale entries with one-click detach.
-4. **Connect** — writes Claude Desktop config, shows the Claude Code command, shows the last MCP call.
-5. **Settings** — Python check against the interpreter Hedge apps use with one-click `pip install`; update check via Tauri updater plugin; data directory path and reveal button.
+1. **Home** — since you last opened the app: runs, failures, and a "needs attention" list that links to the fix; recent runs; Claude's recent calls.
+2. **Runs** — script runs by day, failures filter, and each run's log and traceback.
+3. **Variables** — profile menu in the toolbar; typed editors per type; "required by" links from script manifests; missing requirements pinned first; import/export (secrets excluded unless opted in).
+4. **Scripts** — the profile's scripts folder; target app/event, attachment state, unmet requirements, package check; attach, detach, new from template, open in external editor, delete; "sync attachments to this profile". Every change is previewed first.
+5. **Hedge apps** — installed apps and versions, Pro scripting flag, `tested_against` warnings, every event with what it runs, stale entries with one-click clear.
+6. **Connect** — writes Claude Desktop config (with a backup), shows the Claude Code command, shows Claude's last 200 tool calls.
+7. **Settings** — Python check against the interpreter Hedge apps use, with a one-click install of the bundled `hedgebuddy` wheel; data directory path and reveal button; optional editor command.
 
-Behaviours: core watches the data directory and the app reflects external changes (MCP writes) within a second. Closing the window quits; no tray, no background process.
+Behaviours: core watches the data directory and the app reflects external changes (MCP writes) within a second. The app is not meant to stay open: closing the window quits, and there is no tray, background process, or notification. The in-app update check moves to phase 6.
 
-Out of scope: in-app code editing beyond read-only preview, running scripts from the GUI, command panels for individual Hedge apps.
+Out of scope: in-app code editing beyond read-only preview, running scripts from the GUI, command panels for individual Hedge apps, a light theme.
 
 ## 11. Git and repository reset
 
@@ -313,8 +319,11 @@ Each phase is one implementation plan.
 2. **Core** — storage, profiles, variables, validation, manifest parsing, catalog with four manifests, OS integration trait with Windows and macOS implementations, volume inspection, run-record reading, watcher.
 3. **CLI and MCP** — `hedgebuddy` binary, all subcommands, `mcp` over stdio, dry runs, contract tests. Milestone: the card scenario runs from Claude Desktop with no GUI.
 4. **Python 0.11.0** — decorator, typed vars, event, log, inject_env, run records, conformance tests, PyPI publish.
-5. **Desktop app** — design pass with mockups, five views, live reload, Connect panel, sidecar bundling.
-6. **Release** — Tauri updater, signed builds (certificates still to be obtained), docs rewrite, `v0.11.0` tag.
+5. **Desktop app**, in three plans (design: `2026-09-23-phase5-desktop-app-design.md`):
+   - **5A Foundation** — shared tool crate with typed results, cross-process lock, batched watcher, Claude activity log, preferences, app shell and design system, Home and Runs.
+   - **5B Editing** — Variables, Scripts, Hedge apps, the change-preview dialog, profile import/export.
+   - **5C Connect and Settings** — Claude Desktop setup, Claude activity, Python check with the bundled wheel install, sidecar and wheel bundling.
+6. **Release** — Tauri updater and the in-app update check, signed builds (certificates still to be obtained), docs rewrite, `v0.11.0` tag.
 
 Phases 4 and 5 are independent and may run in parallel.
 
