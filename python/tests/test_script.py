@@ -101,6 +101,27 @@ def test_sys_exit_inside_main(hb_root, tmp_path):
     assert (ends(hb_root)[0]["status"], ends(hb_root)[0]["exit_code"]) == ("failed", 4)
 
 
+def test_sys_exit_with_a_reason_inside_main(hb_root, tmp_path, capsys):
+    hook_profile(hb_root)
+
+    def main(event, vars):
+        sys.exit("reason")
+
+    assert run(main, source_path=script_file(tmp_path), argv=["probe.py"]) == 1
+    assert "reason" in capsys.readouterr().err
+    assert (ends(hb_root)[0]["status"], ends(hb_root)[0]["exit_code"]) == ("failed", 1)
+
+
+def test_sys_exit_with_no_code_inside_main(hb_root, tmp_path):
+    hook_profile(hb_root)
+
+    def main(event, vars):
+        sys.exit()
+
+    assert run(main, source_path=script_file(tmp_path), argv=["probe.py"]) == 0
+    assert (ends(hb_root)[0]["status"], ends(hb_root)[0]["exit_code"]) == ("ok", 0)
+
+
 def test_an_exception_is_recorded_with_its_traceback(hb_root, tmp_path, capsys):
     hook_profile(hb_root)
 
@@ -112,6 +133,7 @@ def test_an_exception_is_recorded_with_its_traceback(hb_root, tmp_path, capsys):
     assert (end["status"], end["exit_code"]) == ("error", 1)
     assert "RuntimeError: boom" in end["traceback"]
     assert "RuntimeError: boom" in capsys.readouterr().err
+    assert _runs._current is None
 
 
 def test_a_non_integer_return_is_an_error(hb_root, tmp_path):
@@ -170,6 +192,36 @@ def test_without_a_manifest_every_variable_is_available_and_the_name_is_inferred
     assert seen == {"name": "DiskAdded", "title": "A003", "app": None, "notify": True}
     start = run_lines(hb_root)[0]
     assert "app" not in start and "event" not in start
+
+
+def test_an_optional_requirements_default_is_used_when_declared_without_a_value(hb_root, tmp_path):
+    write_profile(
+        hb_root,
+        "p",
+        {"HOOK": {"type": "secret"}, "PROJECT_NAME": {"type": "string"}},  # PROJECT_NAME: no "value"
+        secrets={"HOOK": "https://hook"},
+    )
+    seen = {}
+
+    def main(event, vars):
+        seen["project"] = vars.PROJECT_NAME
+
+    assert run(main, source_path=script_file(tmp_path), argv=["probe.py", PAYLOAD]) == 0
+    assert seen == {"project": "Untitled"}
+    assert (ends(hb_root)[0]["status"], ends(hb_root)[0]["exit_code"]) == ("ok", 0)
+
+
+def test_a_closed_or_missing_stderr_does_not_lose_the_end_record(hb_root, tmp_path, monkeypatch):
+    hook_profile(hb_root)
+    monkeypatch.setattr(sys, "stderr", None)
+
+    def main(event, vars):
+        raise RuntimeError("boom")
+
+    assert run(main, source_path=script_file(tmp_path), argv=["probe.py"]) == 1
+    end = ends(hb_root)[0]
+    assert (end["status"], end["exit_code"]) == ("error", 1)
+    assert "RuntimeError: boom" in end["traceback"]
 
 
 def test_no_active_profile_exits_1_without_a_record(hb_root, tmp_path, capsys):

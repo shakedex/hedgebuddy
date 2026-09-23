@@ -101,8 +101,11 @@ def run(func: Main, *, source_path: Optional[str], argv: Sequence[str]) -> int:
         code = _system_exit_code(e)
     except BaseException:
         text = traceback.format_exc()
-        sys.stderr.write(text)
         run_log.end("error", 1, text)
+        try:
+            print(text, end="", file=sys.stderr)
+        except Exception:
+            pass
         return 1
     finally:
         _runs.set_current(None)
@@ -118,6 +121,13 @@ def script(func: Main) -> Main:
     event in ``sys.argv[1]``, records the run, calls ``func`` and exits with
     its return value (``None`` means 0). When the module is imported (for
     example by a test), ``func`` is returned unchanged.
+
+    ``func`` runs immediately, while the module is still being executed at
+    the ``@hb.script`` line -- so the decorated function must be the last
+    top-level definition in the file. Anything defined below it (helpers,
+    constants, further imports) has not run yet, so referencing it from
+    inside the function raises ``NameError``. Put imports and helper
+    definitions above the decorated function.
     """
     if getattr(func, "__module__", None) != "__main__":
         return func
