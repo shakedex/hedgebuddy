@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -25,7 +25,7 @@ class Variable:
 
     name: str
     type: str
-    raw: Any
+    raw: Any = field(repr=False)
     description: str
 
 
@@ -39,7 +39,9 @@ def _read_json(path: Path) -> Any:
         text = path.read_text(encoding="utf-8")
     except FileNotFoundError:
         raise
-    except (OSError, UnicodeDecodeError) as e:
+    except UnicodeDecodeError as e:
+        raise StorageCorruptedError(f"{path} is not valid UTF-8: {e}") from e
+    except OSError as e:
         raise StorageNotFoundError(f"cannot read {path}: {e}") from e
     try:
         return json.loads(text)
@@ -96,15 +98,19 @@ def load_variables(root: Path, profile: str) -> Dict[str, Variable]:
         raise StorageNotFoundError(f"profile '{profile}' does not exist ({path} is missing)") from None
     if not isinstance(data, dict) or not _is_one(data.get("version")) or not isinstance(data.get("variables"), dict):
         raise StorageCorruptedError(f"{path} is not a version 1 HedgeBuddy profile")
+    if data.get("name") != profile:
+        raise StorageCorruptedError(f"{path} names profile {data.get('name')!r} but is stored under {profile!r}")
     secrets = _load_secrets(folder / "secrets.json")
     out: Dict[str, Variable] = {}
     for name, entry in data["variables"].items():
         if not VAR_NAME.match(name) or not isinstance(entry, dict) or entry.get("type") not in TYPES:
             raise StorageCorruptedError(f"{path}: variable {name!r} is not valid")
+        description = entry.get("description", "")
+        if not isinstance(description, str):
+            raise StorageCorruptedError(f"{path}: variable {name!r} has a non-string description")
         ty = entry["type"]
         raw = secrets.get(name) if ty == "secret" else entry.get("value")
-        description = entry.get("description", "")
-        out[name] = Variable(name, ty, raw, description if isinstance(description, str) else "")
+        out[name] = Variable(name, ty, raw, description)
     return out
 
 

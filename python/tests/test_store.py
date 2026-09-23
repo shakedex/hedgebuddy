@@ -62,6 +62,31 @@ def test_missing_secrets_file_means_no_secret_values(hb_root):
     assert load_variables(hb_root, "p")["HOOK"].raw is None
 
 
+def test_repr_never_shows_a_secret_value(hb_root):
+    write_profile(hb_root, "p", {"HOOK": {"type": "secret"}}, secrets={"HOOK": "https://hook"})
+    variables = load_variables(hb_root, "p")
+    assert "https://hook" not in repr(variables["HOOK"])
+    assert "https://hook" not in repr(variables)
+
+
+def test_profile_name_must_match_its_folder(hb_root):
+    folder = hb_root / "profiles" / "p"
+    folder.mkdir(parents=True)
+    (folder / "profile.json").write_text(
+        '{"version": 1, "name": "other", "variables": {}}', encoding="utf-8"
+    )
+    with pytest.raises(StorageCorruptedError):
+        load_variables(hb_root, "p")
+
+
+def test_invalid_utf8_profile_is_corrupted(hb_root):
+    folder = hb_root / "profiles" / "p"
+    folder.mkdir(parents=True)
+    (folder / "profile.json").write_bytes(b"\xff\xfe not utf-8")
+    with pytest.raises(StorageCorruptedError):
+        load_variables(hb_root, "p")
+
+
 def test_missing_profile(hb_root):
     with pytest.raises(StorageNotFoundError, match="profile 'nope' does not exist"):
         load_variables(hb_root, "nope")
@@ -81,6 +106,7 @@ def test_invalid_profile_name_is_rejected_before_touching_the_disk(hb_root):
         '{"version": 1, "name": "p", "variables": {"lower": {"type": "string", "value": "x"}}}',
         '{"version": 1, "name": "p", "variables": {"X": {"type": "date", "value": "x"}}}',
         '{"version": 1, "name": "p", "variables": {"X": "string"}}',
+        '{"version": 1, "name": "p", "variables": {"X": {"type": "string", "value": "x", "description": 3}}}',
     ],
 )
 def test_corrupted_profiles(hb_root, profile_json):
