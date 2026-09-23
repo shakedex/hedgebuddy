@@ -1,0 +1,3 @@
+{"ts":"2026-09-15T18:20:01.120Z","tool":"write_script","target":"on_copy_complete.py","outcome":"ok"}
+{"ts":"2026-09-15T18:20:04.884Z","tool":"run_app_command","target":"offshoot","outcome":"needs_confirmation"}
+{"ts":"2026-09-15T18:20:09.310Z","tool":"list_runs","target":null,"outcome":"ok"}

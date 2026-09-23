@@ -263,6 +263,17 @@ pub fn to_json<T: Serialize>(value: &T) -> ToolResult {
     serde_json::to_value(value).map_err(|e| ToolError::new(e.to_string()))
 }
 
+/// How a call ends up in the Claude activity log: an error, a
+/// `run_app_command` that stopped for the operator's approval, or ok.
+pub fn activity_outcome(result: &ToolResult) -> hedgebuddy_core::ActivityOutcome {
+    use hedgebuddy_core::ActivityOutcome;
+    match result {
+        Err(_) => ActivityOutcome::Error,
+        Ok(v) if v.get("requires_confirmation").is_some() => ActivityOutcome::NeedsConfirmation,
+        Ok(_) => ActivityOutcome::Ok,
+    }
+}
+
 /// Parameters of tools that take none.
 #[derive(Debug, Default, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -505,6 +516,25 @@ mod tests {
             .unwrap();
             assert_eq!(v["value"], format!("v{i}"), "{v}");
         }
+    }
+
+    #[test]
+    fn outcomes_for_the_activity_log() {
+        use hedgebuddy_core::ActivityOutcome;
+        assert_eq!(
+            activity_outcome(&Ok(json!({"active": "p"}))),
+            ActivityOutcome::Ok
+        );
+        assert_eq!(
+            activity_outcome(&Err(ToolError::new("nope"))),
+            ActivityOutcome::Error
+        );
+        assert_eq!(
+            activity_outcome(&Ok(
+                json!({"executed": false, "requires_confirmation": ["addTransfers"]})
+            )),
+            ActivityOutcome::NeedsConfirmation
+        );
     }
 
     #[test]

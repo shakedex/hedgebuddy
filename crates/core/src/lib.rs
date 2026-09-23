@@ -15,7 +15,9 @@
 //! [`volumes::inspect_volume`] and [`python_env::find_python`] cover camera
 //! cards and the Python interpreter.
 
+pub mod activity;
 pub mod catalog;
+pub mod clock;
 pub mod error;
 pub(crate) mod fs_util;
 pub mod hedge;
@@ -33,7 +35,11 @@ pub mod variable;
 pub mod volumes;
 pub mod watch;
 
+pub use activity::{
+    activity_target, ActivityOutcome, ActivityRecord, ACTIVITY_KEEP, ACTIVITY_TRIM_AT,
+};
 pub use catalog::Catalog;
+pub use clock::now_rfc3339;
 pub use error::{CoreError, Result};
 pub use hedge::Hedge;
 pub use host::{FakeHost, Host, Os, RealHost};

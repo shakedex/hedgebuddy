@@ -154,6 +154,32 @@ fn mcp_server_speaks_the_protocol() {
     let unknown = c.request("tools/call", json!({"name": "nope", "arguments": {}}));
     assert!(unknown.get("error").is_some(), "{unknown}");
 
+    let log = std::fs::read_to_string(dir.path().join("activity.jsonl")).unwrap();
+    assert!(
+        !log.contains("https://hook"),
+        "the activity log holds a value: {log}"
+    );
+    let got: Vec<(String, Value, String)> = log
+        .lines()
+        .map(|l| {
+            let r: Value = serde_json::from_str(l).unwrap();
+            (
+                r["tool"].as_str().unwrap().to_owned(),
+                r["target"].clone(),
+                r["outcome"].as_str().unwrap().to_owned(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        got,
+        vec![
+            ("create_profile".to_owned(), json!("p"), "ok".to_owned()),
+            ("set_var".to_owned(), json!("HOOK"), "ok".to_owned()),
+            ("list_vars".to_owned(), Value::Null, "ok".to_owned()),
+            ("get_var".to_owned(), json!("NOPE"), "error".to_owned()),
+        ]
+    );
+
     let resources = c.request("resources/list", json!({}));
     let uris: Vec<&str> = resources["result"]["resources"]
         .as_array()

@@ -83,6 +83,18 @@ fn call_ignores_a_leading_bom_in_piped_arguments() {
 }
 
 #[test]
+fn call_does_not_write_the_activity_log() {
+    let dir = tempfile::tempdir().unwrap();
+    assert_cmd::Command::cargo_bin("hedgebuddy")
+        .unwrap()
+        .env("HEDGEBUDDY_DATA_DIR", dir.path())
+        .args(["call", "create_profile", r#"{"name":"p"}"#])
+        .assert()
+        .success();
+    assert!(!dir.path().join("activity.jsonl").exists());
+}
+
+#[test]
 fn call_reports_errors_on_stderr() {
     let dir = tempfile::tempdir().unwrap();
     hb().env("HEDGEBUDDY_DATA_DIR", dir.path())

@@ -1,5 +1,6 @@
 //! The MCP server: an `rmcp` `ServerHandler` over `hedgebuddy_tools`'
 //! [`tools`] and [`resources`]. Nothing here contains HedgeBuddy logic.
+//! Every tool call is appended to the Claude activity log.
 
 use std::sync::Arc;
 
@@ -89,9 +90,23 @@ impl ServerHandler for Server {
             .map(serde_json::Value::Object)
             .unwrap_or(serde_json::Value::Null);
         let ctx = self.ctx.clone();
-        let result = tokio::task::spawn_blocking(move || tools::call(&ctx, &name, args))
-            .await
-            .map_err(|e| McpError::internal_error(format!("tool panicked: {e}"), None))?;
+        // Only the name of what the call acts on is kept, never the arguments.
+        let target = hedgebuddy_core::activity_target(&args);
+        let result = tokio::task::spawn_blocking(move || {
+            let result = tools::call(&ctx, &name, args);
+            let record = hedgebuddy_core::ActivityRecord::now(
+                &name,
+                target,
+                tools::activity_outcome(&result),
+            );
+            if let Err(e) = ctx.store.append_activity(&record) {
+                // stdout carries protocol messages only.
+                eprintln!("hedgebuddy: cannot record Claude activity: {e}");
+            }
+            result
+        })
+        .await
+        .map_err(|e| McpError::internal_error(format!("tool panicked: {e}"), None))?;
         let result = match result {
             Ok(value) => {
                 let mut ok = CallToolResult::success(vec![ContentBlock::text(

@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/shakedex/hedgebuddy/schema/activity-record.schema.json",
+  "title": "HedgeBuddy Claude activity record (one JSONL line)",
+  "description": "One MCP tool call in <data>/activity.jsonl. Argument values, script source and error text are never recorded.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["ts", "tool", "target", "outcome"],
+  "properties": {
+    "ts": { "type": "string", "format": "date-time" },
+    "tool": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+    "target": { "type": ["string", "null"] },
+    "outcome": { "enum": ["ok", "error", "needs_confirmation"] }
+  }
+}
