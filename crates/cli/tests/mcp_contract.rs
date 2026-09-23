@@ -139,10 +139,7 @@ fn mcp_server_speaks_the_protocol() {
     let missing = c.call_tool("get_var", json!({"name": "NOPE"}));
     assert_eq!(missing["isError"], true, "{missing}");
     let unknown = c.request("tools/call", json!({"name": "nope", "arguments": {}}));
-    assert!(
-        unknown.get("error").is_some() || unknown["result"]["isError"] == true,
-        "{unknown}"
-    );
+    assert!(unknown.get("error").is_some(), "{unknown}");
 
     let resources = c.request("resources/list", json!({}));
     let uris: Vec<&str> = resources["result"]["resources"]

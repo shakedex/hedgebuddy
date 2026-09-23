@@ -47,9 +47,11 @@ pub struct Context {
     /// Set when `<data>/catalog/` has an invalid override; the embedded
     /// catalog is used instead and `environment` reports this text.
     pub catalog_error: Option<String>,
-    /// Held while `run_app_command` executes, so two concurrent calls don't
-    /// run Hedge app commands at the same time.
-    pub(crate) command_lock: Mutex<()>,
+    /// Held by [`call`] around every tool that is not read-only, so writes
+    /// within this process run one at a time: the store's read-modify-write
+    /// updates don't lose each other's changes, and two `run_app_command`
+    /// calls don't drive a Hedge app at the same time.
+    pub(crate) write_lock: Mutex<()>,
 }
 
 impl Context {
@@ -67,7 +69,7 @@ impl Context {
             store,
             hedge: Hedge::new(host, catalog),
             catalog_error,
-            command_lock: Mutex::new(()),
+            write_lock: Mutex::new(()),
         }
     }
 
@@ -186,12 +188,19 @@ pub fn all() -> Vec<ToolDef> {
     tools
 }
 
-/// Run one tool by name.
+/// Run one tool by name. Tools that are not read-only run under
+/// [`Context::write_lock`], one at a time.
 pub fn call(ctx: &Context, name: &str, args: Value) -> ToolResult {
     let def = all()
         .into_iter()
         .find(|t| t.name == name)
         .ok_or_else(|| ToolError::new(format!("unknown tool '{name}'")))?;
+    if def.hints.read_only {
+        return (def.run)(ctx, args);
+    }
+    // A tool that panicked while holding the lock leaves nothing half-held
+    // in `()`, so a poisoned lock is still safe to take.
+    let _guard = ctx.write_lock.lock().unwrap_or_else(|e| e.into_inner());
     (def.run)(ctx, args)
 }
 
@@ -268,5 +277,53 @@ mod tests {
             .unwrap()
             .contains("offshoot.toml"));
         assert_eq!(ctx.hedge.catalog().apps().count(), 4);
+    }
+
+    #[test]
+    fn concurrent_writes_to_one_profile_are_all_kept() {
+        let (_d, _f, ctx) = test_ctx(FakeHost::new(Os::Windows));
+        let ctx = Arc::new(ctx);
+        call(&ctx, "create_profile", json!({"name": "p"})).unwrap();
+        let start = Arc::new(std::sync::Barrier::new(8));
+        let threads: Vec<_> = (0..8)
+            .map(|i| {
+                let (ctx, start) = (ctx.clone(), start.clone());
+                std::thread::spawn(move || {
+                    // Half secrets, so both profile.json and secrets.json are rewritten.
+                    let ty = if i % 2 == 0 { "string" } else { "secret" };
+                    start.wait();
+                    call(
+                        &ctx,
+                        "set_var",
+                        json!({"name": format!("VAR_{i}"), "type": ty, "value": format!("v{i}")}),
+                    )
+                })
+            })
+            .collect();
+        for t in threads {
+            t.join().unwrap().unwrap();
+        }
+        let listed = call(&ctx, "list_vars", json!({})).unwrap();
+        let names: BTreeSet<&str> = listed["variables"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|v| v["name"].as_str().unwrap())
+            .collect();
+        let expected: BTreeSet<String> = (0..8).map(|i| format!("VAR_{i}")).collect();
+        assert_eq!(
+            names,
+            expected.iter().map(String::as_str).collect(),
+            "{listed}"
+        );
+        for i in 0..8 {
+            let v = call(
+                &ctx,
+                "get_var",
+                json!({"name": format!("VAR_{i}"), "reveal": true}),
+            )
+            .unwrap();
+            assert_eq!(v["value"], format!("v{i}"), "{v}");
+        }
     }
 }

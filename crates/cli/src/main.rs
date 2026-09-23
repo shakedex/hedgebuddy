@@ -3,6 +3,7 @@
 
 use std::io::Read;
 use std::process::ExitCode;
+use std::time::Duration;
 
 use clap::{Parser, Subcommand};
 use hedgebuddy_cli::tools::{self, Context};
@@ -81,7 +82,12 @@ fn run_mcp() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    match runtime.block_on(hedgebuddy_cli::mcp::serve(ctx)) {
+    let served = runtime.block_on(hedgebuddy_cli::mcp::serve(ctx));
+    // tokio reads stdin on a blocking thread that can't be cancelled; if the
+    // server stops while a read is pending (the client still holds stdin
+    // open), dropping the runtime would wait for that read forever.
+    runtime.shutdown_timeout(Duration::from_secs(1));
+    match served {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
             eprintln!("error: {e}");

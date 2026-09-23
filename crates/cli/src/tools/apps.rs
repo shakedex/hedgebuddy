@@ -179,10 +179,6 @@ fn run_app_command(ctx: &Context, p: RunCommand) -> ToolResult {
         }));
     }
     let wait = Duration::from_secs(p.wait_seconds.unwrap_or(5).min(30));
-    let _guard = ctx
-        .command_lock
-        .lock()
-        .map_err(|_| ToolError::new("command lock poisoned"))?;
     let outcome = ctx.hedge.run_commands(&p.app, &calls, wait)?;
     Ok(json!({ "executed": true, "outcome": to_json(&outcome)? }))
 }
