@@ -15,6 +15,9 @@ export function ProfileSwitcher() {
   const activate = useActivateProfile();
   const [createOpen, setCreateOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  /** Set by "New profile…"'s `onSelect`, consumed by the dropdown's `onCloseAutoFocus` once it has actually
+   *  closed (a ref, not state: it's read once inside an event handler, never rendered). */
+  const openCreateOnClose = useRef(false);
 
   if (summary.isPending) return <Skeleton className="h-7 w-28 rounded-full" />;
 
@@ -26,13 +29,6 @@ export function ProfileSwitcher() {
     if (name === active || activate.isPending) return;
     const retry = () => activate.mutate(name, { onError: (e) => showError(e, retry) });
     retry();
-  };
-
-  /** The dialog opens over the dropdown, not from a `DialogTrigger`, so Radix has nothing to return focus to
-   *  on close; do it ourselves, after its own close effects have run. */
-  const setCreateDialogOpen = (next: boolean) => {
-    setCreateOpen(next);
-    if (!next) requestAnimationFrame(() => triggerRef.current?.focus());
   };
 
   return (
@@ -50,7 +46,19 @@ export function ProfileSwitcher() {
             <ChevronDown aria-hidden className="size-3.5 text-muted-foreground" strokeWidth={1.75} />
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-56">
+        <DropdownMenuContent
+          align="end"
+          className="w-56"
+          onCloseAutoFocus={(e) => {
+            // "New profile…" doesn't open the dialog itself (see below); it only gets to here once the
+            // menu has actually finished closing. Skip the menu's own restore-focus-to-the-pill default so
+            // it doesn't fight the dialog's autofocus, and open the dialog instead.
+            if (!openCreateOnClose.current) return;
+            openCreateOnClose.current = false;
+            e.preventDefault();
+            setCreateOpen(true);
+          }}
+        >
           <DropdownMenuLabel>Profiles</DropdownMenuLabel>
           <DropdownMenuRadioGroup value={active} onValueChange={switchTo}>
             {profiles.map((name) => (
@@ -60,12 +68,23 @@ export function ProfileSwitcher() {
             ))}
           </DropdownMenuRadioGroup>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onSelect={() => setCreateDialogOpen(true)}>
+          {/*
+            Opening the dialog straight from onSelect (while the menu is still tearing down its own focus
+            scope) is what left a ghost DropdownMenuContent behind and broke focus restoration on Cancel.
+            Instead this only flags the intent; onCloseAutoFocus above does the actual opening once the
+            menu is really gone.
+          */}
+          <DropdownMenuItem onSelect={() => { openCreateOnClose.current = true; }}>
             <Plus aria-hidden strokeWidth={1.75} /> New profile…
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-      <CreateProfileDialog open={createOpen} onOpenChange={setCreateDialogOpen} activate />
+      <CreateProfileDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        onCloseFocus={() => triggerRef.current?.focus()}
+        activate
+      />
     </>
   );
 }

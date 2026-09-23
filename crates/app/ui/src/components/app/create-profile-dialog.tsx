@@ -11,7 +11,12 @@ import { cn } from "@/lib/utils";
 /** Main spec §5: a profile name is a slug. */
 const SLUG = /^[a-z0-9][a-z0-9-]{0,63}$/;
 
-export function CreateProfileDialog({ open, onOpenChange, activate }: { open: boolean; onOpenChange: (open: boolean) => void; activate: boolean }) {
+export function CreateProfileDialog({ open, onOpenChange, activate, onCloseFocus }: {
+  open: boolean; onOpenChange: (open: boolean) => void; activate: boolean;
+  /** Called instead of Radix's own close-focus restore (which has nowhere reliable to return to, since this
+   *  dialog isn't opened via a `DialogTrigger`). */
+  onCloseFocus?: () => void;
+}) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const create = useCreateProfile();
@@ -40,7 +45,14 @@ export function CreateProfileDialog({ open, onOpenChange, activate }: { open: bo
 
   return (
     <Dialog open={open} onOpenChange={close}>
-      <DialogContent className="sm:max-w-[420px]">
+      <DialogContent
+        className="sm:max-w-[420px]"
+        onCloseAutoFocus={(e) => {
+          if (!onCloseFocus) return;
+          e.preventDefault();
+          onCloseFocus();
+        }}
+      >
         <DialogHeader>
           <DialogTitle>New profile</DialogTitle>
           <DialogDescription>A profile holds the variables and scripts for one kind of job.</DialogDescription>
