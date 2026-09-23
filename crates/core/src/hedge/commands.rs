@@ -82,6 +82,7 @@ fn check_value(command: &str, name: &str, spec: &ParamSpec, v: &Value) -> Result
 
 fn query_value(spec: &ParamSpec, v: &Value, separator: Option<&str>) -> String {
     match (spec.ty, v, separator) {
+        (ParamType::Json, other, _) => other.to_string(),
         (ParamType::PathList, Value::Array(items), Some(sep)) => items
             .iter()
             .filter_map(Value::as_str)
@@ -152,14 +153,22 @@ impl Hedge {
                 )));
             }
             let specs = spec.param_specs()?;
-            if let Some(unknown) = call.params.keys().find(|k| !specs.contains_key(*k)) {
+            // A JSON `null` counts as an absent parameter (an MCP caller may
+            // send explicit nulls for omitted optional fields).
+            let params: Map<String, Value> = call
+                .params
+                .iter()
+                .filter(|(_, v)| !v.is_null())
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect();
+            if let Some(unknown) = params.keys().find(|k| !specs.contains_key(*k)) {
                 return Err(CoreError::Validation(format!(
                     "{}: unknown parameter '{unknown}'",
                     spec.id
                 )));
             }
             for (name, ps) in &specs {
-                match call.params.get(name) {
+                match params.get(name) {
                     Some(v) => check_value(&spec.id, name, ps, v)?,
                     None if !ps.optional => {
                         return Err(CoreError::Validation(format!(
@@ -176,7 +185,7 @@ impl Hedge {
             match spec.form {
                 CommandForm::Action => {
                     let mut obj = Map::new();
-                    obj.insert(spec.id.clone(), Value::Object(call.params.clone()));
+                    obj.insert(spec.id.clone(), Value::Object(params.clone()));
                     pending.push(Value::Object(obj));
                 }
                 CommandForm::Url => {
@@ -184,7 +193,7 @@ impl Hedge {
                     let query: Vec<String> = specs
                         .iter()
                         .filter_map(|(name, ps)| {
-                            call.params.get(name).map(|v| {
+                            params.get(name).map(|v| {
                                 format!(
                                     "{name}={}",
                                     percent_encode(&query_value(
@@ -234,8 +243,14 @@ impl Hedge {
             .as_ref()
             .and_then(|p| fs::metadata(p).ok())
             .map_or(0, |m| m.len());
-        for url in &plan.urls {
-            self.host.open_url(url)?;
+        for (i, url) in plan.urls.iter().enumerate() {
+            if let Err(e) = self.host.open_url(url) {
+                return Err(CoreError::Host(format!(
+                    "opened {i} of {} URLs before failing ({e}); already opened: {}",
+                    plan.urls.len(),
+                    plan.urls[..i].join(" ")
+                )));
+            }
         }
         let responses = match &log {
             Some(path) => wait_for_growth(path, before, wait),
@@ -299,6 +314,36 @@ mod tests {
     fn percent_encoding() {
         assert_eq!(percent_encode("aZ09-_.~"), "aZ09-_.~");
         assert_eq!(percent_encode("a b/ü|"), "a%20b%2F%C3%BC%7C");
+    }
+
+    #[test]
+    fn json_params_always_encode_as_json() {
+        let spec = ParamSpec {
+            ty: ParamType::Json,
+            optional: false,
+        };
+        assert_eq!(query_value(&spec, &json!("active"), None), "\"active\"");
+        assert_eq!(query_value(&spec, &json!({"a": 1}), None), "{\"a\":1}");
+    }
+
+    #[test]
+    fn null_params_count_as_absent() {
+        let (_f, h) = hedge(FakeHost::new(Os::Windows));
+        let plan = h
+            .plan_commands(
+                "offshoot",
+                &[call("setSource", json!({"paths": ["/A"], "label": null}))],
+            )
+            .unwrap();
+        let prefix = "offshoot://actions?json=";
+        let decoded: Value = serde_json::from_str(&decode(&plan.urls[0][prefix.len()..])).unwrap();
+        let obj = decoded[0]["setSource"].as_object().unwrap();
+        assert!(!obj.contains_key("label"), "{decoded:?}");
+        assert!(matches!(
+            h.plan_commands("offshoot", &[call("setDestination", json!({"path": null}))])
+                .unwrap_err(),
+            CoreError::Validation(_)
+        ));
     }
 
     #[test]
