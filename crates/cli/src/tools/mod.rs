@@ -15,6 +15,7 @@ use serde_json::{json, Value};
 // `pub(crate) use tool;` re-export below rather than through `macro_rules!`
 // legacy textual scoping (which would otherwise make that re-export, or the
 // group modules' own `use super::tool;`, look unused to `unused_imports`).
+pub(crate) mod apps;
 pub(crate) mod attachments;
 pub(crate) mod profiles;
 pub(crate) mod scripts;
@@ -46,9 +47,7 @@ pub struct Context {
     /// catalog is used instead and `environment` reports this text.
     pub catalog_error: Option<String>,
     /// Held while `run_app_command` executes, so two concurrent calls don't
-    /// run Hedge app commands at the same time. Unused before that tool
-    /// lands.
-    #[allow(dead_code)]
+    /// run Hedge app commands at the same time.
     pub(crate) command_lock: Mutex<()>,
 }
 
@@ -177,6 +176,7 @@ pub struct NoParams {}
 /// Every tool, in a stable order.
 pub fn all() -> Vec<ToolDef> {
     let mut tools = Vec::new();
+    tools.extend(apps::tools());
     tools.extend(attachments::tools());
     tools.extend(profiles::tools());
     tools.extend(scripts::tools());
