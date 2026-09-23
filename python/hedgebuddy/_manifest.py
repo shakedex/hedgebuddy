@@ -70,7 +70,7 @@ def _lines(text: str) -> List[str]:
 def extract_manifest_text(source: str) -> Optional[str]:
     """The text before the ``---`` line of the module docstring, when that
     docstring starts with ``{``; ``None`` when the script has no manifest."""
-    if source.startswith("﻿"):
+    if source.startswith("\ufeff"):
         source = source[1:]
     lines = _lines(source)
     i = 0
@@ -127,7 +127,7 @@ def parse_manifest(source: str) -> Optional[Manifest]:
         raise ManifestError("'requires' must be an object")
     requires: Dict[str, Requirement] = {}
     for name, spec in raw_requires.items():
-        if not VAR_NAME.match(name):
+        if not VAR_NAME.fullmatch(name):
             raise ManifestError(f"requirement name {name!r} must be UPPER_SNAKE_CASE")
         if not isinstance(spec, dict):
             raise ManifestError(f"requirement {name} must be an object")

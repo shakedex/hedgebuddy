@@ -62,7 +62,7 @@ def active_profile(root: Path) -> Optional[str]:
     name = index.get("active_profile")
     if name is None:
         return None
-    if not isinstance(name, str) or not SLUG.match(name):
+    if not isinstance(name, str) or not SLUG.fullmatch(name):
         raise StorageCorruptedError(f"{path} names an invalid profile {name!r}")
     return name
 
@@ -88,7 +88,7 @@ def profile_names(root: Path) -> List[str]:
 
 def load_variables(root: Path, profile: str) -> Dict[str, Variable]:
     """Every variable of ``profile``, with secret values merged in from ``secrets.json``."""
-    if not SLUG.match(profile):
+    if not SLUG.fullmatch(profile):
         raise StorageNotFoundError(f"{profile!r} is not a valid profile name")
     folder = root / "profiles" / profile
     path = folder / "profile.json"
@@ -103,7 +103,7 @@ def load_variables(root: Path, profile: str) -> Dict[str, Variable]:
     secrets = _load_secrets(folder / "secrets.json")
     out: Dict[str, Variable] = {}
     for name, entry in data["variables"].items():
-        if not VAR_NAME.match(name) or not isinstance(entry, dict) or entry.get("type") not in TYPES:
+        if not VAR_NAME.fullmatch(name) or not isinstance(entry, dict) or entry.get("type") not in TYPES:
             raise StorageCorruptedError(f"{path}: variable {name!r} is not valid")
         description = entry.get("description", "")
         if not isinstance(description, str):

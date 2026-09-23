@@ -31,6 +31,7 @@ def test_active_profile(hb_root):
         '{"version": true, "active_profile": null}',
         '{"version": 1, "active_profile": "../evil"}',
         '{"version": 1, "active_profile": 3}',
+        '{"version": 1, "active_profile": "p\\n"}',
     ],
 )
 def test_bad_index_is_corrupted(hb_root, text):
@@ -97,6 +98,13 @@ def test_invalid_profile_name_is_rejected_before_touching_the_disk(hb_root):
         load_variables(hb_root, "../x")
 
 
+def test_profile_name_with_trailing_newline_is_rejected(hb_root):
+    # `$` matches just before a trailing newline in Python regexes; the name
+    # check must use `fullmatch` so this is rejected like core rejects it.
+    with pytest.raises(StorageNotFoundError, match="not a valid profile name"):
+        load_variables(hb_root, "p\n")
+
+
 @pytest.mark.parametrize(
     "profile_json",
     [
@@ -104,6 +112,7 @@ def test_invalid_profile_name_is_rejected_before_touching_the_disk(hb_root):
         '{"version": 1, "name": "p"}',
         '{"version": 2, "name": "p", "variables": {}}',
         '{"version": 1, "name": "p", "variables": {"lower": {"type": "string", "value": "x"}}}',
+        '{"version": 1, "name": "p", "variables": {"AB\\n": {"type": "string", "value": "x"}}}',
         '{"version": 1, "name": "p", "variables": {"X": {"type": "date", "value": "x"}}}',
         '{"version": 1, "name": "p", "variables": {"X": "string"}}',
         '{"version": 1, "name": "p", "variables": {"X": {"type": "string", "value": "x", "description": 3}}}',

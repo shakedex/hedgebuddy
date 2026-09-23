@@ -73,6 +73,13 @@ def test_invalid_manifests(text, message):
         parse_manifest(manifest(text))
 
 
+def test_requirement_name_rejects_a_trailing_newline():
+    # `$` matches just before a trailing newline in Python regexes; the name
+    # check must use `fullmatch` so this is rejected like core rejects it.
+    with pytest.raises(ManifestError, match="UPPER_SNAKE_CASE"):
+        parse_manifest(manifest('{"hedgebuddy": 1, "requires": {"AB\\n": {"type": "string"}}}'))
+
+
 def test_defaults_are_converted_to_their_type():
     m = parse_manifest(manifest('{"hedgebuddy": 1, "requires": {"ROOT": {"type": "path", "default": "D:/A"}}}'))
     assert str(m.requires["ROOT"].default).replace("\\", "/") == "D:/A"
