@@ -6,8 +6,11 @@ import sys
 import time
 from pathlib import Path
 
+import pytest
+
 import hedgebuddy as hb
 from hedgebuddy import _runs
+from hedgebuddy._lock import locked
 from hedgebuddy._runs import RunLog, new_run_id, set_current, utc_timestamp
 from tests.helpers import run_lines, validate_run_record
 
@@ -92,6 +95,19 @@ def test_log_appends_to_the_current_run(hb_root, capsys):
     assert capsys.readouterr().out == ""
     assert run_lines(hb_root)[-1]["message"] == "42"
     assert _runs._current is None
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows byte-range locks are mandatory; flock is advisory")
+def test_the_lock_does_not_block_readers(tmp_path):
+    path = tmp_path / "runs.jsonl"
+    path.write_bytes(b'{"phase": "log"}\n')
+    with open(path, "ab") as f:
+        with locked(f):
+            with open(path, "rb") as reader:  # a second handle, as core's list_runs opens one
+                assert reader.read() == b'{"phase": "log"}\n'
+            f.write(b"x\n")
+            f.flush()
+    assert path.read_bytes() == b'{"phase": "log"}\nx\n'  # the write still went to the end
 
 
 WRITER = (

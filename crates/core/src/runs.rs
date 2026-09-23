@@ -108,8 +108,9 @@ pub struct RunFilter {
 }
 
 impl Store {
-    /// All runs, newest first. Lines that do not parse are skipped; a
-    /// `log`/`end` without a matching `start` is skipped.
+    /// All runs, newest first. A run file that cannot be read is skipped,
+    /// lines that do not parse are skipped, and a `log`/`end` without a
+    /// matching `start` is skipped.
     pub fn list_runs(&self, filter: &RunFilter) -> Result<Vec<Run>> {
         let dir = self.runs_dir();
         if !dir.exists() {
@@ -126,7 +127,11 @@ impl Store {
         // Group by run_id. Ties on started_at are broken by run_id order (BTreeMap) so the result is deterministic.
         let mut runs: BTreeMap<String, Run> = BTreeMap::new();
         for file in files {
-            let text = fs::read_to_string(&file).map_err(|e| CoreError::io(&file, e))?;
+            // Skip a file that cannot be read (locked by a writer, not UTF-8,
+            // a folder) rather than failing the whole listing.
+            let Ok(text) = fs::read_to_string(&file) else {
+                continue;
+            };
             for line in text.lines().filter(|l| !l.trim().is_empty()) {
                 let Ok(record) = serde_json::from_str::<RunRecord>(line) else {
                     continue;
@@ -476,6 +481,46 @@ mod tests {
                 vec!["old"]
             );
         }
+    }
+
+    #[test]
+    fn an_unreadable_run_file_is_skipped() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(dir.path());
+        fs::create_dir_all(store.runs_dir()).unwrap();
+        fs::write(
+            store.runs_dir().join("2026-09-15.jsonl"),
+            r#"{"ts":"2026-09-15T10:00:00Z","run_id":"ok","phase":"start","script":"a.py","profile":"p"}"#,
+        )
+        .unwrap();
+        // A folder with a run file's name cannot be read as a file anywhere.
+        fs::create_dir(store.runs_dir().join("2026-09-16.jsonl")).unwrap();
+        // On Windows, also hold a run file open with no sharing, as a
+        // writer holding a lock on its content would block reads.
+        #[cfg(windows)]
+        let guard = {
+            use std::os::windows::fs::OpenOptionsExt;
+            let locked = store.runs_dir().join("2026-09-17.jsonl");
+            fs::write(
+                &locked,
+                r#"{"ts":"2026-09-17T10:00:00Z","run_id":"locked","phase":"start","script":"a.py","profile":"p"}"#,
+            )
+            .unwrap();
+            fs::OpenOptions::new()
+                .read(true)
+                .share_mode(0)
+                .open(&locked)
+                .unwrap()
+        };
+        let listed = store.list_runs(&RunFilter::default());
+        #[cfg(windows)]
+        drop(guard);
+
+        let runs = listed.expect("an unreadable run file must not fail the listing");
+        assert_eq!(
+            runs.iter().map(|r| r.run_id.as_str()).collect::<Vec<_>>(),
+            vec!["ok"]
+        );
     }
 
     #[test]
