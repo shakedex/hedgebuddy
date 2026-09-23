@@ -83,6 +83,11 @@ impl Store {
         self.root.join("runs")
     }
 
+    /// Folder of catalog overrides: `<root>/catalog`.
+    pub fn catalog_dir(&self) -> PathBuf {
+        self.root.join("catalog")
+    }
+
     /// Read `hedgebuddy.json`. A missing file is the empty state.
     pub fn index(&self) -> Result<Index> {
         let idx: Index = fs_util::read_json_or(&self.index_path(), Index::default())?;

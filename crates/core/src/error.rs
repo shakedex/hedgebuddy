@@ -44,6 +44,25 @@ pub enum CoreError {
     /// The file watcher could not be started or could not watch the data directory.
     #[error("file watcher: {0}")]
     Watch(String),
+    /// The operation is not available on this platform, or for this app.
+    #[error("not supported: {0}")]
+    Unsupported(String),
+    /// An operating-system call (registry, app bundle, URL handler, external
+    /// program, volume list) failed.
+    #[error("host error: {0}")]
+    Host(String),
+    /// A catalog file failed to parse or broke one of the catalog's rules.
+    #[error("catalog: {0}")]
+    Catalog(String),
+    /// No app with this id is in the catalog.
+    #[error("app '{0}' is not in the catalog")]
+    AppNotFound(String),
+    /// The app has no event with this id.
+    #[error("{app} has no event '{event}'")]
+    EventNotFound { app: String, event: String },
+    /// The app has no command with this id.
+    #[error("{app} has no command '{command}'")]
+    CommandNotFound { app: String, command: String },
     /// The data directory's location could not be determined.
     #[error(transparent)]
     Path(#[from] crate::paths::PathError),

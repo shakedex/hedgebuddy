@@ -10,9 +10,15 @@ description = "Core logic for HedgeBuddy: storage, profiles, catalog, and Hedge 
 directories = { workspace = true }
 jiff = "0.2"
 notify = "8"
+open = "5"
 serde = { workspace = true }
 serde_json = { workspace = true }
+sysinfo = { version = "0.39", default-features = false, features = ["disk"] }
 thiserror = { workspace = true }
+toml = "1"
+
+[target.'cfg(windows)'.dependencies]
+winreg = "0.56"
 
 [dev-dependencies]
 tempfile = "3"

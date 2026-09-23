@@ -47,12 +47,12 @@ Events: OffShoot 10 (OffShootStarted, DiskAdded, DiskRemoved, DiskBusy, DiskIdle
 **Where attachments are stored.**
 
 - Windows: one registry string value per event under `HKCU\Software\Hedge` (OffShoot) and `HKCU\Software\FoolCat`, named `EventScript<InternalName>`, plus `EventScriptAllowScripting` (DWORD 1). Internal names differ from documented event names in at least one case: `VerificationIssue` is stored as `EventScriptCheckpointIssue`; `OffShootStarted` as `EventScriptAppStarted`; `DisksIdle` as `EventScriptAllDisksIdle`. Undocumented but stable across the two apps observed.
-- macOS: OffShoot Helper applies workspace JSON from `~/Library/Preferences/Hedge/Workspaces/`, whose `setPreferences` dictionary accepts keys such as `scripting_events_checkpoint_issue`. Documented as "not all preferences are built in." Preferences domain for Helper is `nl.syncfactory.Hedge.Mac.Helper`.
+- macOS: OffShoot Helper applies workspace JSON files from `~/Library/Preferences/Hedge/Workspaces/`; a workspace's `setPreferences` object accepts `scripting_opt_in` and `scripting_events_{checkpoint_issue, disk_added, disk_busy, disk_idle, disk_removed, disks_idle, file_copy_completed}` (documented on the Helper page). HedgeBuddy writes `HedgeBuddy.json` there and the operator applies it from the Helper menu, so macOS attachments are reported as *staged*. No keys are documented for OffShoot Started, Transfers Added, or Source Added, or for FoolCat and EditReady; those are attached by hand on macOS.
 - Unknown: whether apps re-read attachment settings live or only at launch. To be tested in phase 2.
 
 **Control.** Each app has a URL scheme (`offshoot://`, `foolcat://`, `editready://`, `canister://`) invoked via `start` (Windows) or `open` (macOS). OffShoot: `open`, `quit`, `restart`, `update`, `activate`, `deactivate`, `reset?type=sources|destinations`, `setSource {paths, label}`, `setDestination {path}`, `addTransfers`, `restartTransfer?id=`, `reloadPresets`, `setPreferences` (macOS only), and `actions?json=[...]` to chain. Responses are logged to `%APPDATA%\Hedge\HedgeCallback.log` / `~/Library/Logs/Hedge/urlSchemeResponseLog.txt`. No URL command selects a preset.
 
-**Presets.** OffShoot presets are JSON files in `%APPDATA%\Hedge\Presets\*.hedge` with `folderPattern`, `labelPattern`, `renamePattern`, `counter`, and flags. `offshoot://reloadPresets` reloads them. The active preset name is in the registry value `SessionVariableSelectedPreset` (undocumented).
+**Presets.** OffShoot presets are JSON files in `%APPDATA%\Hedge\Presets\*.hedge` with `folderPattern`, `labelPattern`, `renamePattern`, `counter`, and flags. `offshoot://reloadPresets` reloads them. The active preset name is in the registry value `SessionVariableSelectedPreset` (observed, undocumented); `PresetsLocation` overrides the folder. No API selects a preset, and the macOS preset folder is not documented.
 
 **Nothing from Hedge about MCP or AI.** Their docs publish `https://docs.hedge.video/llms.txt`.
 
@@ -177,75 +177,9 @@ Core parses the manifest without executing Python. A `requires` entry with a `de
 
 ## 7. Hedge app catalog
 
-One TOML manifest per app. Shape, using OffShoot:
+The authoritative format is `catalog/README.md`, and the shipped files are `catalog/*.toml`. Differences from the first draft of this section: detection uses `registry_key` + `version_value` (Windows) and `app_path` + optional `bundle_id` (macOS); scripting kinds are `registry`, `helper_workspace`, and `manual`; `payload` lists the exact keys scripts receive; commands declare `form = "url"` or `"action"` (actions are batched into one `actions?json=` URL) and `list_separator` for `|`-separated lists; a `[presets.<os>]` section describes the preset folder, its registry override, and preset selection. License commands (`activate`, `deactivate`) and `update` are deliberately absent, and `setPreferences` is not used.
 
-```toml
-catalog_version = 1
-tested_against = "26.1"
-
-[app]
-id = "offshoot"
-name = "OffShoot"
-scheme = "offshoot"
-requires_pro = true
-docs = "https://docs.hedge.video/offshoot/features/automation"
-
-[detect.windows]
-registry = "HKCU\\Software\\Hedge"
-version_value = "BuildVersion"
-[detect.macos]
-bundle_id = "nl.syncfactory.Hedge.Mac"
-
-[scripting.windows]
-kind = "registry"
-key = "HKCU\\Software\\Hedge"
-enable_value = "EventScriptAllowScripting"
-value_pattern = "EventScript{registry_name}"
-[scripting.macos]
-kind = "helper_workspace"
-workspace_dir = "~/Library/Preferences/Hedge/Workspaces"
-pref_pattern = "scripting_events_{pref_name}"
-
-[[events]]
-id = "FileCopyCompleted"
-registry_name = "FileCopyCompleted"
-pref_name = "file_copy_completed"
-payload = ["sourcePaths", "presetName", "state", "sourceInfo", "startedAt",
-           "destinationPath", "verification_mode", "duration", "bytesCopied",
-           "id", "transferLogJSONPath"]
-json_fields = ["sourceInfo"]
-
-[[events]]
-id = "VerificationIssue"
-registry_name = "CheckpointIssue"
-pref_name = "checkpoint_issue"
-payload = ["description", "filePath"]
-
-[[commands]]
-id = "setSource"
-params = { paths = "path[]", label = "string?" }
-
-[[commands]]
-id = "setDestination"
-params = { path = "path" }
-
-[[commands]]
-id = "addTransfers"
-confirm = true
-
-[[commands]]
-id = "reloadPresets"
-
-[files.windows]
-presets = "%APPDATA%\\Hedge\\Presets"
-callback_log = "%APPDATA%\\Hedge\\HedgeCallback.log"
-event_log = "%APPDATA%\\Hedge\\Hedge.log"
-[files.macos]
-presets = "~/Library/Application Support/Hedge/Presets"
-callback_log = "~/Library/Logs/Hedge/urlSchemeResponseLog.txt"
-```
-
-Core uses manifests for: detection and version; event list and payload keys (documentation for agents, accessor list for Python); attach, detach, and state per OS by `kind` (`registry`, `helper_workspace`; new kinds can be added); command validation, URL encoding, launching, and chaining via `actions?json` when more than one command is passed; file locations for presets and logs.
+Core uses the catalog through `Hedge`: app status and version warnings, attachment state per event (`attached`, `external`, `stale`, `staged`, `detached`, `manual`, `unsupported`), attach/detach plans applied only by `Hedge::apply`, profile-wide `sync_attachments`, URL commands with callback-log responses, presets, and app log tails.
 
 When an installed app's version is newer than `tested_against`, core emits a warning surfaced in the GUI and in `list_apps`.
 
@@ -271,7 +205,7 @@ Rules:
 - **Dry runs on anything irreversible.** `run_app_command`, `attach_script`, `detach_script`, `sync_attachments`, `write_preset`, `delete_profile`, `delete_script`, `delete_var` accept `dry_run: true` and return what would be written or launched (URL, registry values, file diff). They carry the MCP `destructiveHint` annotation. Commands marked `confirm = true` in the catalog say so in the tool output so the agent asks the operator before firing.
 - **`describe_app`** returns install state, version, Pro scripting flag, events with payload keys, commands with parameter types, file locations, and the docs URL.
 - **`inspect_volume`** returns label, filesystem, size, removable flag, and a camera-card guess from folder structure (e.g. `PRIVATE/`, `DCIM/`, `XDROOT/`, `.ari`/`.mxf` counts), with clip count and total media size.
-- **`run_app_command`** takes `app` and an ordered list of `{command, params}`; single commands use the direct URL form, multiple use `actions?json`. It waits up to a few seconds for the callback log to change and returns the response lines.
+- **`run_app_command`** takes `app` and an ordered list of `{command, params}`; each command is encoded as the catalog declares: `url` commands as their own URL, consecutive `action` commands batched into one `actions?json=` URL. URLs are opened in order; when waiting for responses, each URL's callback-log response is awaited before the next opens. It waits up to a few seconds for the callback log to change and returns the response lines.
 - **`environment`** returns data directory, catalog overrides in effect, Python interpreter path and version as Hedge apps would resolve it (Windows: `py` launcher; macOS: `python3`), and whether the `hedgebuddy` package is installed there.
 
 Resources (read-only): `hedgebuddy://catalog/<app>`, `hedgebuddy://schema/<name>`, `hedgebuddy://docs/hedge-llms` (pointer to Hedge's `llms.txt`).
@@ -361,8 +295,8 @@ Phases 4 and 5 are independent and may run in parallel.
 
 1. Agent calls `list_volumes`, then `inspect_volume` on the new removable drive; it reports a camera card.
 2. Agent calls `get_profile` for `commercial-one-day`: destination roots, project name, camera labels.
-3. Agent calls `write_preset` (dry run, then real) to write an OffShoot preset with the profile's folder pattern and counter `003`, then `run_app_command` `reloadPresets`. Selecting that preset in OffShoot is either done by the operator once or via the registry value; the catalog records the value name, and phase 2 decides whether to expose it.
-4. Agent calls `run_app_command` with `[reset destinations, setSource(paths, label="A003"), setDestination × N, addTransfers]` as a dry run, shows the operator the URL, and fires on confirmation.
+3. Agent calls `write_preset` (dry run, then real) to write an OffShoot preset with the profile's folder pattern and counter `003`, then `run_app_command` `reloadPresets`. Selecting it uses `plan_select_preset` (Windows registry value `SessionVariableSelectedPreset`; whether a running OffShoot picks it up is unverified).
+4. Agent calls `run_app_command` with `[reset destinations, setSource(paths, label="A003"), setDestination × N, addTransfers]` as a dry run, shows the operator the planned URLs (a `reset` URL, one batched `actions` URL, and an `addTransfers` URL), and fires on confirmation.
 5. Agent reads the callback log through the same call's response. Completion later arrives through the attached `FileCopyCompleted` script's run record, readable via `list_runs`.
 
 Requires OffShoot Pro and an MCP host on the workstation.
@@ -377,6 +311,7 @@ Requires OffShoot Pro and an MCP host on the workstation.
 | Python interpreter mismatch | `environment` and the Settings view target the interpreter Hedge apps resolve, not PATH's first Python. |
 | Tauri sidecar path changes between installs | Connect panel rewrites the host config on every launch if the path differs. |
 | Unsigned builds on macOS | Existing TODO; phase 6. Until then the docs keep the `xattr -cr` note. |
+| URL commands race each other | `run_commands` opens URLs one at a time and waits for each callback-log response; whether `reset`/`addTransfers` can join the `actions` batch is checked in the phase 3 smoke test. |
 
 ## 16. Out of scope
 
