@@ -11,7 +11,7 @@ const SENTENCE: Record<Screen, string> = {
   variables: "Editing variables here arrives in the next update. Until then, ask Claude to set them.",
   scripts: "Managing scripts here arrives in the next update. Until then, ask Claude to write and attach them.",
   apps: "Checking each Hedge app here arrives in the next update. Home already flags stale entries and version warnings.",
-  connect: `Setting up Claude Desktop from here arrives in a later update. Until then, follow the README's "Use it from Claude" steps.`,
+  connect: `Setting up Claude Desktop from here arrives in a later update. Until then, follow the README's “Use it from Claude” steps.`,
   settings: "The Python check and the one-click package install arrive in a later update.",
 };
 
@@ -31,8 +31,8 @@ const TITLE: Record<Screen, string> = {
  */
 export function Placeholder({ screen, name }: { screen: Screen; name?: string }) {
   return (
-    <div className="flex h-full items-center justify-center p-4">
-      <EmptyState icon={NAV_ICONS[screen]} title={TITLE[screen]} className="max-w-md items-center text-center">
+    <div className="p-4 max-[640px]:p-3">
+      <EmptyState icon={NAV_ICONS[screen]} title={TITLE[screen]} className="max-w-md">
         {name ? (
           <>
             <span className="block text-foreground">

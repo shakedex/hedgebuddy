@@ -11,7 +11,6 @@ import { ErrorPanel } from "@/components/app/error-panel";
 import { ListDetail } from "@/components/app/list-detail";
 import { Mono } from "@/components/app/mono";
 import { Panel } from "@/components/app/panel";
-import { ScreenHeader } from "@/components/app/screen-header";
 import { Stat } from "@/components/app/stat";
 import { StatusIcon } from "@/components/app/status-icon";
 import { Badge } from "@/components/ui/badge";
@@ -26,10 +25,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Toaster } from "@/components/ui/sonner";
 import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { appName, clock, dayKey, dayLabel, duration, plural, when } from "@/lib/format";
 import { NAV_ICONS, STATUS, runStatusKey, type StatusKey } from "@/lib/status";
 import { cn } from "@/lib/utils";
@@ -103,48 +101,45 @@ const RUNS: FakeRun[] = [
 
 export function DesignGallery() {
   return (
-    <TooltipProvider delayDuration={300}>
-      <div className="ambient flex h-full flex-col">
-        <ScreenHeader title="Design system">
-          <Badge variant="outline">preview only</Badge>
-        </ScreenHeader>
-        <main className="min-h-0 flex-1 overflow-y-auto">
-          <div className="flex max-w-[1080px] flex-col gap-10 px-4 pt-5 pb-16 max-[560px]:px-3">
-            <Section index={1} title="Colour" note="Spec §5.1, read live from the CSS variables. Only red and amber carry hue; primary marks actions, the selection and focus.">
-              <Colours />
-            </Section>
-            <Section index={2} title="Type" note="Inter Variable with cv05 and cv08; JetBrains Mono Variable for names, paths and code. Numbers that change use tabular figures.">
-              <TypeScale />
-            </Section>
-            <Section index={3} title="Status" note="Spec §5.2: every state is an icon and a word. Fine stays grey.">
-              <StatusTable />
-            </Section>
-            <Section index={4} title="Counts and navigation" note="Badges, never dots. The rail variant sits on the collapsed sidebar.">
-              <Navigation />
-            </Section>
-            <Section index={5} title="Readouts" note="Home's four numbers. Failed is tinted only when it is not zero.">
-              <Readouts />
-            </Section>
-            <Section index={6} title="Panels" note="Milled surfaces: hairline border, a 3 % inset highlight, no drop shadow.">
-              <Panels />
-            </Section>
-            <Section index={7} title="States" note="Loading, empty, error and busy: every data view designs all four.">
-              <States />
-            </Section>
-            <Section index={8} title="Actions" note="Every variant at every size. Tab through them: the focus ring is 2 px primary with a 2 px gap.">
-              <Buttons />
-            </Section>
-            <Section index={9} title="Fields and controls" note="Recessed wells for input; an invalid field says why underneath.">
-              <Controls />
-            </Section>
-            <Section index={10} title="List and detail" note="Two panes from 640 px of container width; below that the detail slides over the list with a back button.">
-              <ListDetailDemo />
-            </Section>
+    <div className="ambient flex h-full flex-col">
+      <main className="min-h-0 flex-1 overflow-y-auto">
+        <div className="flex max-w-[1080px] flex-col gap-10 px-4 pt-5 pb-16 max-[560px]:px-3">
+          <div className="flex justify-end">
+            <Badge variant="outline">preview only</Badge>
           </div>
-        </main>
-        <Toaster position="bottom-right" />
-      </div>
-    </TooltipProvider>
+          <Section index={1} title="Colour" note="Spec §5.1, read live from the CSS variables. Only red and amber carry hue; primary marks actions, the selection and focus.">
+            <Colours />
+          </Section>
+          <Section index={2} title="Type" note="Inter Variable with cv05 and cv08; JetBrains Mono Variable for names, paths and code. Numbers that change use tabular figures.">
+            <TypeScale />
+          </Section>
+          <Section index={3} title="Status" note="Spec §5.2: every state is an icon and a word. Fine stays grey.">
+            <StatusTable />
+          </Section>
+          <Section index={4} title="Counts and navigation" note="Badges, never dots. The rail variant sits on the collapsed sidebar.">
+            <Navigation />
+          </Section>
+          <Section index={5} title="Readouts" note="Home's four numbers. Failed is tinted only when it is not zero.">
+            <Readouts />
+          </Section>
+          <Section index={6} title="Panels" note="Milled surfaces: hairline border, a 3 % inset highlight, no drop shadow.">
+            <Panels />
+          </Section>
+          <Section index={7} title="States" note="Loading, empty, error and busy: every data view designs all four.">
+            <States />
+          </Section>
+          <Section index={8} title="Actions" note="Every variant at every size. Tab through them: the focus ring is 2 px primary with a 2 px gap.">
+            <Buttons />
+          </Section>
+          <Section index={9} title="Fields and controls" note="Recessed wells for input; an invalid field says why underneath.">
+            <Controls />
+          </Section>
+          <Section index={10} title="List and detail" note="Two panes from 640 px of container width; below that the detail slides over the list with a back button.">
+            <ListDetailDemo />
+          </Section>
+        </div>
+      </main>
+    </div>
   );
 }
 

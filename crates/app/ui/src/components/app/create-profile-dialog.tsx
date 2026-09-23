@@ -17,22 +17,29 @@ export function CreateProfileDialog({ open, onOpenChange, activate }: { open: bo
   const create = useCreateProfile();
   const invalid = name.length > 0 && !SLUG.test(name);
 
+  /** Closing (Create, Cancel, Escape or an overlay click) always clears the fields for next time. */
+  const close = (next: boolean) => {
+    onOpenChange(next);
+    if (!next) {
+      setName("");
+      setDescription("");
+    }
+  };
+
   const submit = () =>
     create.mutate(
       { name, description, activate },
       {
         onSuccess: () => {
-          onOpenChange(false);
-          setName("");
-          setDescription("");
           toast(`Profile ${name} created`);
+          close(false);
         },
         onError: (e) => showError(e, submit),
       },
     );
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={close}>
       <DialogContent className="sm:max-w-[420px]">
         <DialogHeader>
           <DialogTitle>New profile</DialogTitle>
@@ -68,7 +75,7 @@ export function CreateProfileDialog({ open, onOpenChange, activate }: { open: bo
             <Input id="profile-description" placeholder="Client X, single-day commercial" value={description} onChange={(e) => setDescription(e.target.value)} />
           </div>
           <DialogFooter>
-            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
+            <Button type="button" variant="ghost" onClick={() => close(false)}>Cancel</Button>
             <Button type="submit" disabled={!SLUG.test(name) || create.isPending}>Create profile</Button>
           </DialogFooter>
         </form>

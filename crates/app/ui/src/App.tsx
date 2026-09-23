@@ -16,9 +16,9 @@ export default function App() {
           <Route path="/runs">{/* Task 15 */}<Placeholder screen="runs" /></Route>
           <Route path="/runs/:runId">{() => <Placeholder screen="runs" />}</Route>
           <Route path="/variables">{() => <Placeholder screen="variables" />}</Route>
-          <Route path="/variables/:name">{(p) => <Placeholder screen="variables" name={decodeURIComponent(p.name)} />}</Route>
+          <Route path="/variables/:name">{(p) => <Placeholder screen="variables" name={p.name} />}</Route>
           <Route path="/scripts">{() => <Placeholder screen="scripts" />}</Route>
-          <Route path="/scripts/:name">{(p) => <Placeholder screen="scripts" name={decodeURIComponent(p.name)} />}</Route>
+          <Route path="/scripts/:name">{(p) => <Placeholder screen="scripts" name={p.name} />}</Route>
           <Route path="/apps">{() => <Placeholder screen="apps" />}</Route>
           <Route path="/apps/:id">{(p) => <Placeholder screen="apps" name={p.id} />}</Route>
           <Route path="/connect">{() => <Placeholder screen="connect" />}</Route>

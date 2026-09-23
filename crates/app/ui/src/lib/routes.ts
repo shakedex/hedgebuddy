@@ -21,7 +21,10 @@ export const NAV: NavItem[] = [
 ];
 export const SETTINGS: NavItem = { path: "/settings", label: "Settings", icon: NAV_ICONS.settings, badge: { key: "settings", tone: "warning" } };
 
-/** The nav item a location belongs to (`/runs/abc` → Runs). */
-export function navFor(location: string): NavItem {
-  return [...NAV, SETTINGS].find((n) => (n.path === "/" ? location === "/" : location === n.path || location.startsWith(`${n.path}/`))) ?? NAV[0];
+/**
+ * The nav item a location belongs to (`/runs/abc` → Runs), or `undefined` for a route with no nav item
+ * (`/_design`): that keeps the sidebar from highlighting Home as a false "current page".
+ */
+export function navFor(location: string): NavItem | undefined {
+  return [...NAV, SETTINGS].find((n) => (n.path === "/" ? location === "/" : location === n.path || location.startsWith(`${n.path}/`)));
 }

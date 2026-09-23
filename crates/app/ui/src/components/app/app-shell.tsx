@@ -11,7 +11,11 @@ import { navFor } from "@/lib/routes";
 export function AppShell({ children }: { children: React.ReactNode }) {
   const wide = useMediaQuery("(min-width: 720px)");
   const [location] = useLocation();
-  const title = location === "/_design" ? "Design system" : navFor(location).label;
+  const nav = location === "/_design" ? undefined : navFor(location);
+  const title = location === "/_design" ? "Design system" : (nav?.label ?? "Home");
+  // Keyed on the screen (its nav path), not the raw location: `/runs` → `/runs/abc` stays the same screen,
+  // so a list-and-detail screen isn't destroyed and remounted on every row click or arrow key.
+  const screen = location === "/_design" ? location : (nav?.path ?? "/");
   return (
     <SidebarProvider open={wide} onOpenChange={() => {}} style={{ "--sidebar-width": "12.5rem", "--sidebar-width-icon": "3.25rem" } as React.CSSProperties}>
       <AppSidebar />
@@ -19,11 +23,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <ScreenHeader title={title}>
           <ProfileSwitcher />
         </ScreenHeader>
-        <main className="min-h-0 flex-1">
-          <ErrorBoundary key={location}>
-            <div key={location} className="h-full animate-rise">{children}</div>
+        <div className="min-h-0 flex-1">
+          <ErrorBoundary key={screen}>
+            <div key={screen} className="h-full animate-rise">{children}</div>
           </ErrorBoundary>
-        </main>
+        </div>
       </SidebarInset>
     </SidebarProvider>
   );
