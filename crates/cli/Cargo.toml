@@ -6,6 +6,10 @@ license.workspace = true
 repository.workspace = true
 description = "HedgeBuddy command line and MCP server"
 
+[lib]
+name = "hedgebuddy_cli"
+path = "src/lib.rs"
+
 [[bin]]
 name = "hedgebuddy"
 path = "src/main.rs"
@@ -13,7 +17,14 @@ path = "src/main.rs"
 [dependencies]
 clap = { workspace = true }
 hedgebuddy-core = { workspace = true }
+rmcp = { version = "3", features = ["server", "transport-io"] }
+schemars = "1"
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "io-std"] }
 
 [dev-dependencies]
 assert_cmd = "2"
+jiff = "0.2"
 predicates = "3"
+tempfile = "3"

@@ -20,6 +20,10 @@ const EMBEDDED: [(&str, &str); 4] = [
     ("offshoot", include_str!("../../../catalog/offshoot.toml")),
 ];
 
+/// Command ids that manage an app's license. No manifest, embedded or
+/// override, may declare them (compared ignoring case).
+const LICENSE_COMMANDS: [&str; 3] = ["activate", "deactivate", "update"];
+
 /// A value that may differ between Windows and macOS.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -302,6 +306,15 @@ impl AppManifest {
         }
         let mut seen = BTreeSet::new();
         for c in &self.commands {
+            if LICENSE_COMMANDS
+                .iter()
+                .any(|l| l.eq_ignore_ascii_case(&c.id))
+            {
+                return fail(format!(
+                    "command '{}': license commands are never exposed",
+                    c.id
+                ));
+            }
             if !seen.insert(c.id.as_str()) {
                 return fail(format!("duplicate command '{}'", c.id));
             }
@@ -718,6 +731,41 @@ docs = "https://example.com"
             "t",
         )
         .unwrap();
+    }
+
+    #[test]
+    fn license_commands_are_rejected() {
+        let with_scheme = MINIMAL.replace(
+            "name = \"New App\"",
+            "name = \"New App\"\nscheme = \"newapp\"",
+        );
+        for id in ["activate", "deactivate", "update", "Activate", "UPDATE"] {
+            let err = parse_app_manifest(
+                &format!("{with_scheme}\n[[commands]]\nid = \"{id}\"\nform = \"url\"\n"),
+                "t",
+            )
+            .unwrap_err();
+            assert!(
+                matches!(&err, CoreError::Catalog(m) if m.contains("license commands are never exposed")),
+                "{id}: {err}"
+            );
+        }
+    }
+
+    #[test]
+    fn an_override_with_a_license_command_fails_to_load() {
+        let dir = tempfile::tempdir().unwrap();
+        let offshoot = EMBEDDED.iter().find(|(id, _)| *id == "offshoot").unwrap().1;
+        fs::write(
+            dir.path().join("offshoot.toml"),
+            format!("{offshoot}\n[[commands]]\nid = \"activate\"\nform = \"url\"\nparams = {{ key = \"string\" }}\n"),
+        )
+        .unwrap();
+        let err = Catalog::load(Some(dir.path())).unwrap_err();
+        assert!(
+            matches!(&err, CoreError::Catalog(m) if m.contains("offshoot.toml") && m.contains("license")),
+            "{err}"
+        );
     }
 
     #[test]

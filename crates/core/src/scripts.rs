@@ -1,7 +1,8 @@
 //! The `scripts/` folder of a profile.
 
+use std::ffi::OsStr;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Component, Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
@@ -32,15 +33,26 @@ pub struct ScriptCheck {
     pub issues: Vec<RequirementIssue>,
 }
 
-/// A single `*.py` file name with no path separators.
+/// A single `*.py` file name that stays inside the scripts folder on Windows
+/// and macOS. Rejected: path separators, `..`, a leading `.`, drive prefixes
+/// (`C:x.py`), stream names (`a:b.py`), control characters and the other
+/// characters Windows forbids, and Windows device names such as `CON.py`.
 pub fn validate_script_name(name: &str) -> Result<()> {
-    let stem = name.strip_suffix(".py");
-    let ok = matches!(stem, Some(s) if !s.is_empty())
-        && !name.contains('/')
-        && !name.contains('\\')
-        && !name.starts_with("..")
-        && !name.contains("..");
-    if ok {
+    let stem = name.strip_suffix(".py").unwrap_or_default();
+    let bad = stem.trim().is_empty()
+        || name.starts_with('.')
+        || name.ends_with('.')
+        || name.ends_with(' ')
+        || name.contains("..")
+        || name.chars().any(fs_util::is_forbidden_char)
+        || fs_util::is_reserved_name(name);
+    // Belt and braces: the name must be exactly one plain path component.
+    let mut components = Path::new(name).components();
+    let single = matches!(
+        (components.next(), components.next()),
+        (Some(Component::Normal(n)), None) if n == OsStr::new(name)
+    );
+    if !bad && single {
         Ok(())
     } else {
         Err(CoreError::Validation(format!(
@@ -300,11 +312,63 @@ mod tests {
     }
 
     #[test]
-    fn tricky_names() {
-        for ok in [".hidden.py", "a.py.py", "a b.py"] {
+    fn script_names_cannot_leave_the_scripts_folder() {
+        for ok in [
+            "on_copy_complete.py",
+            "A cam log.py",
+            "a b.py",
+            "console.py",
+            "con_log.py",
+            "COM10.py",
+        ] {
             validate_script_name(ok).unwrap();
         }
-        for bad in ["a..b.py", "..py"] {
+        for bad in [
+            // Drive-relative paths and NTFS alternate data streams.
+            "C:x.py",
+            "c:x.py",
+            "ab:c.py",
+            // Windows device names, in any case and with any extension.
+            "CON.py",
+            "con.py",
+            "Nul.py",
+            "LPT1.py",
+            "com9.py",
+            "aux.log.py",
+            // Separators and traversal.
+            "a/b.py",
+            "a\\b.py",
+            "..py",
+            "...py",
+            "../a.py",
+            "..\\a.py",
+            "a/../b.py",
+            // Other characters Windows forbids, and control characters.
+            "a*.py",
+            "a?.py",
+            "a\"b.py",
+            "a<b.py",
+            "a>b.py",
+            "a|b.py",
+            "a\tb.py",
+            "a\0b.py",
+            // Leading dot, blank stem.
+            ".hidden.py",
+            " .py",
+        ] {
+            assert!(
+                matches!(validate_script_name(bad), Err(CoreError::Validation(_))),
+                "{bad:?} should be invalid"
+            );
+        }
+    }
+
+    #[test]
+    fn tricky_names() {
+        for ok in ["a.py.py", "a b.py"] {
+            validate_script_name(ok).unwrap();
+        }
+        for bad in ["a..b.py", "..py", ".hidden.py"] {
             assert!(validate_script_name(bad).is_err(), "{bad:?}");
         }
 

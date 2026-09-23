@@ -166,6 +166,57 @@ impl Hedge {
         Ok(actions)
     }
 
+    /// Detach a script from the app event its manifest names, but only when
+    /// that event is currently attached to (or staged for) this very script.
+    pub fn detach_script(
+        &self,
+        store: &Store,
+        profile: &str,
+        script: &str,
+        dry_run: bool,
+    ) -> Result<Vec<Action>> {
+        let check = store.check_script(profile, script)?;
+        let manifest = check.manifest.ok_or_else(|| {
+            CoreError::Validation(format!("{script} has no manifest, so it is not attached"))
+        })?;
+        let (Some(app), Some(event)) = (manifest.app.as_deref(), manifest.event.as_deref()) else {
+            return Err(CoreError::Validation(format!(
+                "{script}'s manifest does not name an app and an event"
+            )));
+        };
+        let state = self.attachment(app, event, store)?.state;
+        let ours = match &state {
+            AttachState::Attached { path, .. } | AttachState::Staged { path, .. } => {
+                managed_script(store, path) == Some((profile.to_owned(), script.to_owned()))
+            }
+            _ => false,
+        };
+        if !ours {
+            return Err(CoreError::Validation(format!(
+                "{app} {event} is not attached to {profile}/{script}; nothing to detach"
+            )));
+        }
+        self.detach_event(app, event, dry_run)
+    }
+
+    /// Detach an event whose attachment points at a file that no longer
+    /// exists. Any other state is refused.
+    pub fn clear_stale_attachment(
+        &self,
+        app: &str,
+        event: &str,
+        store: &Store,
+        dry_run: bool,
+    ) -> Result<Vec<Action>> {
+        match self.attachment(app, event, store)?.state {
+            AttachState::Stale { .. } => self.detach_event(app, event, dry_run),
+            other => Err(CoreError::Validation(format!(
+                "{app} {event} is not stale (state: {}); use detach_script or sync_attachments instead",
+                serde_json::to_value(&other).ok().and_then(|v| v["state"].as_str().map(str::to_owned)).unwrap_or_default()
+            ))),
+        }
+    }
+
     /// Make Hedge app attachments reflect `profile`:
     /// 1. Each of the profile's scripts whose manifest names a known app and
     ///    event, with met requirements, is a candidate. Scripts without a
@@ -582,6 +633,73 @@ mod tests {
             hedge.sync_attachments(&store, "ghost", true).unwrap_err(),
             CoreError::ProfileNotFound(_)
         ));
+    }
+
+    #[test]
+    fn detach_script_only_detaches_its_own_attachment() {
+        let (_d, store, fake, hedge) = setup();
+        store.create_profile("p", "").unwrap();
+        store
+            .write_script("p", "copy.py", &script("FileCopyCompleted", ""))
+            .unwrap();
+        store
+            .write_script("p", "other.py", &script("FileCopyCompleted", ""))
+            .unwrap();
+        store.write_script("p", "plain.py", "print('x')\n").unwrap();
+        assert!(matches!(
+            hedge
+                .detach_script(&store, "p", "copy.py", false)
+                .unwrap_err(),
+            CoreError::Validation(_)
+        ));
+        hedge.attach_script(&store, "p", "copy.py", false).unwrap();
+        assert!(matches!(
+            hedge
+                .detach_script(&store, "p", "other.py", false)
+                .unwrap_err(),
+            CoreError::Validation(_)
+        ));
+        assert!(matches!(
+            hedge
+                .detach_script(&store, "p", "plain.py", false)
+                .unwrap_err(),
+            CoreError::Validation(_)
+        ));
+        let dry = hedge.detach_script(&store, "p", "copy.py", true).unwrap();
+        assert_eq!(dry.len(), 1);
+        assert!(
+            reg(&fake, "EventScriptFileCopyCompleted").is_some(),
+            "dry run must not delete"
+        );
+        hedge.detach_script(&store, "p", "copy.py", false).unwrap();
+        assert_eq!(reg(&fake, "EventScriptFileCopyCompleted"), None);
+    }
+
+    #[test]
+    fn clear_stale_attachment_requires_a_stale_state() {
+        let (_d, store, fake, hedge) = setup();
+        hedge
+            .apply(&[Action::RegistrySet {
+                key: KEY.into(),
+                value: "EventScriptDiskAdded".into(),
+                data: RegValue::String("E:\\gone\\old.py".into()),
+            }])
+            .unwrap();
+        assert!(matches!(
+            hedge
+                .clear_stale_attachment("offshoot", "DiskBusy", &store, false)
+                .unwrap_err(),
+            CoreError::Validation(_)
+        ));
+        let dry = hedge
+            .clear_stale_attachment("offshoot", "DiskAdded", &store, true)
+            .unwrap();
+        assert_eq!(dry.len(), 1);
+        assert!(reg(&fake, "EventScriptDiskAdded").is_some());
+        hedge
+            .clear_stale_attachment("offshoot", "DiskAdded", &store, false)
+            .unwrap();
+        assert_eq!(reg(&fake, "EventScriptDiskAdded"), None);
     }
 
     #[test]

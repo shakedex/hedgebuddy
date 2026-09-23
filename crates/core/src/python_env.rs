@@ -12,12 +12,15 @@ use serde::{Deserialize, Serialize};
 use crate::error::Result;
 use crate::host::{Host, Os};
 
-pub(crate) const PROBE: &str = "import json, sys\ntry:\n    from importlib import metadata\n    v = metadata.version('hedgebuddy')\nexcept Exception:\n    v = None\nprint(json.dumps({'executable': sys.executable, 'version': '%d.%d.%d' % tuple(sys.version_info[:3]), 'hedgebuddy': v}))\n";
+/// The Python snippet [`find_python`] runs (public so front ends can fake its
+/// output in tests).
+pub const PROBE: &str = "import json, sys\ntry:\n    from importlib import metadata\n    v = metadata.version('hedgebuddy')\nexcept Exception:\n    v = None\nprint(json.dumps({'executable': sys.executable, 'version': '%d.%d.%d' % tuple(sys.version_info[:3]), 'hedgebuddy': v}))\n";
 
+/// The Python snippet [`syntax_check`] runs; it compiles without executing.
 /// Compiles (never runs) the script, reading bytes so a BOM or coding cookie
 /// is honoured. `compile` also rejects code `ast.parse` accepts, such as a
 /// top-level `return` or a `break` outside a loop.
-pub(crate) const SYNTAX_CHECK: &str = "import sys\nsrc = open(sys.argv[1], 'rb').read()\ncompile(src, sys.argv[1], 'exec', dont_inherit=True)\n";
+pub const SYNTAX_CHECK: &str = "import sys\nsrc = open(sys.argv[1], 'rb').read()\ncompile(src, sys.argv[1], 'exec', dont_inherit=True)\n";
 
 /// The interpreter Hedge apps use.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

@@ -79,7 +79,7 @@ Deleted from the old tree: `app/`, `updater/`, `python-lib/`, `tests/`, `example
 ### Components
 
 - **core** owns storage, profiles, variables and validation, script manifest parsing, catalog loading, attach/detach/state, app commands, volume inspection, run-record reading, and the data-directory watcher. OS-specific integration (registry, plist/Helper workspace, `start`/`open`, volume enumeration) sits behind a trait with Windows and macOS implementations and a fake for tests.
-- **cli** is a thin parser over core. `hedgebuddy mcp` serves MCP over stdio using the official Rust MCP SDK. Other subcommands mirror the MCP tools for shell use.
+- **cli** is a thin layer over core. `hedgebuddy mcp` serves MCP over stdio using the official Rust MCP SDK (`rmcp`). Every MCP tool is defined once in the crate's tool layer and also runs from the shell as `hedgebuddy call <tool> <json>`; `hedgebuddy tools` lists them.
 - **app** is a Tauri v2 shell. Tauri commands call core directly. The CLI binary is bundled as a sidecar so hosts can reach the MCP server whether or not the window is open.
 - **catalog** manifests are embedded in both binaries and can be overridden per file from `<data>/catalog/`.
 - **python** reads the data directory directly and never invokes Rust.
@@ -189,24 +189,38 @@ Shipped manifests: `offshoot`, `foolcat`, `editready`, `canister` (commands only
 
 Transport: stdio, via `hedgebuddy mcp`. Every tool wraps one core function.
 
-| Group | Tools |
-|---|---|
-| Profiles | `list_profiles`, `get_profile`, `create_profile`, `set_active_profile`, `delete_profile` |
-| Variables | `list_vars`, `get_var`, `set_var`, `delete_var` |
-| Scripts | `list_scripts`, `read_script`, `write_script`, `delete_script`, `check_script`, `attach_script`, `detach_script`, `sync_attachments` |
-| Hedge apps | `list_apps`, `describe_app`, `run_app_command`, `read_app_log`, `list_presets`, `write_preset` |
-| Runs | `list_runs`, `get_run` |
-| System | `list_volumes`, `inspect_volume`, `environment` |
+| Group | Tool | Hints |
+|---|---|---|
+| Profiles | `list_profiles`, `get_profile` | read |
+| | `create_profile`, `set_active_profile` | write |
+| | `delete_profile` | destructive, `dry_run` |
+| Variables | `list_vars`, `get_var` | read (`reveal`) |
+| | `set_var` | write |
+| | `delete_var` | destructive, `dry_run` |
+| Scripts | `list_scripts`, `read_script`, `check_script` | read |
+| | `write_script` | destructive (may overwrite) |
+| | `delete_script` | destructive, `dry_run` |
+| Attachments | `list_attachments` | read |
+| | `attach_script`, `detach_script`, `sync_attachments`, `clear_stale_attachment` | destructive, `dry_run` |
+| Hedge apps | `list_apps`, `describe_app`, `read_app_log`, `list_presets` | read |
+| | `run_app_command` | destructive, `dry_run`, `confirmed` |
+| | `write_preset`, `select_preset` | destructive, `dry_run` |
+| Runs | `list_runs`, `get_run` | read |
+| System | `list_volumes`, `inspect_volume`, `environment` | read |
 
 Rules:
 
 - **Secrets are masked.** `list_vars` and `get_var` return `********` for secret-typed values unless `reveal: true` is passed; the tool description states this is for the operator's explicit request only. Setting a secret is allowed.
 - **`write_script` validates first.** Parses the manifest, rejects unknown app or event, reports missing required variables in the active profile. `check_script` does the same for an existing file and runs a Python syntax check via the interpreter found by `environment`.
-- **Dry runs on anything irreversible.** `run_app_command`, `attach_script`, `detach_script`, `sync_attachments`, `write_preset`, `delete_profile`, `delete_script`, `delete_var` accept `dry_run: true` and return what would be written or launched (URL, registry values, file diff). They carry the MCP `destructiveHint` annotation. Commands marked `confirm = true` in the catalog say so in the tool output so the agent asks the operator before firing.
+- **Dry runs on anything irreversible.** `run_app_command`, `attach_script`, `detach_script`, `sync_attachments`, `clear_stale_attachment`, `write_preset`, `select_preset`, `delete_profile`, `delete_script`, `delete_var` accept `dry_run: true` and return what would be written or launched (URL, registry values, file diff). They carry the MCP `destructiveHint` annotation. Commands marked `confirm = true` in the catalog say so in the tool output so the agent asks the operator before firing.
 - **`describe_app`** returns install state, version, Pro scripting flag, events with payload keys, commands with parameter types, file locations, and the docs URL.
 - **`inspect_volume`** returns label, filesystem, size, removable flag, and a camera-card guess from folder structure (e.g. `PRIVATE/`, `DCIM/`, `XDROOT/`, `.ari`/`.mxf` counts), with clip count and total media size.
 - **`run_app_command`** takes `app` and an ordered list of `{command, params}`; each command is encoded as the catalog declares: `url` commands as their own URL, consecutive `action` commands batched into one `actions?json=` URL. URLs are opened in order; when waiting for responses, each URL's callback-log response is awaited before the next opens. It waits up to a few seconds for the callback log to change and returns the response lines.
 - **`environment`** returns data directory, catalog overrides in effect, Python interpreter path and version as Hedge apps would resolve it (Windows: `py` launcher; macOS: `python3`), and whether the `hedgebuddy` package is installed there.
+- **`detach_script`** only detaches an event currently attached to that very script. **`clear_stale_attachment`** only detaches an event whose file no longer exists. External (operator-owned) attachments are changed only by `attach_script`/`sync_attachments` replacing them, and those report what they replace.
+- **`run_app_command`** returns `requires_confirmation` and runs nothing when a command the catalog marks `confirm` is present and `confirmed: true` was not passed.
+- **`list_runs`** prunes run files older than 30 days before listing.
+- **Writes are serialised.** Within one `hedgebuddy` process, tools that change state run one at a time (MCP clients may send calls in parallel); read-only tools do not wait.
 
 Resources (read-only): `hedgebuddy://catalog/<app>`, `hedgebuddy://schema/<name>`, `hedgebuddy://docs/hedge-llms` (pointer to Hedge's `llms.txt`).
 
@@ -270,7 +284,7 @@ Out of scope: in-app code editing beyond read-only preview, running scripts from
 
 - **Core unit tests** (Rust): storage, profiles, validation, manifest parsing, catalog loading, URL building. OS integration behind a trait with a fake; real implementations get a small integration test gated behind an env flag for machines with Hedge apps installed.
 - **Conformance fixtures** (`schema/fixtures/`): sample data directories and script files with expected parsed output; run by both `cargo test` and `pytest`.
-- **MCP contract tests**: spawn `hedgebuddy mcp` against a temp data directory and exercise every tool including dry runs. Doubles as the GUI's logic tests since Tauri commands call the same functions.
+- **Tool and MCP contract tests**: unit tests cover every tool through `tools::call` with `FakeHost`, dry runs included. They double as the GUI's logic tests, since Tauri commands call the same functions. The MCP contract test spawns `hedgebuddy mcp` against a temp data directory and covers the protocol: initialize, `tools/list` with annotations, tool calls and errors, resources, prompts, and exit when stdin closes. It calls only tools that touch the data directory or the catalog.
 - **Manual smoke checklist**: attach in OffShoot and FoolCat on a real Windows and macOS machine; confirm whether attachments are picked up live or need an app restart; fire `run_app_command` and read the callback log; run the card scenario end to end from Claude Desktop.
 - No React unit tests in this version.
 

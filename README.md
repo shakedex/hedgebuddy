@@ -19,6 +19,39 @@ HedgeBuddy is a small setup tool for DITs who automate Hedge's apps (OffShoot, F
 | `schema` | JSON Schemas and fixtures shared by the Rust and Python test suites |
 | `docs/superpowers/specs` | Design specs |
 
+## Use it from Claude (MCP)
+
+Build and install the binary (it lands in `~/.cargo/bin`, which rustup puts on PATH):
+
+```bash
+cargo install --path crates/cli
+hedgebuddy tools
+```
+
+**Claude Code:**
+
+```bash
+claude mcp add hedgebuddy -- hedgebuddy mcp
+```
+
+**Claude Desktop:** add this to `claude_desktop_config.json` (`%APPDATA%\Claude\` on Windows, `~/Library/Application Support/Claude/` on macOS), using the full path to the binary if `hedgebuddy` is not on the PATH Claude Desktop sees, then restart Claude Desktop:
+
+```json
+{
+  "mcpServers": {
+    "hedgebuddy": { "command": "hedgebuddy", "args": ["mcp"] }
+  }
+}
+```
+
+**From a shell:** every MCP tool also runs as `hedgebuddy call <tool> '<json arguments>'` (or `-` to read the arguments from stdin), for example `hedgebuddy call list_apps`. In Windows PowerShell 5.1 the inline JSON argument loses its quotes, so pipe the JSON and pass `-` instead:
+
+```powershell
+'{"name": "p"}' | hedgebuddy call create_profile -
+```
+
+Tools that change a Hedge app's settings, run app commands, or delete something take `dry_run`. Commands the catalog marks for confirmation need `confirmed: true` (for OffShoot: `addTransfers`, `reset`, `quit`, `restart`, `restartTransfer`), so the agent shows you the plan first.
+
 ## Development
 
 ```bash

@@ -2,6 +2,7 @@
 
 use std::collections::BTreeMap;
 use std::fs;
+use std::io::ErrorKind;
 use std::path::PathBuf;
 
 use jiff::civil::Date;
@@ -206,7 +207,19 @@ impl Store {
             .find(|r| r.run_id == run_id))
     }
 
+    /// Prune run files older than [`RUN_RETENTION_DAYS`] (by today's local
+    /// date), then list runs. Front ends use this; the pure `list_runs` never
+    /// deletes anything. Pruning is best effort: if it fails (a file is
+    /// locked, say), the runs are still listed and the next call tries again.
+    pub fn list_recent_runs(&self, filter: &RunFilter) -> Result<Vec<Run>> {
+        let today = jiff::Zoned::now().date();
+        let _ = self.prune_runs(today, RUN_RETENTION_DAYS);
+        self.list_runs(filter)
+    }
+
     /// Delete `runs/*.jsonl` whose date stem is before `today - keep_days`.
+    /// A file that is already gone (another process pruned it first) is
+    /// skipped, not an error, and not in the returned list.
     pub fn prune_runs(&self, today: Date, keep_days: i32) -> Result<Vec<PathBuf>> {
         let dir = self.runs_dir();
         if !dir.exists() {
@@ -228,8 +241,11 @@ impl Store {
                 continue;
             };
             if date < cutoff {
-                fs::remove_file(&path).map_err(|e| CoreError::io(&path, e))?;
-                deleted.push(path);
+                match fs::remove_file(&path) {
+                    Ok(()) => deleted.push(path),
+                    Err(e) if e.kind() == ErrorKind::NotFound => {}
+                    Err(e) => return Err(CoreError::io(&path, e)),
+                }
             }
         }
         deleted.sort();
@@ -388,6 +404,78 @@ mod tests {
         assert!(store.runs_dir().join("2026-08-16.jsonl").exists());
         assert!(store.runs_dir().join("notes.txt").exists());
         assert!(store.runs_dir().join("bad-name.jsonl").exists());
+    }
+
+    #[test]
+    fn list_recent_runs_prunes_old_files_first() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(dir.path());
+        fs::create_dir_all(store.runs_dir()).unwrap();
+        fs::write(
+            store.runs_dir().join("2020-01-01.jsonl"),
+            r#"{"ts":"2020-01-01T00:00:00Z","run_id":"old","phase":"start","script":"a.py","profile":"p"}"#,
+        )
+        .unwrap();
+        let today = jiff::Zoned::now().date().to_string();
+        fs::write(
+            store.runs_dir().join(format!("{today}.jsonl")),
+            format!(r#"{{"ts":"{today}T10:00:00Z","run_id":"new","phase":"start","script":"a.py","profile":"p"}}"#),
+        )
+        .unwrap();
+        let runs = store.list_recent_runs(&RunFilter::default()).unwrap();
+        assert_eq!(
+            runs.iter().map(|r| r.run_id.as_str()).collect::<Vec<_>>(),
+            vec!["new"]
+        );
+        assert!(!store.runs_dir().join("2020-01-01.jsonl").exists());
+    }
+
+    #[test]
+    fn list_recent_runs_still_lists_when_pruning_fails() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(dir.path());
+        fs::create_dir_all(store.runs_dir()).unwrap();
+        let old = store.runs_dir().join("2020-01-01.jsonl");
+        fs::write(
+            &old,
+            r#"{"ts":"2020-01-01T00:00:00Z","run_id":"old","phase":"start","script":"a.py","profile":"p"}"#,
+        )
+        .unwrap();
+        // Make the old file impossible to delete while listing. On Windows,
+        // hold it open sharing read access only (no delete); on Unix, make
+        // its folder read-only.
+        #[cfg(windows)]
+        let guard = {
+            use std::os::windows::fs::OpenOptionsExt;
+            const FILE_SHARE_READ: u32 = 1;
+            fs::OpenOptions::new()
+                .read(true)
+                .share_mode(FILE_SHARE_READ)
+                .open(&old)
+                .unwrap()
+        };
+        #[cfg(unix)]
+        let original = {
+            let original = fs::metadata(store.runs_dir()).unwrap().permissions();
+            let mut read_only = original.clone();
+            read_only.set_readonly(true);
+            fs::set_permissions(store.runs_dir(), read_only).unwrap();
+            original
+        };
+        let listed = store.list_recent_runs(&RunFilter::default());
+        #[cfg(windows)]
+        drop(guard);
+        #[cfg(unix)]
+        fs::set_permissions(store.runs_dir(), original).unwrap();
+
+        let runs = listed.expect("a failed prune must not fail the listing");
+        // Root on Unix can delete it anyway; otherwise it is still listed.
+        if old.exists() {
+            assert_eq!(
+                runs.iter().map(|r| r.run_id.as_str()).collect::<Vec<_>>(),
+                vec!["old"]
+            );
+        }
     }
 
     #[test]
