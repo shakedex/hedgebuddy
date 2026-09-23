@@ -206,6 +206,15 @@ impl Store {
             .find(|r| r.run_id == run_id))
     }
 
+    /// Prune run files older than [`RUN_RETENTION_DAYS`] (by today's local
+    /// date), then list runs. Front ends use this; the pure `list_runs` never
+    /// deletes anything.
+    pub fn list_recent_runs(&self, filter: &RunFilter) -> Result<Vec<Run>> {
+        let today = jiff::Zoned::now().date();
+        self.prune_runs(today, RUN_RETENTION_DAYS)?;
+        self.list_runs(filter)
+    }
+
     /// Delete `runs/*.jsonl` whose date stem is before `today - keep_days`.
     pub fn prune_runs(&self, today: Date, keep_days: i32) -> Result<Vec<PathBuf>> {
         let dir = self.runs_dir();
@@ -388,6 +397,30 @@ mod tests {
         assert!(store.runs_dir().join("2026-08-16.jsonl").exists());
         assert!(store.runs_dir().join("notes.txt").exists());
         assert!(store.runs_dir().join("bad-name.jsonl").exists());
+    }
+
+    #[test]
+    fn list_recent_runs_prunes_old_files_first() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(dir.path());
+        fs::create_dir_all(store.runs_dir()).unwrap();
+        fs::write(
+            store.runs_dir().join("2020-01-01.jsonl"),
+            r#"{"ts":"2020-01-01T00:00:00Z","run_id":"old","phase":"start","script":"a.py","profile":"p"}"#,
+        )
+        .unwrap();
+        let today = jiff::Zoned::now().date().to_string();
+        fs::write(
+            store.runs_dir().join(format!("{today}.jsonl")),
+            format!(r#"{{"ts":"{today}T10:00:00Z","run_id":"new","phase":"start","script":"a.py","profile":"p"}}"#),
+        )
+        .unwrap();
+        let runs = store.list_recent_runs(&RunFilter::default()).unwrap();
+        assert_eq!(
+            runs.iter().map(|r| r.run_id.as_str()).collect::<Vec<_>>(),
+            vec!["new"]
+        );
+        assert!(!store.runs_dir().join("2020-01-01.jsonl").exists());
     }
 
     #[test]
