@@ -176,7 +176,8 @@ fn mcp_server_speaks_the_protocol() {
     drop(c.stdin);
     let deadline = std::time::Instant::now() + Duration::from_secs(10);
     loop {
-        if c.child.try_wait().unwrap().is_some() {
+        if let Some(status) = c.child.try_wait().unwrap() {
+            assert!(status.success(), "server exited with {status}");
             break;
         }
         assert!(

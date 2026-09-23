@@ -16,7 +16,7 @@ use rmcp::{ErrorData as McpError, RoleServer, ServerHandler, ServiceExt};
 use crate::resources;
 use crate::tools::{self, Context};
 
-const INSTRUCTIONS: &str = "HedgeBuddy manages variables, profiles and Python scripts for Hedge apps (OffShoot, FoolCat, EditReady, Canister) and drives those apps through their URL commands. Secret values are masked; pass reveal only when the operator explicitly asks to see one. Every tool that changes the machine accepts dry_run: run it first and show the operator the result before applying. run_app_command refuses commands that need confirmation until it is called with confirmed: true after the operator agrees. Start with environment and list_apps; describe_app lists each app's events, payload keys and commands; the author_script prompt gives a script template.";
+const INSTRUCTIONS: &str = "HedgeBuddy manages variables, profiles and Python scripts for Hedge apps (OffShoot, FoolCat, EditReady, Canister) and drives those apps through their URL commands. Secret values are masked; pass reveal only when the operator explicitly asks to see one. Tools that change a Hedge app's settings, run app commands, or delete something accept dry_run: run them with dry_run first and show the operator the result before applying. run_app_command refuses commands that need confirmation until it is called with confirmed: true after the operator agrees. Start with environment and list_apps; describe_app lists each app's events, payload keys and commands; the author_script prompt gives a script template.";
 
 /// The HedgeBuddy MCP server.
 #[derive(Clone)]
