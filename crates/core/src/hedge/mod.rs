@@ -11,10 +11,12 @@ use crate::host::Host;
 
 mod apps;
 mod attach;
+mod commands;
 mod sync;
 
 pub use apps::{compare_versions, AppDescription, AppStatus, ResolvedFiles, ScriptingSupport};
 pub use attach::{managed_script, Action, AttachState, EventAttachment};
+pub use commands::{percent_encode, CommandCall, CommandOutcome, CommandPlan};
 pub use sync::{validate_manifest, SyncConflict, SyncItem, SyncReport, SyncSkip};
 
 /// Hedge app operations on one machine.
