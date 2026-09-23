@@ -141,7 +141,7 @@ def parse_manifest(source: str) -> Optional[Manifest]:
         if not isinstance(description, str):
             raise ManifestError(f"requirement {name}: description must be a string")
         default = NO_DEFAULT
-        if "default" in spec:
+        if spec.get("default") is not None:  # "default": null means no default, as in core
             try:
                 default = convert(name, ty, spec["default"])
             except VariableTypeError as e:

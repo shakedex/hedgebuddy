@@ -66,6 +66,8 @@ def test_optional_app_and_event():
         ('{"hedgebuddy": 1, "requires": {"X": {"type": "string", "optional": true}}}', "unknown field"),
         ('{"hedgebuddy": 1, "requires": {"X": {"type": "string", "description": 3}}}', "description"),
         ('{"hedgebuddy": 1, "requires": {"X": {"type": "int", "default": "3"}}}', "default for X"),
+        ('{"hedgebuddy": 1, "requires": {"PORT": {"type": "int", "default": "8080"}}}', "default for PORT"),
+        ('{"hedgebuddy": 1, "requires": {"X": {"type": "secret", "default": 5}}}', "default for X"),
     ],
 )
 def test_invalid_manifests(text, message):
@@ -83,6 +85,12 @@ def test_requirement_name_rejects_a_trailing_newline():
 def test_defaults_are_converted_to_their_type():
     m = parse_manifest(manifest('{"hedgebuddy": 1, "requires": {"ROOT": {"type": "path", "default": "D:/A"}}}'))
     assert str(m.requires["ROOT"].default).replace("\\", "/") == "D:/A"
+
+
+def test_a_null_default_means_no_default():
+    m = parse_manifest(manifest('{"hedgebuddy": 1, "requires": {"PORT": {"type": "int", "default": null}}}'))
+    assert not m.requires["PORT"].has_default
+    assert check_requirements(m, {}) == [RequirementIssue("missing", "PORT", "int")]
 
 
 def test_check_requirements():

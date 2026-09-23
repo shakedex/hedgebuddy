@@ -266,6 +266,7 @@ Decisions made in phase 4:
 - Run records are written under an exclusive file lock (`msvcrt.locking` on Windows, `flock` on macOS) so parallel scripts never interleave lines. A record that cannot be written is reported once on stderr and never fails the script. Run ids are ULIDs; timestamps are UTC with milliseconds; all records of one run go to the file named by the local date at its start. The end record is written before a traceback is printed, so it is also recorded when stderr is missing or closed.
 - The library replaces the profile's secret values with `********` in `log` messages and the `end` traceback, and in the traceback it prints to stderr. Values shorter than four characters are not masked, so they cannot mangle unrelated text.
 - Manifest extraction skips a leading UTF-8 BOM, in core and in the library.
+- A requirement's `default` must be a valid value of its type (a string for `secret`). Core and the library both reject a manifest that breaks this. `"default": null` means no default, so the requirement is required.
 - `check_script` reports when a script imports `hedgebuddy` but the package is missing or at another version in the Python the Hedge apps use.
 
 ## 10. Desktop app
