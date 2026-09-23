@@ -412,9 +412,10 @@ function pythonStatus(healthy: boolean): PythonStatus {
     version: "3.13.5",
     installed: healthy ? REQUIRED_VERSION : "0.10.0",
     required: REQUIRED_VERSION,
+    // Worded exactly as `hedgebuddy-core`'s `package_problem` (crates/core/src/python_env.rs) words it.
     problem: healthy
       ? null
-      : `the installed hedgebuddy package is 0.10.0; this HedgeBuddy needs ${REQUIRED_VERSION}`,
+      : `hedgebuddy 0.10.0 is installed for C:\\Python313\\python.exe, but this HedgeBuddy needs ${REQUIRED_VERSION}; run: py -3 -m pip install hedgebuddy==${REQUIRED_VERSION}`,
   };
 }
 
@@ -465,6 +466,7 @@ function liveData(scenario: Scenario): ScenarioData {
       return { active: name };
     },
     createProfile: (name, description) => {
+      if (profiles.includes(name)) throw new BridgeError("error", `profile '${name}' already exists`);
       const becameActive = profiles.length === 0;
       profiles.push(name);
       if (becameActive) active = name;
@@ -477,7 +479,7 @@ function liveData(scenario: Scenario): ScenarioData {
       const counts: HomeCounts = {
         runs_since: newRuns.length,
         failed_since: failed.length,
-        scripts_attached: healthy ? 2 : 2,
+        scripts_attached: 2,
         variables: healthy ? 1 : 0,
       };
       const badges: SidebarBadges = {
@@ -519,6 +521,7 @@ function emptyData(scenario: Scenario): ScenarioData {
       return { active: name };
     },
     createProfile: (name, description) => {
+      if (profiles.includes(name)) throw new BridgeError("error", `profile '${name}' already exists`);
       const becameActive = profiles.length === 0;
       profiles.push(name);
       if (becameActive) active = name;

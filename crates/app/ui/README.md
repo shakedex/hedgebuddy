@@ -24,11 +24,11 @@ Serves the UI at `http://localhost:5199` with a mock bridge instead of Tauri, so
 |---|---|
 | `problems` (default) | Attention items, a mix of run outcomes |
 | `healthy` | Nothing needing attention |
-| `empty` | A fresh profile with no data yet |
+| `empty` | A first launch: no profile, runs or Claude activity yet, so Home shows its first-run steps |
 | `error` | Every read fails |
-| `busy` | Writes fail with "another HedgeBuddy is busy; try again" |
+| `busy` | Reads work; writes fail with "another HedgeBuddy is busy; try again" |
 
-In the browser console, `window.__hb.emit(["runs"])` fires a fake `data-changed` event for the given categories, to check that screens refetch without a reload.
+In the browser console, `window.__hb.emit(["runs"])` fires a fake `data-changed` event for the given categories, to check that screens refetch without a reload. In `busy`, `window.__hb.busy(["set_active_profile"])` makes only the named writes report busy (for example, to fail only the second step of creating and activating a profile), and `window.__hb.busy(null)` restores every write.
 
 ## Regenerating types
 

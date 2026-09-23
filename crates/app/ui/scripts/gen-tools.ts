@@ -101,7 +101,11 @@ function ts(schema: Schema, indent = ""): string {
   if ("const" in s) return JSON.stringify(s.const);
   if (Array.isArray(s.enum)) return s.enum.map((v: Json) => JSON.stringify(v)).join(" | ");
   const parts: string[] = [];
-  const own = ownType(s, indent);
+  // An untagged union's root carries only the `type: "object"` that `output_schema_of` inserts beside its
+  // `oneOf`/`anyOf`: emitting it would add `Record<string, unknown> &`, which lets a misspelt key type-check.
+  const union = Array.isArray(s.oneOf) || Array.isArray(s.anyOf);
+  const bareObject = s.type === "object" && s.properties === undefined && s.additionalProperties === undefined;
+  const own = union && bareObject ? null : ownType(s, indent);
   if (own) parts.push(own);
   for (const key of ["oneOf", "anyOf"]) {
     if (Array.isArray(s[key])) parts.push(s[key].map((x: Schema) => ts(x, indent)).join(" | "));

@@ -1,6 +1,7 @@
+import { useRef } from "react";
 import { QueryClient, useMutation, useQuery } from "@tanstack/react-query";
 import { BridgeError, callApp, callTool } from "./bridge";
-import type { AppCommandName, AppCommandTypes, ToolName, ToolTypes } from "./tools.gen";
+import type { AppCommandName, AppCommandTypes, CreateProfileOutput, ToolName, ToolTypes } from "./tools.gen";
 
 export const queryClient = new QueryClient({
   defaultOptions: {
@@ -83,14 +84,30 @@ export function useActivateProfile() {
   });
 }
 
-/** Create a profile; with `activate`, also make it active (the first profile becomes active by itself). */
+/**
+ * Create a profile; with `activate`, also make it active (the first profile becomes active by itself).
+ *
+ * These are two writes, and the second can fail on its own (another HedgeBuddy is busy). The hook remembers
+ * a profile it created whose activation has not gone through yet, so Try again only activates it instead of
+ * creating it a second time and failing with "already exists".
+ */
 export function useCreateProfile() {
+  const createdNotActivated = useRef<{ name: string; created: CreateProfileOutput } | null>(null);
   return useMutation({
     mutationFn: async (v: { name: string; description: string; activate: boolean }) => {
-      const created = await callTool("create_profile", { name: v.name, description: v.description });
+      const earlier = createdNotActivated.current;
+      let created: CreateProfileOutput;
+      if (earlier !== null && earlier.name === v.name) {
+        created = earlier.created;
+      } else {
+        created = await callTool("create_profile", { name: v.name, description: v.description });
+        createdNotActivated.current = { name: v.name, created };
+      }
       if (v.activate && !created.active) await callTool("set_active_profile", { name: v.name });
+      createdNotActivated.current = null;
       return created;
     },
-    onSuccess: () => invalidateFor(["index"]),
+    // Settled, not only succeeded: when activation fails, the profile was still created.
+    onSettled: () => invalidateFor(["index"]),
   });
 }

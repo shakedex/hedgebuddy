@@ -108,7 +108,7 @@ export type DeleteProfileInput = {
 };
 
 /** Result of `delete_profile`. */
-export type DeleteProfileOutput = (Record<string, unknown>) & ({
+export type DeleteProfileOutput = {
   /** App events attached to its scripts. */
   attached_to: Array<ScriptEvent>;
   /** Always true. */
@@ -122,7 +122,7 @@ export type DeleteProfileOutput = (Record<string, unknown>) & ({
   attached_to: Array<ScriptEvent>;
   /** The deleted profile's name. */
   deleted: string;
-});
+};
 
 /** A script plus `dry_run`. */
 export type DeleteScriptInput = {
@@ -135,7 +135,7 @@ export type DeleteScriptInput = {
 };
 
 /** Result of `delete_script`. */
-export type DeleteScriptOutput = (Record<string, unknown>) & ({
+export type DeleteScriptOutput = {
   /** App events attached to it. */
   attached_to: Array<AppEvent>;
   /** Always true. */
@@ -149,7 +149,7 @@ export type DeleteScriptOutput = (Record<string, unknown>) & ({
   left_attached: Array<AppEvent>;
   /** Profile name. */
   profile: string;
-});
+};
 
 /** Arguments of `delete_var`. */
 export type DeleteVarInput = {
@@ -162,7 +162,7 @@ export type DeleteVarInput = {
 };
 
 /** Result of `delete_var`. */
-export type DeleteVarOutput = (Record<string, unknown>) & ({
+export type DeleteVarOutput = {
   /** Always true. */
   dry_run: boolean;
   /** The variable that would be deleted. */
@@ -172,7 +172,7 @@ export type DeleteVarOutput = (Record<string, unknown>) & ({
   deleted: string;
   /** Profile name. */
   profile: string;
-});
+};
 
 /** An app id. */
 export type DescribeAppInput = {
@@ -482,7 +482,7 @@ export type RunAppCommandInput = {
 };
 
 /** Result of `run_app_command`. */
-export type RunAppCommandOutput = (Record<string, unknown>) & ({
+export type RunAppCommandOutput = {
   /** Always true. */
   dry_run: boolean;
   /** Always false. */
@@ -503,7 +503,7 @@ export type RunAppCommandOutput = (Record<string, unknown>) & ({
   executed: boolean;
   /** The URLs opened and the app's responses. */
   outcome: CommandOutcome;
-});
+};
 
 /** Arguments of `select_preset`. */
 export type SelectPresetInput = {

@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { ChevronDown, Layers, Plus } from "lucide-react";
-import { useActivateProfile, useHomeSummary } from "@/api/queries";
+import { useActivateProfile, useProfiles } from "@/api/queries";
 import { CreateProfileDialog } from "@/components/app/create-profile-dialog";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator,
@@ -9,9 +9,13 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { showError } from "@/lib/toast";
 
-/** Spec §6.1: sits in the toolbar. With no active profile, Home shows its first-run steps instead (renders nothing here). */
+/**
+ * Spec §6.1: sits in the toolbar. With no active profile, Home shows its first-run steps instead (renders
+ * nothing here). Reads `list_profiles`, not the home summary: the summary reads nearly everything, so one bad
+ * file can fail it, and the operator must still be able to switch away from a broken profile.
+ */
 export function ProfileSwitcher() {
-  const summary = useHomeSummary();
+  const profilesQuery = useProfiles();
   const activate = useActivateProfile();
   const [createOpen, setCreateOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -19,11 +23,11 @@ export function ProfileSwitcher() {
    *  closed (a ref, not state: it's read once inside an event handler, never rendered). */
   const openCreateOnClose = useRef(false);
 
-  if (summary.isPending) return <Skeleton className="h-7 w-28 rounded-full" />;
+  if (profilesQuery.isPending) return <Skeleton className="h-7 w-28 rounded-full" />;
 
-  const active = summary.data?.active_profile ?? null;
+  const active = profilesQuery.data?.active ?? null;
   if (!active) return null;
-  const profiles = summary.data?.profiles ?? [];
+  const profiles = profilesQuery.data?.profiles ?? [];
 
   const switchTo = (name: string) => {
     if (name === active || activate.isPending) return;

@@ -1,4 +1,4 @@
-import { Route, Router, Switch } from "wouter";
+import { Redirect, Route, Router, Switch } from "wouter";
 import { useHashLocation } from "wouter/use-hash-location";
 import { isPreview } from "@/api/bridge";
 import { useDataChanged } from "@/api/events";
@@ -27,7 +27,8 @@ export default function App() {
           <Route path="/connect">{() => <Placeholder screen="connect" />}</Route>
           <Route path="/settings">{() => <Placeholder screen="settings" />}</Route>
           {isPreview && <Route path="/_design"><DesignGallery /></Route>}
-          <Route><Placeholder screen="home" /></Route>
+          {/* An unknown path (a stale link, or `/_design` outside the preview) goes Home rather than to a blank screen. */}
+          <Route><Redirect to="/" replace /></Route>
         </Switch>
       </AppShell>
     </Router>

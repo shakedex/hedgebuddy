@@ -58,8 +58,8 @@ function StatusPill({ run }: { run: Run }) {
 }
 
 /** A definition-list row. Both fact grids share a fixed label column (rather than `auto`) so their value
- * columns line up with each other once they stack into one column under 640 px. `title` backs the value
- * with the untruncated text for anything that can clip. */
+ * columns line up with each other when they stack into one column. `title` backs the value with the
+ * untruncated text for anything that can still clip (a very long profile or run id). */
 function Fact({ label, mono, className, title, children }: { label: string; mono?: boolean; className?: string; title?: string; children: React.ReactNode }) {
   return (
     <>
@@ -157,8 +157,12 @@ export function RunDetail({ runId, activeProfile }: { runId: string; activeProfi
         </Mono>
         <StatusPill run={run} />
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto p-4 @max-[640px]:p-3">
-        <div className="grid gap-x-8 gap-y-4 @min-[640px]:grid-cols-2">
+      {/* The scroll area is its own named container, so the facts go two-column only when this pane (not the
+          whole screen, which also holds the list) is at least 560 px wide: 528 px inside its padding. At the
+          default 960 px window the pane is about 470 px, so they stack and Event and Profile read in full.
+          The area's own padding still follows the screen's container (an element never queries itself). */}
+      <div className="@container/detail min-h-0 flex-1 overflow-y-auto p-4 @max-[640px]:p-3">
+        <div className="grid gap-x-8 gap-y-1.5 @min-[528px]/detail:grid-cols-2">
           <dl className="grid grid-cols-[5rem_1fr] gap-x-4 gap-y-1.5 text-sm">
             <Fact label="App" title={app}>
               {app}

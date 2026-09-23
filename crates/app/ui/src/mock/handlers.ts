@@ -28,9 +28,12 @@ const appHandlers: AppHandlers = {
 
 const WRITES = new Set<string>(["set_active_profile", "create_profile", "preferences_set"]);
 
+/** In `busy`, the writes that report busy: every write unless narrowed with `window.__hb.busy([...])`. */
+let busyWrites: ReadonlySet<string> = WRITES;
+
 function check(name: string) {
   if (data.scenario === "error") throw new BridgeError("error", "cannot read hedgebuddy.json: invalid JSON at line 1");
-  if (data.scenario === "busy" && WRITES.has(name)) throw new BridgeError("busy", "another HedgeBuddy is busy; try again");
+  if (data.scenario === "busy" && busyWrites.has(name)) throw new BridgeError("busy", "another HedgeBuddy is busy; try again");
 }
 
 export async function callTool<N extends ToolName>(name: N, args: ToolTypes[N]["input"]): Promise<ToolTypes[N]["output"]> {
@@ -56,9 +59,17 @@ function emit(categories: string[]) {
   window.dispatchEvent(new CustomEvent(MOCK_EVENT, { detail: { categories } }));
 }
 
+/**
+ * Narrow which writes report busy in the `busy` scenario, e.g. `["set_active_profile"]` to fail only the
+ * second step of creating and activating a profile; `null` restores every write.
+ */
+function busy(names: string[] | null) {
+  busyWrites = names === null ? WRITES : new Set(names);
+}
+
 declare global {
   interface Window {
-    __hb?: { emit: (categories: string[]) => void; scenario: string };
+    __hb?: { emit: (categories: string[]) => void; busy: (names: string[] | null) => void; scenario: string };
   }
 }
-window.__hb = { emit, scenario: data.scenario };
+window.__hb = { emit, busy, scenario: data.scenario };

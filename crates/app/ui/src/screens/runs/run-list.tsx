@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import type { UseQueryResult } from "@tanstack/react-query";
 import { CircleCheck, History, Search, SearchX } from "lucide-react";
 import { Link } from "wouter";
@@ -8,6 +8,7 @@ import { EmptyState } from "@/components/app/empty-state";
 import { ErrorPanel } from "@/components/app/error-panel";
 import { Mono } from "@/components/app/mono";
 import { StatusIcon } from "@/components/app/status-icon";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
@@ -17,7 +18,11 @@ import { clock, dayKey, dayLabel, duration } from "@/lib/format";
 import { isFailedRun, runStatusKey } from "@/lib/status";
 import { cn } from "@/lib/utils";
 
-type Mode = "all" | "failed";
+/** The list's All/Failed toggle. */
+export type RunMode = "all" | "failed";
+
+/** A run row's DOM id: what the listbox's `aria-activedescendant` names and keyboard moves scroll to. */
+const rowId = (runId: string) => `run-${runId}`;
 
 /** Case-insensitive match against the fields the toolbar's filter promises to search (spec: script, event, app, profile). */
 function matchesFilter(run: Run, q: string): boolean {
@@ -27,6 +32,13 @@ function matchesFilter(run: Run, q: string): boolean {
     (run.app?.toLowerCase().includes(q) ?? false) ||
     run.profile.toLowerCase().includes(q)
   );
+}
+
+/** The runs the list shows: `runs` narrowed by the All/Failed toggle, then by the filter text. */
+export function visibleRuns(runs: Run[], mode: RunMode, filterText: string): Run[] {
+  const modeRuns = mode === "failed" ? runs.filter(isFailedRun) : runs;
+  const q = filterText.trim().toLowerCase();
+  return q === "" ? modeRuns : modeRuns.filter((run) => matchesFilter(run, q));
 }
 
 /** Line 2 of a row: event, then an outcome clause, then the profile when it isn't the active one. */
@@ -43,7 +55,7 @@ function RunRow({ run, selected, activeProfile }: { run: Run; selected: boolean;
   return (
     <Link
       href={`/runs/${encodeURIComponent(run.run_id)}`}
-      id={`run-${run.run_id}`}
+      id={rowId(run.run_id)}
       role="option"
       aria-selected={selected}
       // The listbox itself owns keyboard focus (aria-activedescendant); rows are click targets only, so
@@ -123,9 +135,16 @@ function buildGroups(displayed: Run[], since: string | null): DayGroup[] {
 /**
  * Runs list (spec §6.2): a toolbar (All/Failed, a filter, and an "All profiles" switch when there is an
  * active profile) over runs grouped by local day, newest first, with a "since you last opened" divider.
+ * The screen owns the toggle and filter state and hands in `displayed`, so it can tell when the detail pane
+ * has nothing to point at. Every empty state names its scope: the active profile's runs, or every profile's.
  */
 export function RunList({
   query,
+  displayed,
+  mode,
+  onModeChange,
+  filterText,
+  onFilterTextChange,
   selectedId,
   activeProfile,
   since,
@@ -134,6 +153,12 @@ export function RunList({
   onSelect,
 }: {
   query: UseQueryResult<ListRunsOutput>;
+  /** `visibleRuns(query's runs, mode, filterText)`. */
+  displayed: Run[];
+  mode: RunMode;
+  onModeChange: (mode: RunMode) => void;
+  filterText: string;
+  onFilterTextChange: (text: string) => void;
   selectedId: string | null;
   activeProfile: string | null;
   since: string | null;
@@ -141,8 +166,7 @@ export function RunList({
   onAllProfilesChange: (allProfiles: boolean) => void;
   onSelect: (id: string) => void;
 }) {
-  const [mode, setMode] = useState<Mode>("all");
-  const [filterText, setFilterText] = useState("");
+  const allProfilesSwitch = useRef<HTMLButtonElement>(null);
 
   // See HomeScreen: keeps the *last* error across the "pending" flicker a retry causes, so Retry-in-flight
   // doesn't get mistaken for a fresh first load.
@@ -152,11 +176,20 @@ export function RunList({
 
   const allRuns = query.data?.runs ?? [];
   const failedCount = allRuns.filter(isFailedRun).length;
-  const modeRuns = mode === "failed" ? allRuns.filter(isFailedRun) : allRuns;
-  const q = filterText.trim().toLowerCase();
-  const displayed = q === "" ? modeRuns : modeRuns.filter((run) => matchesFilter(run, q));
   const ids = displayed.map((run) => run.run_id);
-  const onKeyDown = useListKeyboard(ids, selectedId, onSelect);
+  const onKeyDown = useListKeyboard(ids, selectedId, onSelect, rowId);
+  // A selection that is not in the list (another profile's run with All profiles off, or one the filter
+  // hides) is not announced: `aria-activedescendant` must name an element that exists.
+  const listedSelection = selectedId !== null && ids.includes(selectedId) ? selectedId : null;
+
+  // Bring a selection that arrives from outside the list (a link from Home, or the list widening to every
+  // profile) into view once. Keyboard moves scroll for themselves.
+  const scrolledTo = useRef<string | null>(null);
+  useEffect(() => {
+    if (listedSelection === null || scrolledTo.current === listedSelection) return;
+    scrolledTo.current = listedSelection;
+    document.getElementById(rowId(listedSelection))?.scrollIntoView({ block: "nearest" });
+  }, [listedSelection]);
 
   if (lastError.current !== null && !query.isSuccess) {
     return (
@@ -169,6 +202,21 @@ export function RunList({
   }
 
   const groups = buildGroups(displayed, since);
+  const scoped = activeProfile !== null && !allProfiles;
+  const profileName = scoped ? <Mono>{activeProfile}</Mono> : null;
+  const showAllProfiles = scoped ? (
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={() => {
+        onAllProfilesChange(true);
+        // This button goes away with the empty state; the switch it just flipped is where focus belongs.
+        allProfilesSwitch.current?.focus();
+      }}
+    >
+      Show all profiles
+    </Button>
+  ) : undefined;
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -178,7 +226,7 @@ export function RunList({
           variant="outline"
           size="sm"
           value={mode}
-          onValueChange={(v) => v && setMode(v as Mode)}
+          onValueChange={(v) => v && onModeChange(v as RunMode)}
           className="shrink-0"
         >
           <ToggleGroupItem value="all" aria-label="All runs">
@@ -191,7 +239,7 @@ export function RunList({
         </ToggleGroup>
         {activeProfile && (
           <label className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
-            <Switch size="sm" checked={allProfiles} onCheckedChange={onAllProfilesChange} />
+            <Switch ref={allProfilesSwitch} size="sm" checked={allProfiles} onCheckedChange={onAllProfilesChange} />
             All profiles
           </label>
         )}
@@ -201,7 +249,7 @@ export function RunList({
           <Search aria-hidden className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground" strokeWidth={1.75} />
           <Input
             value={filterText}
-            onChange={(e) => setFilterText(e.target.value)}
+            onChange={(e) => onFilterTextChange(e.target.value)}
             placeholder="Filter runs"
             aria-label="Filter runs"
             className="h-7 pl-7"
@@ -212,21 +260,38 @@ export function RunList({
         {query.isPending && lastError.current === null ? (
           <RunListSkeleton />
         ) : allRuns.length === 0 ? (
-          <EmptyState icon={History} title="No runs yet" className="px-3 py-6">
+          <EmptyState
+            icon={History}
+            title={scoped ? <>No runs in {profileName}</> : "No runs yet"}
+            className="px-3 py-6"
+            action={showAllProfiles}
+          >
             Each time a Hedge app fires an event, its attached script records a run here.
           </EmptyState>
         ) : mode === "failed" && failedCount === 0 ? (
-          <EmptyState icon={CircleCheck} title="No failed runs" className="px-3 py-6">
-            Everything that ran in the last 30 days succeeded.
+          <EmptyState
+            icon={CircleCheck}
+            title={scoped ? <>No failed runs in {profileName}</> : activeProfile ? "No failed runs in any profile" : "No failed runs"}
+            className="px-3 py-6"
+            action={showAllProfiles}
+          >
+            {scoped ? "Everything this profile ran in the last 30 days succeeded." : "Everything that ran in the last 30 days succeeded."}
           </EmptyState>
         ) : displayed.length === 0 ? (
-          <EmptyState icon={SearchX} title={`No runs match “${filterText}”`} className="px-3 py-6" />
+          <EmptyState
+            icon={SearchX}
+            title={`No ${mode === "failed" ? "failed runs match" : "runs match"} “${filterText.trim()}”`}
+            className="px-3 py-6"
+            action={showAllProfiles}
+          >
+            {scoped ? <>Only runs in {profileName} were searched.</> : activeProfile ? "Every profile's runs were searched." : undefined}
+          </EmptyState>
         ) : (
           <div
             role="listbox"
             aria-label="Runs"
             tabIndex={0}
-            aria-activedescendant={selectedId ? `run-${selectedId}` : undefined}
+            aria-activedescendant={listedSelection !== null ? rowId(listedSelection) : undefined}
             onKeyDown={onKeyDown}
             className="focus-visible:outline-offset-[-2px]"
           >
@@ -242,7 +307,7 @@ export function RunList({
                   item.kind === "divider" ? (
                     <SinceDivider key="since-divider" />
                   ) : (
-                    <RunRow key={item.run.run_id} run={item.run} selected={item.run.run_id === selectedId} activeProfile={activeProfile} />
+                    <RunRow key={item.run.run_id} run={item.run} selected={item.run.run_id === listedSelection} activeProfile={activeProfile} />
                   ),
                 )}
               </div>
