@@ -1,5 +1,22 @@
-"""HedgeBuddy: variables and Hedge app events for Python scripts."""
+"""HedgeBuddy for Python scripts run by Hedge apps."""
+
+from ._errors import (
+    HedgeBuddyError,
+    ManifestError,
+    StorageCorruptedError,
+    StorageNotFoundError,
+    VariableNotFoundError,
+    VariableTypeError,
+)
 
 __version__ = "0.11.0"
 
-__all__ = ["__version__"]
+__all__ = [
+    "HedgeBuddyError",
+    "ManifestError",
+    "StorageCorruptedError",
+    "StorageNotFoundError",
+    "VariableNotFoundError",
+    "VariableTypeError",
+    "__version__",
+]
