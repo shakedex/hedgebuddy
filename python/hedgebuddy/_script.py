@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Optional, Sequence
 
 from . import _runs
-from ._errors import HedgeBuddyError, ManifestError, VariableNotFoundError, VariableTypeError
+from ._errors import HedgeBuddyError, ManifestError, VariableNotFoundError, VariableTypeError, _warn
 from ._event import Event, parse_event
 from ._manifest import Manifest, check_requirements, parse_manifest
 from ._paths import data_dir
@@ -36,6 +36,8 @@ def _exit_code(value: Any) -> int:
     if value is None:
         return 0
     if isinstance(value, int):
+        if not 0 <= value <= 255:  # the range an exit code has on every platform
+            raise ValueError(f"main must return an exit code from 0 to 255, not {value}")
         return int(value)
     raise TypeError(f"main must return None or an int exit code, not {type(value).__name__}")
 
@@ -46,7 +48,7 @@ def _system_exit_code(exc: SystemExit) -> int:
         return 0
     if isinstance(code, int):
         return int(code)
-    print(code, file=sys.stderr)
+    _warn(code)
     return 1
 
 
@@ -57,7 +59,7 @@ def run(func: Main, *, source_path: Optional[str], argv: Sequence[str]) -> int:
         root = data_dir()
         profile = resolve_profile(root)
     except HedgeBuddyError as e:
-        print(f"hedgebuddy: {e}", file=sys.stderr)
+        _warn(f"hedgebuddy: {e}")
         return 1
 
     manifest: Optional[Manifest] = None

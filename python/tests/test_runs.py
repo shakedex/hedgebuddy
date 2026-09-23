@@ -1,4 +1,5 @@
 import datetime
+import io
 import os
 import re
 import subprocess
@@ -66,6 +67,19 @@ def test_write_failures_warn_once_and_never_raise(tmp_path, capsys):
     run.log("m")
     run.end("ok", 0)
     assert capsys.readouterr().err.count("cannot write the run record") == 1
+
+
+@pytest.mark.parametrize("stderr", [None, "closed"])
+def test_write_failures_never_raise_without_a_usable_stderr(tmp_path, monkeypatch, capsys, stderr):
+    closed = io.StringIO()
+    closed.close()
+    monkeypatch.setattr(sys, "stderr", closed if stderr == "closed" else None)
+    blocker = tmp_path / "not-a-folder"
+    blocker.write_text("x", encoding="utf-8")
+    run = RunLog(blocker)
+    run.start(script="a.py", profile="p")
+    run.end("ok", 0)
+    assert capsys.readouterr().out == ""  # the warning never falls back to stdout
 
 
 def test_non_serializable_end_warns_once_and_never_raises(hb_root, capsys):

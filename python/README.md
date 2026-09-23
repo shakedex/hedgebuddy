@@ -69,7 +69,7 @@ When Hedge runs the file, the decorator does the following, in order:
 5. Calls `main(event, vars)`.
 6. Records the result and exits with `main`'s return value.
 
-`None` means success. A non-zero number means the run failed. An uncaught exception is recorded with its traceback. When the file is imported rather than run, for example by a test, the decorator returns `main` unchanged.
+`None` means success. A non-zero number means the run failed. Any other return value, or a number outside 0 to 255, is recorded as an error with exit code 1. An uncaught exception is recorded with its traceback. When the file is imported rather than run, for example by a test, the decorator returns `main` unchanged.
 
 The profile's secret values are replaced with `********` in `hb.log` lines and tracebacks, both in the run record and on stderr. A secret shorter than four characters is not masked, so it does not mangle other text.
 

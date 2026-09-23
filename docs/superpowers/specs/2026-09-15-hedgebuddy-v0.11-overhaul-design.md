@@ -258,6 +258,7 @@ Errors: `VariableNotFoundError`, `VariableTypeError`, `StorageNotFoundError`, `S
 Decisions made in phase 4:
 - `@hb.script` runs `main` only when its module is `__main__`; imported (for example by a test), it returns the function unchanged.
 - The decorated `main` must be the last top-level definition: `@hb.script` runs it while decorating, so code below it has not run yet (putting helpers below `main` raises `NameError`). Deferring the run to interpreter exit was rejected because it cannot set the exit code without skipping other libraries' exit handlers.
+- `main` returns `None` or an int from 0 to 255. Any other value is recorded as `error` and the exit code is 1.
 - The run record opens as soon as the active profile is known, so manifest and requirement failures are recorded with status `error`. Without an active profile nothing is recorded; the error goes to stderr and the exit code is 1.
 - `hb.var(name, default)` returns the default only when the variable is missing; storage errors are always raised. A variable declared without a value (a secret with nothing in `secrets.json`) counts as missing when a script runs.
 - `load_variables` rejects a `profile.json` whose `name` differs from its folder, just as core does.

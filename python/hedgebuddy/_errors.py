@@ -1,6 +1,19 @@
-"""Errors raised by hedgebuddy."""
+"""Errors raised by hedgebuddy, and ``_warn`` for problems it only reports."""
 
 from __future__ import annotations
+
+import sys
+
+
+def _warn(text: object) -> None:
+    """Print ``text`` on stderr. Never raises: a stderr that is ``None``
+    (``pythonw``) or closed, or text that cannot be printed, is ignored."""
+    try:
+        stream = sys.stderr
+        if stream is not None:  # print(file=None) would write to stdout
+            print(text, file=stream)
+    except Exception:
+        pass
 
 
 class HedgeBuddyError(Exception):

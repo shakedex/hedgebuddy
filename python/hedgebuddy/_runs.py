@@ -5,11 +5,11 @@ from __future__ import annotations
 import datetime
 import json
 import os
-import sys
 import time
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
+from ._errors import _warn
 from ._lock import locked
 
 _CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
@@ -101,7 +101,7 @@ class RunLog:
                     f.flush()
         except (OSError, TypeError, ValueError) as e:
             self._failed = True
-            print(f"hedgebuddy: cannot write the run record to {self.path}: {e}", file=sys.stderr)
+            _warn(f"hedgebuddy: cannot write the run record to {self.path}: {e}")
 
 
 _current: Optional[RunLog] = None

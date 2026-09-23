@@ -1,3 +1,4 @@
+import io
 import json
 import os
 import subprocess
@@ -170,6 +171,15 @@ def test_a_non_integer_return_is_an_error(hb_root, tmp_path):
     assert "main must return None or an int" in ends(hb_root)[0]["traceback"]
 
 
+@pytest.mark.parametrize("result", [256, -1])
+def test_an_out_of_range_return_is_an_error(hb_root, tmp_path, result):
+    hook_profile(hb_root)
+    assert run(lambda event, vars: result, source_path=script_file(tmp_path), argv=["probe.py"]) == 1
+    end = ends(hb_root)[0]
+    assert (end["status"], end["exit_code"]) == ("error", 1)
+    assert f"main must return an exit code from 0 to 255, not {result}" in end["traceback"]
+
+
 def test_missing_required_variables_fail_before_main(hb_root, tmp_path):
     write_profile(hb_root, "p", {"HOOK": {"type": "secret"}})  # declared, but no value in secrets.json
     called = []
@@ -250,6 +260,29 @@ def test_a_closed_or_missing_stderr_does_not_lose_the_end_record(hb_root, tmp_pa
     end = ends(hb_root)[0]
     assert (end["status"], end["exit_code"]) == ("error", 1)
     assert "RuntimeError: boom" in end["traceback"]
+
+
+def closed_stream() -> io.StringIO:
+    stream = io.StringIO()
+    stream.close()
+    return stream
+
+
+@pytest.mark.parametrize("stderr", [None, "closed"])
+def test_a_closed_or_missing_stderr_never_makes_run_raise(hb_root, tmp_path, monkeypatch, capsys, stderr):
+    monkeypatch.setattr(sys, "stderr", closed_stream() if stderr == "closed" else None)
+    # No active profile: the message goes to stderr only.
+    assert run(lambda event, vars: None, source_path=script_file(tmp_path), argv=["probe.py"]) == 1
+    assert capsys.readouterr().out == ""
+    # A non-integer SystemExit reason is printed to stderr.
+    hook_profile(hb_root)
+
+    def main(event, vars):
+        sys.exit("reason")
+
+    assert run(main, source_path=script_file(tmp_path), argv=["probe.py"]) == 1
+    assert (ends(hb_root)[0]["status"], ends(hb_root)[0]["exit_code"]) == ("failed", 1)
+    assert capsys.readouterr().out == ""
 
 
 def test_no_active_profile_exits_1_without_a_record(hb_root, tmp_path, capsys):
