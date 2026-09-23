@@ -1,7 +1,7 @@
 //! OffShoot presets and Hedge app log files.
 
 use std::fs;
-use std::io::ErrorKind;
+use std::io::{ErrorKind, Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -32,14 +32,25 @@ pub enum LogKind {
     Event,
 }
 
+/// Windows device names that cannot be used as a file name, regardless of
+/// case or of what follows the first `.`.
+const RESERVED_NAMES: [&str; 22] = [
+    "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8",
+    "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+];
+
 /// A preset name must be usable as a file name on both platforms.
 pub fn validate_preset_name(name: &str) -> Result<()> {
+    let base = name.split('.').next().unwrap_or(name);
     let bad = name.trim().is_empty()
         || name.len() > 100
         || name.starts_with('.')
+        || name.ends_with('.')
+        || name.ends_with(' ')
         || name.chars().any(|c| {
             c.is_control() || matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|')
-        });
+        })
+        || RESERVED_NAMES.iter().any(|r| r.eq_ignore_ascii_case(base));
     if bad {
         Err(CoreError::Validation(format!(
             "preset name '{name}' is not a valid file name"
@@ -106,10 +117,12 @@ impl Hedge {
     pub fn presets_dir(&self, app: &str) -> Result<PathBuf> {
         let spec = self.presets_spec(app)?;
         if let (Some(key), Some(value)) = (&spec.registry_key, &spec.location_override_value) {
-            if let Ok(Some(RegValue::String(s))) = self.host.registry_read(key, value) {
-                if !s.trim().is_empty() {
-                    return Ok(PathBuf::from(s.trim()));
+            match self.host.registry_read(key, value) {
+                Ok(Some(RegValue::String(s))) if !s.trim().is_empty() => {
+                    return Ok(PathBuf::from(s.trim()))
                 }
+                Ok(_) => {}
+                Err(e) => return Err(e),
             }
         }
         self.expand(&spec.dir)
@@ -118,8 +131,10 @@ impl Hedge {
     /// Every readable preset, sorted by name. Unreadable files are skipped.
     pub fn list_presets(&self, app: &str) -> Result<Vec<Preset>> {
         let dir = self.presets_dir(app)?;
-        let Ok(entries) = fs::read_dir(&dir) else {
-            return Ok(Vec::new());
+        let entries = match fs::read_dir(&dir) {
+            Ok(entries) => entries,
+            Err(e) if e.kind() == ErrorKind::NotFound => return Ok(Vec::new()),
+            Err(e) => return Err(CoreError::io(&dir, e)),
         };
         let mut presets: Vec<Preset> = entries
             .filter_map(|e| e.ok())
@@ -141,7 +156,16 @@ impl Hedge {
         let path = self
             .presets_dir(app)?
             .join(format!("{}.hedge", preset.name));
-        let mut obj = preset_object(&path).unwrap_or_else(default_object);
+        let mut obj = if path.is_file() {
+            preset_object(&path).ok_or_else(|| {
+                CoreError::Validation(format!(
+                    "{} exists but is not a valid preset; fix or delete it first",
+                    path.display()
+                ))
+            })?
+        } else {
+            default_object()
+        };
         obj.insert(
             "folderPattern".into(),
             Value::String(preset.folder_pattern.clone()),
@@ -220,11 +244,29 @@ impl Hedge {
             ))
         })?;
         let path = self.expand(template)?;
-        let bytes = match fs::read(&path) {
-            Ok(b) => b,
+        const MAX_TAIL_BYTES: u64 = 1_048_576;
+        let mut file = match fs::File::open(&path) {
+            Ok(f) => f,
             Err(e) if e.kind() == ErrorKind::NotFound => return Ok(Vec::new()),
             Err(e) => return Err(CoreError::io(&path, e)),
         };
+        let len = file.metadata().map_err(|e| CoreError::io(&path, e))?.len();
+        let start = len.saturating_sub(MAX_TAIL_BYTES);
+        if start > 0 {
+            file.seek(SeekFrom::Start(start))
+                .map_err(|e| CoreError::io(&path, e))?;
+        }
+        let mut bytes = Vec::new();
+        file.read_to_end(&mut bytes)
+            .map_err(|e| CoreError::io(&path, e))?;
+        if start > 0 {
+            match bytes.iter().position(|&b| b == b'\n') {
+                Some(nl) => {
+                    bytes.drain(..=nl);
+                }
+                None => bytes.clear(),
+            }
+        }
         let text = String::from_utf8_lossy(&bytes);
         let lines: Vec<&str> = text.lines().collect();
         Ok(lines[lines.len().saturating_sub(tail)..]
@@ -282,6 +324,30 @@ mod tests {
     }
 
     #[test]
+    fn validate_preset_names() {
+        for ok in ["A cam", "B-cam 2"] {
+            assert!(validate_preset_name(ok).is_ok(), "{ok:?} should be valid");
+        }
+        for bad in [
+            "CON",
+            "con",
+            "Lpt1",
+            "nul.backup",
+            "name.",
+            "name ",
+            "",
+            ".hidden",
+            "a/b",
+            "a:b",
+        ] {
+            assert!(
+                matches!(validate_preset_name(bad), Err(CoreError::Validation(_))),
+                "{bad:?} should be invalid"
+            );
+        }
+    }
+
+    #[test]
     fn list_reads_existing_presets() {
         let (_a, presets, _f, h) = setup(FakeHost::new(Os::Windows));
         assert_eq!(h.presets_dir("offshoot").unwrap(), presets);
@@ -329,6 +395,22 @@ mod tests {
             h.plan_write_preset("offshoot", &bad).unwrap_err(),
             CoreError::Validation(_)
         ));
+    }
+
+    #[test]
+    fn write_refuses_to_replace_a_broken_preset() {
+        let (_a, presets, _f, h) = setup(FakeHost::new(Os::Windows));
+        let mut broken = b_cam();
+        broken.name = "broken".into();
+        let before = fs::read_to_string(presets.join("broken.hedge")).unwrap();
+        assert!(matches!(
+            h.plan_write_preset("offshoot", &broken).unwrap_err(),
+            CoreError::Validation(_)
+        ));
+        assert_eq!(
+            fs::read_to_string(presets.join("broken.hedge")).unwrap(),
+            before
+        );
     }
 
     #[test]
