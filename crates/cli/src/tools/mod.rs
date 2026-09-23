@@ -15,8 +15,9 @@ use serde_json::{json, Value};
 // `pub(crate) use tool;` re-export below rather than through `macro_rules!`
 // legacy textual scoping (which would otherwise make that re-export, or the
 // group modules' own `use super::tool;`, look unused to `unused_imports`).
-mod profiles;
-mod variables;
+pub(crate) mod profiles;
+pub(crate) mod scripts;
+pub(crate) mod variables;
 
 /// Build a [`ToolDef`] from a name, description, hints, parameter type, and
 /// handler `fn(&Context, Params) -> ToolResult`.
@@ -176,6 +177,7 @@ pub struct NoParams {}
 pub fn all() -> Vec<ToolDef> {
     let mut tools = Vec::new();
     tools.extend(profiles::tools());
+    tools.extend(scripts::tools());
     tools.extend(variables::tools());
     tools
 }
