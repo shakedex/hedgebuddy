@@ -52,7 +52,7 @@ Events: OffShoot 10 (OffShootStarted, DiskAdded, DiskRemoved, DiskBusy, DiskIdle
 
 **Control.** Each app has a URL scheme (`offshoot://`, `foolcat://`, `editready://`, `canister://`) invoked via `start` (Windows) or `open` (macOS). OffShoot: `open`, `quit`, `restart`, `update`, `activate`, `deactivate`, `reset?type=sources|destinations`, `setSource {paths, label}`, `setDestination {path}`, `addTransfers`, `restartTransfer?id=`, `reloadPresets`, `setPreferences` (macOS only), and `actions?json=[...]` to chain. Responses are logged to `%APPDATA%\Hedge\HedgeCallback.log` / `~/Library/Logs/Hedge/urlSchemeResponseLog.txt`. No URL command selects a preset.
 
-**Presets.** OffShoot presets are JSON files in `%APPDATA%\Hedge\Presets\*.hedge` with `folderPattern`, `labelPattern`, `renamePattern`, `counter`, and flags. `offshoot://reloadPresets` reloads them. The active preset name is in the registry value SessionVariableSelectedPreset (observed, undocumented); PresetsLocation overrides the folder. No API selects a preset, and the macOS preset folder is not documented.
+**Presets.** OffShoot presets are JSON files in `%APPDATA%\Hedge\Presets\*.hedge` with `folderPattern`, `labelPattern`, `renamePattern`, `counter`, and flags. `offshoot://reloadPresets` reloads them. The active preset name is in the registry value `SessionVariableSelectedPreset` (observed, undocumented); `PresetsLocation` overrides the folder. No API selects a preset, and the macOS preset folder is not documented.
 
 **Nothing from Hedge about MCP or AI.** Their docs publish `https://docs.hedge.video/llms.txt`.
 
@@ -205,7 +205,7 @@ Rules:
 - **Dry runs on anything irreversible.** `run_app_command`, `attach_script`, `detach_script`, `sync_attachments`, `write_preset`, `delete_profile`, `delete_script`, `delete_var` accept `dry_run: true` and return what would be written or launched (URL, registry values, file diff). They carry the MCP `destructiveHint` annotation. Commands marked `confirm = true` in the catalog say so in the tool output so the agent asks the operator before firing.
 - **`describe_app`** returns install state, version, Pro scripting flag, events with payload keys, commands with parameter types, file locations, and the docs URL.
 - **`inspect_volume`** returns label, filesystem, size, removable flag, and a camera-card guess from folder structure (e.g. `PRIVATE/`, `DCIM/`, `XDROOT/`, `.ari`/`.mxf` counts), with clip count and total media size.
-- **`run_app_command`** takes `app` and an ordered list of `{command, params}`; single commands use the direct URL form, multiple use `actions?json`. It waits up to a few seconds for the callback log to change and returns the response lines.
+- **`run_app_command`** takes `app` and an ordered list of `{command, params}`; each command is encoded as the catalog declares: `url` commands as their own URL, consecutive `action` commands batched into one `actions?json=` URL. URLs are opened in order; when waiting for responses, each URL's callback-log response is awaited before the next opens. It waits up to a few seconds for the callback log to change and returns the response lines.
 - **`environment`** returns data directory, catalog overrides in effect, Python interpreter path and version as Hedge apps would resolve it (Windows: `py` launcher; macOS: `python3`), and whether the `hedgebuddy` package is installed there.
 
 Resources (read-only): `hedgebuddy://catalog/<app>`, `hedgebuddy://schema/<name>`, `hedgebuddy://docs/hedge-llms` (pointer to Hedge's `llms.txt`).
@@ -295,8 +295,8 @@ Phases 4 and 5 are independent and may run in parallel.
 
 1. Agent calls `list_volumes`, then `inspect_volume` on the new removable drive; it reports a camera card.
 2. Agent calls `get_profile` for `commercial-one-day`: destination roots, project name, camera labels.
-3. Agent calls `write_preset` (dry run, then real) to write an OffShoot preset with the profile's folder pattern and counter `003`, then `run_app_command` `reloadPresets`. Selecting that preset in OffShoot is either done by the operator once or via the registry value; the catalog records the value name, and phase 2 decides whether to expose it.
-4. Agent calls `run_app_command` with `[reset destinations, setSource(paths, label="A003"), setDestination × N, addTransfers]` as a dry run, shows the operator the URL, and fires on confirmation.
+3. Agent calls `write_preset` (dry run, then real) to write an OffShoot preset with the profile's folder pattern and counter `003`, then `run_app_command` `reloadPresets`. Selecting it uses `plan_select_preset` (Windows registry value `SessionVariableSelectedPreset`; whether a running OffShoot picks it up is unverified).
+4. Agent calls `run_app_command` with `[reset destinations, setSource(paths, label="A003"), setDestination × N, addTransfers]` as a dry run, shows the operator the planned URLs (a `reset` URL, one batched `actions` URL, and an `addTransfers` URL), and fires on confirmation.
 5. Agent reads the callback log through the same call's response. Completion later arrives through the attached `FileCopyCompleted` script's run record, readable via `list_runs`.
 
 Requires OffShoot Pro and an MCP host on the workstation.
@@ -311,6 +311,7 @@ Requires OffShoot Pro and an MCP host on the workstation.
 | Python interpreter mismatch | `environment` and the Settings view target the interpreter Hedge apps resolve, not PATH's first Python. |
 | Tauri sidecar path changes between installs | Connect panel rewrites the host config on every launch if the path differs. |
 | Unsigned builds on macOS | Existing TODO; phase 6. Until then the docs keep the `xattr -cr` note. |
+| URL commands race each other | `run_commands` opens URLs one at a time and waits for each callback-log response; whether `reset`/`addTransfers` can join the `actions` batch is checked in the phase 3 smoke test. |
 
 ## 16. Out of scope
 
