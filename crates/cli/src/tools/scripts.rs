@@ -240,6 +240,28 @@ mod tests {
     }
 
     #[test]
+    fn write_refuses_names_that_leave_the_scripts_folder() {
+        let (_d, _f, ctx) = test_ctx(FakeHost::new(Os::Windows));
+        ctx.store.create_profile("p", "").unwrap();
+        for name in ["C:x.py", "ab:c.py", "CON.py"] {
+            let err = call(
+                &ctx,
+                "write_script",
+                json!({"name": name, "source": "print('x')\n"}),
+            )
+            .unwrap_err();
+            assert!(err.0.contains("script name"), "{name}: {err}");
+        }
+        let scripts = ctx.store.scripts_dir("p");
+        assert!(
+            !scripts.exists() || std::fs::read_dir(&scripts).unwrap().next().is_none(),
+            "nothing is written to the scripts folder"
+        );
+        // On Windows, `C:x.py` is relative to drive C's current folder.
+        assert!(!std::path::Path::new("C:x.py").exists());
+    }
+
+    #[test]
     fn check_without_python_skips_the_compile_step() {
         let (_d, _f, ctx) = test_ctx(FakeHost::new(Os::Windows));
         ctx.store.create_profile("p", "").unwrap();

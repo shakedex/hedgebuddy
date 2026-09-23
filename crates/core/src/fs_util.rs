@@ -13,6 +13,26 @@ use crate::error::{CoreError, Result};
 /// concurrent writers of the same target file never collide.
 static COUNTER: AtomicU64 = AtomicU64::new(0);
 
+/// Windows device names that cannot be used as a file name, regardless of
+/// case or of what follows the first `.`.
+const RESERVED_NAMES: [&str; 22] = [
+    "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8",
+    "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+];
+
+/// Whether the part of `name` before its first `.` is a Windows device name
+/// such as `CON` or `lpt1`.
+pub(crate) fn is_reserved_name(name: &str) -> bool {
+    let base = name.split('.').next().unwrap_or(name);
+    RESERVED_NAMES.iter().any(|r| r.eq_ignore_ascii_case(base))
+}
+
+/// Whether `c` cannot appear in a file name on Windows or macOS: a control
+/// character, a path separator, or one of `: * ? " < > |`.
+pub(crate) fn is_forbidden_char(c: char) -> bool {
+    c.is_control() || matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|')
+}
+
 /// Write `bytes` to `path` atomically: write to a sibling temp file, then
 /// rename over the target. Creates parent directories. When `private` is
 /// true the file is created with mode 0600 on Unix (no-op on Windows).

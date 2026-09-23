@@ -10,6 +10,7 @@ use serde_json::{json, Map, Value};
 use super::{Action, Hedge};
 use crate::catalog::PresetsSpec;
 use crate::error::{CoreError, Result};
+use crate::fs_util;
 use crate::host::RegValue;
 
 /// The fields of an OffShoot preset (`<name>.hedge`) that HedgeBuddy reads and writes.
@@ -32,25 +33,15 @@ pub enum LogKind {
     Event,
 }
 
-/// Windows device names that cannot be used as a file name, regardless of
-/// case or of what follows the first `.`.
-const RESERVED_NAMES: [&str; 22] = [
-    "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8",
-    "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
-];
-
 /// A preset name must be usable as a file name on both platforms.
 pub fn validate_preset_name(name: &str) -> Result<()> {
-    let base = name.split('.').next().unwrap_or(name);
     let bad = name.trim().is_empty()
         || name.len() > 100
         || name.starts_with('.')
         || name.ends_with('.')
         || name.ends_with(' ')
-        || name.chars().any(|c| {
-            c.is_control() || matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|')
-        })
-        || RESERVED_NAMES.iter().any(|r| r.eq_ignore_ascii_case(base));
+        || name.chars().any(fs_util::is_forbidden_char)
+        || fs_util::is_reserved_name(name);
     if bad {
         Err(CoreError::Validation(format!(
             "preset name '{name}' is not a valid file name"
