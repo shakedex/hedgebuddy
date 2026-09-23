@@ -20,17 +20,9 @@ const RENAME_RETRY_FOR: Duration = Duration::from_secs(1);
 /// Pause between rename attempts.
 const RENAME_RETRY_EVERY: Duration = Duration::from_millis(20);
 
-/// Whether `kind` is `PermissionDenied`, or (Windows only) a sharing
-/// violation reported as a raw OS error 32 (`ERROR_SHARING_VIOLATION`). A
-/// reader test observed Windows surfacing 32 instead of `PermissionDenied`
-/// when another process has the target open without sharing delete access.
-fn is_retryable(e: &io::Error) -> bool {
-    e.kind() == io::ErrorKind::PermissionDenied || e.raw_os_error() == Some(32)
-}
-
-/// Run `rename` until it succeeds, fails with an error [`is_retryable`] does
-/// not cover, or `budget` runs out. With `retry` false it runs once.
-/// On Windows a retryable error usually means another process (a virus
+/// Run `rename` until it succeeds, fails with anything other than
+/// `PermissionDenied`, or `budget` runs out. With `retry` false it runs once.
+/// On Windows `PermissionDenied` usually means another process (a virus
 /// scanner, the Python library, another HedgeBuddy) has the target open for
 /// a moment.
 pub(crate) fn rename_with_retry(
@@ -41,7 +33,11 @@ pub(crate) fn rename_with_retry(
     let deadline = Instant::now() + budget;
     loop {
         match rename() {
-            Err(e) if retry && is_retryable(&e) && Instant::now() < deadline => {
+            Err(e)
+                if retry
+                    && e.kind() == io::ErrorKind::PermissionDenied
+                    && Instant::now() < deadline =>
+            {
                 std::thread::sleep(RENAME_RETRY_EVERY)
             }
             other => return other,
