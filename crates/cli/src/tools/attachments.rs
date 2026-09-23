@@ -2,12 +2,21 @@
 
 use schemars::JsonSchema;
 use serde::Deserialize;
-use serde_json::json;
+use serde_json::{json, Value};
 
 use super::{to_json, tool, Context, ToolDef, ToolResult, DESTRUCTIVE, READ};
 use crate::tools::scripts::ScriptDry;
 
 const APPLY_NOTE: &str = "On macOS the change is staged in the OffShoot Helper workspace HedgeBuddy.json; the operator applies it from the OffShoot Helper menu. The Hedge app may need a restart to pick up the change (unverified).";
+
+/// Add the OffShoot Helper apply note, but only when the change was actually
+/// applied: on a dry run nothing was staged, so the note would be misleading.
+fn with_note(mut out: Value, applied: bool) -> Value {
+    if applied {
+        out["note"] = json!(APPLY_NOTE);
+    }
+    out
+}
 
 /// An app id.
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -92,10 +101,10 @@ fn attach_script(ctx: &Context, p: ScriptDry) -> ToolResult {
     let plan = ctx
         .hedge
         .attach_script(&ctx.store, &profile, &p.name, p.dry_run)?;
+    let applied = !p.dry_run;
     let mut out = to_json(&plan)?;
-    out["applied"] = json!(!p.dry_run);
-    out["note"] = json!(APPLY_NOTE);
-    Ok(out)
+    out["applied"] = json!(applied);
+    Ok(with_note(out, applied))
 }
 
 fn detach_script(ctx: &Context, p: ScriptDry) -> ToolResult {
@@ -103,28 +112,27 @@ fn detach_script(ctx: &Context, p: ScriptDry) -> ToolResult {
     let actions = ctx
         .hedge
         .detach_script(&ctx.store, &profile, &p.name, p.dry_run)?;
-    Ok(
-        json!({ "profile": profile, "script": p.name, "actions": to_json(&actions)?, "applied": !p.dry_run, "note": APPLY_NOTE }),
-    )
+    let applied = !p.dry_run;
+    let out = json!({ "profile": profile, "script": p.name, "actions": to_json(&actions)?, "applied": applied });
+    Ok(with_note(out, applied))
 }
 
 fn sync_attachments(ctx: &Context, p: ProfileDry) -> ToolResult {
     let profile = ctx.profile(p.profile.as_deref())?;
-    let mut out = to_json(
-        &ctx.hedge
-            .sync_attachments(&ctx.store, &profile, p.dry_run)?,
-    )?;
-    out["note"] = json!(APPLY_NOTE);
-    Ok(out)
+    let report = ctx
+        .hedge
+        .sync_attachments(&ctx.store, &profile, p.dry_run)?;
+    let applied = report.applied;
+    Ok(with_note(to_json(&report)?, applied))
 }
 
 fn clear_stale_attachment(ctx: &Context, p: AppEventDry) -> ToolResult {
     let actions = ctx
         .hedge
         .clear_stale_attachment(&p.app, &p.event, &ctx.store, p.dry_run)?;
-    Ok(
-        json!({ "app": p.app, "event": p.event, "actions": to_json(&actions)?, "applied": !p.dry_run }),
-    )
+    let applied = !p.dry_run;
+    let out = json!({ "app": p.app, "event": p.event, "actions": to_json(&actions)?, "applied": applied });
+    Ok(with_note(out, applied))
 }
 
 #[cfg(test)]
@@ -134,6 +142,8 @@ mod tests {
     use serde_json::json;
 
     use crate::tools::{call, test_ctx};
+
+    use super::APPLY_NOTE;
 
     const KEY: &str = "HKCU\\Software\\Hedge";
     const COPY: &str = "\"\"\"\n{\"hedgebuddy\": 1, \"app\": \"offshoot\", \"event\": \"FileCopyCompleted\"}\n---\n\"\"\"\n";
@@ -151,10 +161,13 @@ mod tests {
         .unwrap();
         assert_eq!(dry["applied"], false);
         assert_eq!(dry["event"], "FileCopyCompleted");
+        assert!(dry.get("note").is_none(), "dry run must not carry a note");
         assert!(fake
             .registry_value(KEY, "EventScriptFileCopyCompleted")
             .is_none());
-        call(&ctx, "attach_script", json!({"name": "copy.py"})).unwrap();
+        let applied = call(&ctx, "attach_script", json!({"name": "copy.py"})).unwrap();
+        assert_eq!(applied["applied"], true);
+        assert_eq!(applied["note"], APPLY_NOTE);
         assert!(fake
             .registry_value(KEY, "EventScriptFileCopyCompleted")
             .is_some());
@@ -168,7 +181,8 @@ mod tests {
             .clone();
         assert_eq!(fcc["state"], "attached");
         assert_eq!(fcc["script"], "copy.py");
-        call(&ctx, "detach_script", json!({"name": "copy.py"})).unwrap();
+        let detached = call(&ctx, "detach_script", json!({"name": "copy.py"})).unwrap();
+        assert_eq!(detached["note"], APPLY_NOTE);
         assert!(fake
             .registry_value(KEY, "EventScriptFileCopyCompleted")
             .is_none());
@@ -187,7 +201,9 @@ mod tests {
         let dry = call(&ctx, "sync_attachments", json!({"dry_run": true})).unwrap();
         assert_eq!(dry["attach"][0]["script"], "copy.py");
         assert_eq!(dry["applied"], false);
-        call(&ctx, "sync_attachments", json!({})).unwrap();
+        assert!(dry.get("note").is_none(), "dry run must not carry a note");
+        let synced = call(&ctx, "sync_attachments", json!({})).unwrap();
+        assert_eq!(synced["note"], APPLY_NOTE);
         assert!(fake
             .registry_value(KEY, "EventScriptFileCopyCompleted")
             .is_some());
@@ -197,19 +213,24 @@ mod tests {
             json!({"app": "offshoot", "event": "DiskBusy"})
         )
         .is_err());
-        call(
+        let dry_clear = call(
             &ctx,
             "clear_stale_attachment",
             json!({"app": "offshoot", "event": "DiskAdded", "dry_run": true}),
         )
         .unwrap();
+        assert!(
+            dry_clear.get("note").is_none(),
+            "dry run must not carry a note"
+        );
         assert!(fake.registry_value(KEY, "EventScriptDiskAdded").is_some());
-        call(
+        let cleared = call(
             &ctx,
             "clear_stale_attachment",
             json!({"app": "offshoot", "event": "DiskAdded"}),
         )
         .unwrap();
+        assert_eq!(cleared["note"], APPLY_NOTE);
         assert!(fake.registry_value(KEY, "EventScriptDiskAdded").is_none());
     }
 }
