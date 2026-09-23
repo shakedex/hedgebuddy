@@ -44,6 +44,13 @@ pub enum CoreError {
     /// The file watcher could not be started or could not watch the data directory.
     #[error("file watcher: {0}")]
     Watch(String),
+    /// The operation is not available on this platform, or for this app.
+    #[error("not supported: {0}")]
+    Unsupported(String),
+    /// An operating-system call (registry, app bundle, URL handler, external
+    /// program, volume list) failed.
+    #[error("host error: {0}")]
+    Host(String),
     /// The data directory's location could not be determined.
     #[error(transparent)]
     Path(#[from] crate::paths::PathError),

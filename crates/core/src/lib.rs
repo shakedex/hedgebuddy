@@ -11,6 +11,7 @@
 
 pub mod error;
 pub(crate) mod fs_util;
+pub mod host;
 pub mod manifest;
 pub mod paths;
 pub mod profile;
@@ -22,6 +23,7 @@ pub mod variable;
 pub mod watch;
 
 pub use error::{CoreError, Result};
+pub use host::{FakeHost, Host, Os, RealHost};
 pub use manifest::{
     check_requirements, extract_manifest_text, parse_manifest, Manifest, Requirement,
     RequirementIssue,
