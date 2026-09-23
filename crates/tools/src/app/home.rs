@@ -461,6 +461,12 @@ mod tests {
         )
     }
 
+    /// `home_summary`, checked against the output schema the app's types are generated from.
+    fn summary(ctx: &Context, since: Option<&str>) -> HomeSummary {
+        let s = home_summary(ctx, since, &PythonCache::default()).unwrap();
+        crate::app::checked("home_summary", s)
+    }
+
     fn kinds(s: &HomeSummary) -> Vec<String> {
         s.attention
             .iter()
@@ -476,7 +482,7 @@ mod tests {
     #[test]
     fn a_fresh_install_shows_no_profile_and_the_missing_python() {
         let (_d, _f, ctx) = test_ctx(FakeHost::new(Os::Windows));
-        let s = home_summary(&ctx, None, &PythonCache::default()).unwrap();
+        let s = summary(&ctx, None);
         assert_eq!(s.active_profile, None);
         assert!(s.profiles.is_empty());
         assert_eq!(
@@ -524,7 +530,7 @@ mod tests {
                 end("a", &ts(Span::new().minutes(-5)), "ok"),
             ],
         );
-        let s = home_summary(&ctx, None, &PythonCache::default()).unwrap();
+        let s = summary(&ctx, None);
         assert!(s.attention.is_empty(), "{:?}", s.attention);
         assert_eq!(
             (
@@ -583,7 +589,7 @@ mod tests {
         ctx.store
             .append_activity(&ActivityRecord::now("list_runs", None, ActivityOutcome::Ok))
             .unwrap();
-        let s = home_summary(&ctx, Some(&since), &PythonCache::default()).unwrap();
+        let s = summary(&ctx, Some(&since));
         assert_eq!(s.since.as_deref(), Some(since.as_str()));
         assert_eq!((s.counts.runs_since, s.counts.failed_since), (2, 1));
         assert_eq!(
@@ -633,7 +639,7 @@ mod tests {
             })
             .collect();
         write_runs(&ctx, &lines);
-        let s = home_summary(&ctx, None, &PythonCache::default()).unwrap();
+        let s = summary(&ctx, None);
         assert_eq!(
             kinds(&s),
             ["run_failed", "run_failed", "run_failed", "more_failed_runs"]
@@ -655,7 +661,7 @@ mod tests {
             Some(env!("CARGO_PKG_VERSION")),
         );
         let (_d, _f, ctx) = test_ctx(host);
-        let s = home_summary(&ctx, None, &PythonCache::default()).unwrap();
+        let s = summary(&ctx, None);
         assert_eq!(kinds(&s), ["scripting_off"]);
         assert_eq!(serde_json::to_value(&s.attention[0]).unwrap()["events"], 1);
     }
@@ -686,7 +692,7 @@ mod tests {
             Some(env!("CARGO_PKG_VERSION")),
         );
         let (_d, _f, ctx) = test_ctx(host);
-        let s = home_summary(&ctx, None, &PythonCache::default()).unwrap();
+        let s = summary(&ctx, None);
         // Both OffShoot and FoolCat are newer than tested and have scripting
         // off with something attached: every app_newer must come before
         // every scripting_off, not app-by-app (foolcat sorts before

@@ -66,6 +66,29 @@ pub fn schemas() -> Value {
     Value::Object(map)
 }
 
+/// `value`, after checking that it matches the output schema [`commands`]
+/// lists for `name` (the schema the app's TypeScript types come from).
+#[cfg(test)]
+pub(crate) fn checked<T: Serialize>(name: &str, value: T) -> T {
+    let def = commands()
+        .into_iter()
+        .find(|c| c.name == name)
+        .unwrap_or_else(|| panic!("no app command named {name}"));
+    let schema = (def.output)();
+    let validator = jsonschema::validator_for(&schema).expect("output schema compiles");
+    let json = serde_json::to_value(&value).expect("results serialize");
+    let errors: Vec<String> = validator
+        .iter_errors(&json)
+        .map(|e| format!("{} at {}", e, e.instance_path()))
+        .collect();
+    assert!(
+        errors.is_empty(),
+        "{name} result does not match its output schema: {errors:?}
+{json:#}"
+    );
+    value
+}
+
 /// How long the Python check behind `home_summary` is reused when an
 /// interpreter is found.
 pub const PYTHON_CACHE_TTL: Duration = Duration::from_secs(60);
@@ -230,8 +253,18 @@ mod tests {
             assert!(!tools.contains(c.name), "{} is also a tool", c.name);
             assert_eq!((c.input)()["type"], "object", "{}", c.name);
             assert_eq!((c.output)()["type"], "object", "{}", c.name);
+            assert!((c.output)().get("$schema").is_none(), "{}", c.name);
         }
         assert_eq!(schemas().as_object().unwrap().len(), commands().len());
+    }
+
+    #[test]
+    #[should_panic(expected = "does not match its output schema")]
+    fn the_app_output_check_rejects_a_wrong_shape() {
+        checked(
+            "preferences_get",
+            json!({"version": 1, "last_opened": 3, "editor_command": null}),
+        );
     }
 
     #[test]
@@ -285,12 +318,14 @@ mod tests {
                 .append_activity(&ActivityRecord::now(tool, None, ActivityOutcome::Ok))
                 .unwrap();
         }
-        let got = activity(&ctx, ActivityArgs { limit: Some(1) }).unwrap();
+        let got = checked(
+            "activity",
+            activity(&ctx, ActivityArgs { limit: Some(1) }).unwrap(),
+        );
         assert_eq!(got.records.len(), 1);
         assert_eq!(got.records[0].tool, "b");
         assert_eq!(
-            activity(&ctx, ActivityArgs::default())
-                .unwrap()
+            checked("activity", activity(&ctx, ActivityArgs::default()).unwrap())
                 .records
                 .len(),
             2
@@ -304,17 +339,21 @@ mod tests {
         let patch: PreferencesPatch =
             serde_json::from_str(r#"{"editor_command": "code"}"#).unwrap();
         assert_eq!(
-            preferences_set(&ctx, patch.clone())
-                .unwrap()
-                .editor_command
-                .as_deref(),
+            checked(
+                "preferences_set",
+                preferences_set(&ctx, patch.clone()).unwrap()
+            )
+            .editor_command
+            .as_deref(),
             Some("code")
         );
         assert_eq!(
-            preferences_get(&ctx, NoParams {})
-                .unwrap()
-                .editor_command
-                .as_deref(),
+            checked(
+                "preferences_get",
+                preferences_get(&ctx, NoParams {}).unwrap()
+            )
+            .editor_command
+            .as_deref(),
             Some("code")
         );
         let _held = Store::open(ctx.store.root()).lock().unwrap();

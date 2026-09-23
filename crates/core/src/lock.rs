@@ -18,6 +18,7 @@ const RETRY_EVERY: Duration = Duration::from_millis(25);
 
 /// The exclusive write lock on a data folder. Released when dropped.
 #[derive(Debug)]
+#[must_use = "the lock is released as soon as this value is dropped"]
 pub struct DataLock {
     file: File,
 }
@@ -99,7 +100,7 @@ mod tests {
         );
         assert!(waited < Duration::from_secs(3), "waited {waited:?}");
         drop(held);
-        store.lock_within(Duration::from_millis(300)).unwrap();
+        drop(store.lock_within(Duration::from_millis(300)).unwrap());
     }
 
     #[test]

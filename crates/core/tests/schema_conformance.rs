@@ -169,8 +169,8 @@ fn every_invalid_fixture_fails_its_schema() {
         }
     }
     assert!(
-        checked >= 9,
-        "expected at least 9 invalid fixtures, checked {checked}"
+        checked >= 11,
+        "expected at least 11 invalid fixtures, checked {checked}"
     );
 }
 

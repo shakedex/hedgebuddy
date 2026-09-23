@@ -47,6 +47,12 @@ fn tools_schemas_prints_input_and_output_for_every_tool() {
     assert_eq!(map.len(), hedgebuddy_tools::all().len());
     assert_eq!(map["list_runs"]["input"]["type"], "object");
     assert_eq!(map["list_runs"]["output"]["type"], "object");
+    for (name, entry) in map {
+        assert!(
+            entry["output"].get("$schema").is_none(),
+            "{name} output schema names a dialect"
+        );
+    }
 }
 
 #[test]

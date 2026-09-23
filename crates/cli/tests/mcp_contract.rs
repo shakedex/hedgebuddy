@@ -128,6 +128,11 @@ fn mcp_server_speaks_the_protocol() {
             "{} has no object outputSchema",
             t["name"]
         );
+        assert!(
+            t["outputSchema"].get("$schema").is_none(),
+            "{} outputSchema names a dialect",
+            t["name"]
+        );
     }
 
     let created = c.call_tool("create_profile", json!({"name": "p"}));

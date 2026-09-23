@@ -134,6 +134,7 @@ impl Context {
 
 /// Held while a write runs; see [`Context::write_guard`]. Fields drop in
 /// order, so the cross-process lock is released first.
+#[must_use = "the write lock is released as soon as this value is dropped"]
 pub struct WriteGuard<'a> {
     _data: DataLock,
     _process: MutexGuard<'a, ()>,
@@ -231,7 +232,9 @@ pub fn schema_of<T: JsonSchema>() -> Value {
 /// is required unless it has `skip_serializing_if`, so an `Option` that is
 /// always emitted is required and nullable. A root without `type` (an
 /// untagged union, whose variants are all objects) gets `"type": "object"`,
-/// which MCP clients expect of an output schema.
+/// which MCP clients expect of an output schema. The root `$schema` key is
+/// left out: MCP already treats 2020-12 as the default dialect, and a
+/// client's validator might not have that meta-schema to load.
 pub fn output_schema_of<T: JsonSchema>() -> Value {
     let schema = SchemaSettings::draft2020_12()
         .for_serialize()
@@ -239,6 +242,7 @@ pub fn output_schema_of<T: JsonSchema>() -> Value {
         .into_root_schema_for::<T>();
     let mut schema = serde_json::to_value(schema).expect("schemas serialize");
     if let Some(map) = schema.as_object_mut() {
+        map.remove("$schema");
         map.entry("type").or_insert_with(|| json!("object"));
     }
     schema
@@ -366,6 +370,11 @@ mod tests {
             let output = (t.output_schema)();
             assert_eq!(input["type"], "object", "{} input: {input}", t.name);
             assert_eq!(output["type"], "object", "{} output: {output}", t.name);
+            assert!(
+                output.get("$schema").is_none(),
+                "{} output schema names a dialect: {output}",
+                t.name
+            );
             jsonschema::validator_for(&output)
                 .unwrap_or_else(|e| panic!("{} output schema does not compile: {e}", t.name));
         }
