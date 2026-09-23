@@ -65,6 +65,18 @@ def test_write_failures_warn_once_and_never_raise(tmp_path, capsys):
     assert capsys.readouterr().err.count("cannot write the run record") == 1
 
 
+def test_non_serializable_end_warns_once_and_never_raises(hb_root, capsys):
+    run = RunLog(hb_root)
+    run.end("ok", 0, traceback=object())  # not JSON-serializable
+    assert capsys.readouterr().err.count("cannot write the run record") == 1
+
+
+def test_run_log_log_coerces_message_to_str(hb_root):
+    run = RunLog(hb_root)
+    run.log(42)
+    assert run_lines(hb_root)[-1]["message"] == "42"
+
+
 def test_log_prints_when_no_run_is_open(capsys):
     hb.log("hello")
     assert capsys.readouterr().out == "hello\n"

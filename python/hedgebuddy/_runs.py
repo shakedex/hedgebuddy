@@ -53,8 +53,8 @@ class RunLog:
         record["profile"] = profile
         self._write(record)
 
-    def log(self, message: str) -> None:
-        self._write({"ts": utc_timestamp(), "run_id": self.run_id, "phase": "log", "message": message})
+    def log(self, message: Any) -> None:
+        self._write({"ts": utc_timestamp(), "run_id": self.run_id, "phase": "log", "message": str(message)})
 
     def end(self, status: str, exit_code: int, traceback: Optional[str] = None) -> None:
         record: Dict[str, Any] = {
@@ -71,14 +71,14 @@ class RunLog:
     def _write(self, record: Dict[str, Any]) -> None:
         if self._failed:
             return
-        line = (json.dumps(record, ensure_ascii=True) + "\n").encode("ascii")
         try:
+            line = (json.dumps(record, ensure_ascii=True) + "\n").encode("ascii")
             self.path.parent.mkdir(parents=True, exist_ok=True)
             with open(self.path, "ab") as f:
                 with locked(f):
                     f.write(line)
                     f.flush()
-        except OSError as e:
+        except (OSError, TypeError, ValueError) as e:
             self._failed = True
             print(f"hedgebuddy: cannot write the run record to {self.path}: {e}", file=sys.stderr)
 
