@@ -6,6 +6,7 @@
 use std::sync::{Arc, Mutex};
 
 use hedgebuddy_core::{Catalog, CoreError, Hedge, Host, RealHost, Store};
+use schemars::generate::SchemaSettings;
 use schemars::JsonSchema;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -152,13 +153,17 @@ pub const DESTRUCTIVE: Hints = Hints {
 
 /// One tool.
 pub struct ToolDef {
+    /// The tool's name, e.g. `list_profiles`.
     pub name: &'static str,
+    /// What the tool does, as MCP clients show it.
     pub description: &'static str,
+    /// MCP behaviour hints; [`call`] serializes tools that are not read-only.
     pub hints: Hints,
     /// JSON Schema of the arguments.
     pub schema: fn() -> Value,
     /// JSON Schema of the result.
     pub output_schema: fn() -> Value,
+    /// Parse the JSON arguments, run the tool, and serialize its result.
     pub run: fn(&Context, Value) -> ToolResult,
 }
 
@@ -173,11 +178,17 @@ pub fn schema_of<T: JsonSchema>() -> Value {
     serde_json::to_value(schemars::schema_for!(T)).expect("schemas serialize")
 }
 
-/// The JSON Schema of a result type. A root without `type` (an untagged
-/// union, whose variants are all objects) gets `"type": "object"`, which
-/// MCP clients expect of an output schema.
+/// The JSON Schema of a result type, describing how it serializes: a field
+/// is required unless it has `skip_serializing_if`, so an `Option` that is
+/// always emitted is required and nullable. A root without `type` (an
+/// untagged union, whose variants are all objects) gets `"type": "object"`,
+/// which MCP clients expect of an output schema.
 pub fn output_schema_of<T: JsonSchema>() -> Value {
-    let mut schema = schema_of::<T>();
+    let schema = SchemaSettings::draft2020_12()
+        .for_serialize()
+        .into_generator()
+        .into_root_schema_for::<T>();
+    let mut schema = serde_json::to_value(schema).expect("schemas serialize");
     if let Some(map) = schema.as_object_mut() {
         map.entry("type").or_insert_with(|| json!("object"));
     }
@@ -310,6 +321,27 @@ mod tests {
             .unwrap();
         assert!(output_errors(&def, &json!({"active": null, "profiles": []})).is_empty());
         assert!(!output_errors(&def, &json!({"active": null, "profiles": 3})).is_empty());
+    }
+
+    #[test]
+    fn output_schemas_require_every_field_that_is_always_emitted() {
+        let output = |name: &str| {
+            let def = all().into_iter().find(|t| t.name == name).unwrap();
+            (def.output_schema)()
+        };
+        let list_profiles = output("list_profiles");
+        let required = list_profiles["required"].as_array().unwrap();
+        assert!(
+            required.contains(&json!("active")),
+            "an Option that is always emitted (as null) is required: {list_profiles}"
+        );
+        let attach = output("attach_script");
+        let required = attach["required"].as_array().unwrap();
+        assert!(required.contains(&json!("applied")), "{attach}");
+        assert!(
+            !required.contains(&json!("note")),
+            "a skip_serializing_if field is optional: {attach}"
+        );
     }
 
     #[test]

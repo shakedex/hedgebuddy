@@ -142,7 +142,7 @@ pub struct ReadAppLogResult {
     /// Catalog app id.
     pub app: String,
     /// "callback" or "event".
-    pub log: String,
+    pub log: LogKind,
     /// The last lines, oldest first.
     pub lines: Vec<String>,
 }
@@ -304,7 +304,7 @@ fn read_app_log(ctx: &Context, p: ReadLog) -> Result<ReadAppLogResult, ToolError
         .read_app_log(&p.app, kind, p.lines.unwrap_or(50).min(500))?;
     Ok(ReadAppLogResult {
         app: p.app,
-        log: p.log,
+        log: kind,
         lines,
     })
 }

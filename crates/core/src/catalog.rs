@@ -28,6 +28,7 @@ const LICENSE_COMMANDS: [&str; 3] = ["activate", "deactivate", "update"];
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[serde(bound(deserialize = "T: Deserialize<'de>"))]
+#[schemars(rename = "PerOs_{T}")]
 pub struct PerOs<T> {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub windows: Option<T>,

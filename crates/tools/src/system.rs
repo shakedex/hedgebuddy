@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use hedgebuddy_core::host::VolumeInfo;
 use hedgebuddy_core::python_env::PythonInfo;
 use hedgebuddy_core::volumes::VolumeReport;
-use hedgebuddy_core::{python_env, volumes, Run, RunFilter};
+use hedgebuddy_core::{python_env, volumes, Os, Run, RunFilter};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -96,7 +96,7 @@ pub struct EnvironmentResult {
     /// HedgeBuddy's version.
     pub version: String,
     /// "windows" or "macos".
-    pub os: String,
+    pub os: Os,
     /// The data folder.
     pub data_dir: PathBuf,
     /// The active profile.
@@ -217,7 +217,7 @@ fn environment(ctx: &Context, _: NoParams) -> Result<EnvironmentResult, ToolErro
         .collect();
     Ok(EnvironmentResult {
         version: env!("CARGO_PKG_VERSION").to_owned(),
-        os: host.os().as_str().to_owned(),
+        os: host.os(),
         data_dir: ctx.store.root().to_path_buf(),
         active_profile: ctx.store.active_profile_name()?,
         catalog: CatalogState {

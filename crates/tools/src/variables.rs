@@ -98,7 +98,7 @@ pub struct VarView {
     /// The value; `********` for a secret unless revealed; null when not set.
     #[schemars(with = "Option<VarValueShape>")]
     pub value: Option<Value>,
-    /// True when the variable has no value (a secret with nothing stored).
+    /// True when the variable has no value (for example a secret with nothing stored).
     pub missing: bool,
 }
 
