@@ -1,5 +1,6 @@
 """Check python/dist after `uv build`: one wheel and one sdist of the current
-version, the wheel holding exactly the package files and no dependencies."""
+version, the wheel holding exactly the package files and no dependencies, and
+both carrying LICENSE with no license classifier (PEP 639)."""
 
 import re
 import sys
@@ -48,9 +49,18 @@ def main() -> int:
             problems.append("wheel metadata lacks Requires-Python: >=3.9")
         if "Requires-Dist:" in metadata:
             problems.append("wheel declares dependencies; the package must have none")
+        # PEP 639: PyPI rejects License-Expression together with a license classifier.
+        classifiers = [line for line in metadata.splitlines() if line.startswith("Classifier: License ::")]
+        if classifiers:
+            problems.append(f"wheel metadata has license classifiers beside License-Expression: {classifiers}")
+        if dist_info + "licenses/LICENSE" not in names:
+            problems.append(f"wheel lacks {dist_info}licenses/LICENSE")
     with tarfile.open(sdists[0]) as sdist:
-        if f"hedgebuddy-{version}/pyproject.toml" not in sdist.getnames():
+        sdist_names = sdist.getnames()
+        if f"hedgebuddy-{version}/pyproject.toml" not in sdist_names:
             problems.append("sdist lacks pyproject.toml")
+        if f"hedgebuddy-{version}/LICENSE" not in sdist_names:
+            problems.append("sdist lacks LICENSE")
     for problem in problems:
         print(problem)
     if not problems:
