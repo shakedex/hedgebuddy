@@ -10,6 +10,7 @@ from ._errors import (
     VariableTypeError,
 )
 from ._event import Event
+from ._runs import log
 from ._vars import Vars
 
 __version__ = "0.11.0"
@@ -27,5 +28,6 @@ __all__ = [
     "all_vars",
     "exists",
     "inject_env",
+    "log",
     "var",
 ]
