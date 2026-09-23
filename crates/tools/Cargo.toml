@@ -8,11 +8,11 @@ description = "HedgeBuddy's tools, MCP resources and prompt, shared by the CLI a
 
 [dependencies]
 hedgebuddy-core = { workspace = true }
+jiff = "0.2"
 schemars = "1"
 serde = { workspace = true }
 serde_json = { workspace = true }
 
 [dev-dependencies]
-jiff = "0.2"
 jsonschema = "0.56"
 tempfile = "3"
