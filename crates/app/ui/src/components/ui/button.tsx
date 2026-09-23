@@ -28,7 +28,10 @@ const buttonVariants = cva(
         icon: "size-7 [&_svg:not([class*='size-'])]:size-4",
       },
     },
-    compoundVariants: [{ variant: "link", className: "h-auto px-0 has-[>svg]:px-0" }],
+    // A link-style button keeps its text height; an invisible ::after makes the hit area 30 px tall.
+    compoundVariants: [
+      { variant: "link", className: "relative h-auto px-0 has-[>svg]:px-0 after:absolute after:-inset-x-1 after:-inset-y-1.5" },
+    ],
     defaultVariants: {
       variant: "default",
       size: "default",

@@ -2,9 +2,10 @@ import { CircleCheck, CircleX, Info, LoaderCircle, TriangleAlert } from "lucide-
 import { Toaster as Sonner, type ToasterProps } from "sonner"
 
 /*
- * Toasts are `surface` panels. Sonner's own look is unlayered CSS (it would win over Tailwind's layers and
- * add a drop shadow), so the toasts are `unstyled` and every part is styled here. An error keeps only its
- * red icon; the text stays neutral (spec §2.7: colour marks the problem, not the whole toast).
+ * Toasts are floating layers: card surface, strong hairline, the one soft `shadow-float`. Sonner's own look
+ * is unlayered CSS (it would win over Tailwind's layers), so the toasts are `unstyled` and every part is
+ * styled here. An error keeps only its red icon; the text stays neutral (spec §2.7: colour marks the
+ * problem, not the whole toast).
  */
 const Toaster = ({ ...props }: ToasterProps) => {
   return (
@@ -33,9 +34,9 @@ const Toaster = ({ ...props }: ToasterProps) => {
         unstyled: true,
         classNames: {
           toast:
-            "surface flex w-(--width) items-start gap-2.5 p-3 font-sans text-sm text-foreground focus-visible:outline-2! focus-visible:outline-offset-2! focus-visible:outline-primary!",
-          icon: "mt-px flex size-4 shrink-0 items-center",
-          content: "flex min-w-0 flex-1 flex-col gap-0.5",
+            "flex w-(--width) items-start gap-2 rounded-lg border border-border-strong bg-popover p-3 font-sans shadow-float text-sm text-foreground focus-visible:outline-2! focus-visible:outline-offset-2! focus-visible:outline-primary!",
+          icon: "flex h-lh shrink-0 items-center",
+          content: "flex min-w-0 flex-1 flex-col",
           title: "font-medium text-foreground-strong",
           // `!`: Sonner colours dark-theme descriptions with an unlayered rule that `unstyled` does not remove.
           description: "text-muted-foreground!",

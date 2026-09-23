@@ -1,5 +1,6 @@
 import { cn } from "@/lib/utils";
 
+/** A titled surface. The body has a 4 px inset; rows inside use `px-2`, so their content lines up with the title at 12 px. */
 export function Panel({ title, action, children, className, bodyClassName, style }: {
   title?: React.ReactNode; action?: React.ReactNode; children: React.ReactNode;
   className?: string; bodyClassName?: string; style?: React.CSSProperties;
@@ -12,7 +13,7 @@ export function Panel({ title, action, children, className, bodyClassName, style
           {action}
         </header>
       )}
-      <div className={cn("min-h-0 px-1.5 pb-1.5", !title && "pt-1.5", bodyClassName)}>{children}</div>
+      <div className={cn("min-h-0 px-1 pb-1", !title && "pt-1", bodyClassName)}>{children}</div>
     </section>
   );
 }

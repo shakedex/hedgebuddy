@@ -64,6 +64,9 @@ function at(h: number, m: number, s = 0, daysAgo = 0): Date {
 }
 const iso = (d: Date, plusMs = 0) => new Date(d.getTime() + plusMs).toISOString();
 
+/** The one selection treatment: accent fill plus a 2 px primary bar at the left edge. Needs `relative`. */
+const SELECTED = "bg-accent text-foreground-strong before:absolute before:inset-y-2 before:left-0 before:w-0.5 before:rounded-full before:bg-primary";
+
 type FakeRun = {
   id: string; script: string; app: string; event: string; status: RunStatus | null;
   started: string; ended: string | null; exit: number | null; log: string[]; traceback?: string[];
@@ -149,12 +152,12 @@ function Section({ index, title, note, children }: { index: number; title: strin
   return (
     <section className="animate-rise flex flex-col gap-3" style={{ animationDelay: `${(index - 1) * 40}ms` }}>
       <div className="flex flex-col gap-1">
-        <div className="flex items-center gap-2.5">
-          <span className="readout font-mono text-xs text-muted-foreground">{String(index).padStart(2, "0")}</span>
+        <div className="flex items-center gap-2">
+          <span className="w-6 shrink-0 font-mono text-xs text-muted-foreground">{String(index).padStart(2, "0")}</span>
           <h2 className="text-sm font-semibold text-foreground-strong">{title}</h2>
           <div aria-hidden className="h-px flex-1 bg-border" />
         </div>
-        <p className="max-w-[72ch] pl-[26px] text-sm text-muted-foreground">{note}</p>
+        <p className="max-w-[72ch] pl-8 text-sm text-muted-foreground">{note}</p>
       </div>
       {children}
     </section>
@@ -172,10 +175,10 @@ function Colours() {
   return (
     <div className="flex flex-col gap-4">
       {TOKEN_GROUPS.map((group) => (
-        <div key={group.name} className="grid grid-cols-[120px_1fr] gap-3 max-[640px]:grid-cols-1 max-[640px]:gap-1.5">
+        <div key={group.name} className="grid grid-cols-[120px_1fr] gap-3 max-[640px]:grid-cols-1 max-[640px]:gap-2">
           <div className="pt-1">
             <div className="micro-label">{group.name}</div>
-            <p className="mt-0.5 text-xs text-muted-foreground/80">{group.note}</p>
+            <p className="mt-1 text-xs text-muted-foreground">{group.note}</p>
           </div>
           <div className="grid grid-cols-[repeat(auto-fill,minmax(204px,1fr))] gap-2">
             {group.tokens.map((t) => (
@@ -184,15 +187,15 @@ function Colours() {
           </div>
         </div>
       ))}
-      <div className="grid grid-cols-[120px_1fr] gap-3 max-[640px]:grid-cols-1 max-[640px]:gap-1.5">
+      <div className="grid grid-cols-[120px_1fr] gap-3 max-[640px]:grid-cols-1 max-[640px]:gap-2">
         <div className="pt-1">
           <div className="micro-label">Brand</div>
-          <p className="mt-0.5 text-xs text-muted-foreground/80">The logo mark only.</p>
+          <p className="mt-1 text-xs text-muted-foreground">The logo mark only.</p>
         </div>
-        <div className="surface flex h-[58px] w-fit items-center gap-3 px-3">
+        <div className="surface flex w-fit items-center gap-3 p-3">
           <div aria-hidden className="size-5 rounded-[5px]" style={{ background: "linear-gradient(135deg, var(--brand-from), var(--brand-to))" }} />
           <span className="text-sm font-semibold text-foreground-strong">HedgeBuddy</span>
-          <span className="readout font-mono text-xs text-muted-foreground">
+          <span className="font-mono text-xs text-muted-foreground">
             {values["brand-from"]} → {values["brand-to"]}
           </span>
         </div>
@@ -203,11 +206,11 @@ function Colours() {
 
 function Swatch({ name, value }: { name: string; value: string }) {
   return (
-    <div className="surface flex items-center gap-2.5 p-1.5 pr-2.5">
+    <div className="surface flex items-center gap-3 p-2 pr-3">
       <div aria-hidden className="size-10 shrink-0 rounded-md border border-white/[0.06]" style={{ background: `var(--${name})` }} />
       <div className="min-w-0">
         <div className="truncate font-mono text-xs text-foreground-strong">{name}</div>
-        <div className="readout font-mono text-xs text-muted-foreground uppercase">{value}</div>
+        <div className="font-mono text-xs text-muted-foreground uppercase">{value}</div>
       </div>
     </div>
   );
@@ -220,7 +223,7 @@ function TypeScale() {
     <div className="flex flex-col gap-3">
       <div className="surface divide-y divide-border">
         {TYPE_STEPS.map((step) => (
-          <div key={step.name} className="grid grid-cols-[112px_minmax(0,1fr)_minmax(0,1fr)] items-baseline gap-3 px-3 py-2.5 max-[640px]:grid-cols-[88px_minmax(0,1fr)]">
+          <div key={step.name} className="grid grid-cols-[112px_minmax(0,1fr)_minmax(0,1fr)] items-baseline gap-3 p-3 max-[640px]:grid-cols-[88px_minmax(0,1fr)]">
             <div className="flex items-baseline gap-2">
               <span className="font-mono text-xs text-foreground-strong">{step.name}</span>
               <span className="readout text-xs text-muted-foreground">{step.spec}</span>
@@ -228,14 +231,14 @@ function TypeScale() {
             <span className={cn(step.cls, "truncate text-foreground", step.name === "stat" && "readout font-semibold tracking-tight text-foreground-strong", step.name === "lg" && "font-semibold text-foreground-strong")}>
               {step.sample}
             </span>
-            <span className={cn(step.cls, "truncate font-mono text-foreground-strong max-[640px]:col-start-2", step.name === "stat" && "readout")}>{step.mono}</span>
+            <span className={cn(step.cls, "truncate font-mono text-foreground-strong max-[640px]:col-start-2")}>{step.mono}</span>
           </div>
         ))}
       </div>
       <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-2">
-        <div className="surface px-3 py-2.5">
+        <div className="surface p-3">
           <div className="micro-label">Tabular figures</div>
-          <div className="readout mt-1.5 font-mono text-base text-foreground-strong">
+          <div className="mt-2 font-mono text-base text-foreground-strong">
             <div>11:11:11 · 1.1 s</div>
             <div>08:40:59 · 0.3 s</div>
           </div>
@@ -244,16 +247,21 @@ function TypeScale() {
             <div>08:40:59 · 8 408</div>
           </div>
         </div>
-        <div className="surface px-3 py-2.5">
+        <div className="surface p-3">
           <div className="micro-label">Unambiguous names</div>
-          <div className="mt-1.5 text-lg text-foreground-strong">Il1 · CLIENT_ID · lil</div>
-          <div className="mt-0.5 text-xs text-muted-foreground">cv05 tails the l, cv08 serifs the I</div>
+          <div className="mt-2 text-lg text-foreground-strong">Il1 · CLIENT_ID · lil</div>
+          <div className="mt-1 text-xs text-muted-foreground">cv05 tails the l, cv08 serifs the I</div>
         </div>
-        <div className="surface px-3 py-2.5">
+        <div className="surface p-3">
           <div className="micro-label">Inline names</div>
-          <p className="mt-1.5 text-base text-foreground">
+          <p className="mt-2 text-base text-foreground">
             <Mono>CLIENT_EMAIL</Mono> is needed by <Mono>on_copy_complete.py</Mono> but not set.
           </p>
+        </div>
+        <div className="surface p-3">
+          <div className="micro-label">Mono, no ligatures</div>
+          <div className="mt-2 font-mono text-base text-foreground-strong">{"a -> b != c // d :: e"}</div>
+          <div className="mt-1 text-xs text-muted-foreground">calt is off, so paths and code read as typed</div>
         </div>
       </div>
     </div>
@@ -265,11 +273,11 @@ function TypeScale() {
 function StatusTable() {
   const keys = Object.keys(STATUS) as StatusKey[];
   return (
-    <div className="surface grid grid-cols-[repeat(auto-fill,minmax(236px,1fr))] gap-x-2 p-1.5">
+    <div className="surface grid grid-cols-[repeat(auto-fill,minmax(236px,1fr))] gap-x-2 p-1">
       {keys.map((key) => (
-        <div key={key} className="flex h-8 items-center justify-between gap-2 rounded-md px-1.5">
+        <div key={key} className="flex h-8 items-center justify-between gap-2 rounded-md px-2">
           <StatusIcon status={key} label />
-          <span className="truncate font-mono text-xs text-muted-foreground/70">{key}</span>
+          <span className="truncate font-mono text-xs text-muted-foreground">{key}</span>
         </div>
       ))}
     </div>
@@ -292,8 +300,8 @@ function Navigation() {
   const [active, setActive] = useState<keyof typeof NAV_ICONS>("home");
   return (
     <div className="flex flex-wrap items-start gap-3">
-      <nav aria-label="Navigation, labelled" className="w-[200px] rounded-lg border border-border bg-sidebar p-1.5">
-        <div className="mb-1.5 flex items-center gap-2 px-2 py-1.5">
+      <nav aria-label="Navigation, labelled" className="w-[200px] rounded-lg border border-border bg-sidebar p-2">
+        <div className="mb-1 flex items-center gap-2 px-2 py-2">
           <div aria-hidden className="size-4 rounded-[4px]" style={{ background: "linear-gradient(135deg, var(--brand-from), var(--brand-to))" }} />
           <span className="text-sm font-semibold text-foreground-strong">HedgeBuddy</span>
         </div>
@@ -306,19 +314,19 @@ function Navigation() {
               onClick={() => setActive(key)}
               aria-current={on ? "page" : undefined}
               className={cn(
-                "relative flex h-8 w-full items-center gap-2.5 rounded-md px-2 text-sm transition-colors duration-120",
-                on ? "bg-accent text-foreground-strong before:absolute before:inset-y-2 before:left-0 before:w-0.5 before:rounded-full before:bg-primary" : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
+                "relative flex h-8 w-full items-center gap-2 rounded-md px-2 text-sm transition-colors duration-120",
+                on ? SELECTED : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
               )}
             >
               <Icon aria-hidden className="size-4" strokeWidth={1.75} />
               <span className="flex-1 text-left">{label}</span>
-              {count && tone && <CountBadge count={count} tone={tone} />}
+              {tone && <CountBadge count={count ?? 0} tone={tone} />}
             </button>
           );
         })}
       </nav>
-      <nav aria-label="Navigation, icon rail" className="flex w-12 flex-col items-center gap-1 rounded-lg border border-border bg-sidebar py-1.5">
-        <div aria-hidden className="my-1.5 size-4 rounded-[4px]" style={{ background: "linear-gradient(135deg, var(--brand-from), var(--brand-to))" }} />
+      <nav aria-label="Navigation, icon rail" className="flex w-12 flex-col items-center gap-1 rounded-lg border border-border bg-sidebar py-2">
+        <div aria-hidden className="my-2 size-4 rounded-[4px]" style={{ background: "linear-gradient(135deg, var(--brand-from), var(--brand-to))" }} />
         {NAV.map(({ key, label, count, tone }) => {
           const Icon = NAV_ICONS[key];
           const on = active === key;
@@ -331,11 +339,11 @@ function Navigation() {
                   aria-current={on ? "page" : undefined}
                   className={cn(
                     "relative grid size-8 place-items-center rounded-md transition-colors duration-120",
-                    on ? "bg-accent text-foreground-strong" : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
+                    on ? SELECTED : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
                   )}
                 >
                   <Icon aria-hidden className="size-4" strokeWidth={1.75} />
-                  {count && tone && <CountBadge count={count} tone={tone} variant="rail" className="absolute -top-0.5 -right-1" />}
+                  {tone && <CountBadge count={count ?? 0} tone={tone} variant="rail" className="absolute -top-1 -right-1" />}
                 </button>
               </TooltipTrigger>
               <TooltipContent side="right">{label}</TooltipContent>
@@ -390,7 +398,7 @@ function Readouts() {
 function Panels() {
   const [selected, setSelected] = useState("r1");
   return (
-    <div className="grid grid-cols-[1.25fr_1fr] gap-2.5 max-[640px]:grid-cols-1">
+    <div className="grid grid-cols-[1.25fr_1fr] gap-3 max-[640px]:grid-cols-1">
       <Panel title="Needs attention">
         <AttentionRow status="runFailed">
           <Mono>on_copy_complete.py</Mono> failed at <span className="readout">{when(RUNS[0].started)}</span>
@@ -406,10 +414,10 @@ function Panels() {
           <button
             key={run.id}
             onClick={() => setSelected(run.id)}
-            aria-pressed={selected === run.id}
+            aria-current={selected === run.id ? "true" : undefined}
             className={cn(
-              "flex h-8 w-full items-center gap-2.5 rounded-md px-1.5 text-left text-sm transition-colors duration-120",
-              selected === run.id ? "bg-accent" : "hover:bg-accent/50",
+              "relative flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-sm transition-colors duration-120",
+              selected === run.id ? SELECTED : "hover:bg-accent/50",
             )}
           >
             <StatusIcon status={runStatusKey(run.status)} />
@@ -428,7 +436,7 @@ function AttentionRow({ status, children }: { status: StatusKey; children: React
     <a
       href="#/_design"
       onClick={(e) => e.preventDefault()}
-      className="group flex min-h-8 items-center gap-2.5 rounded-md px-1.5 py-1.5 text-sm text-foreground transition-colors duration-120 hover:bg-accent/50"
+      className="group flex min-h-8 items-center gap-2 rounded-md px-2 py-2 text-sm text-foreground transition-colors duration-120 hover:bg-accent/50"
     >
       <StatusIcon status={status} />
       <span className="min-w-0 flex-1">{children}</span>
@@ -442,11 +450,11 @@ function AttentionRow({ status, children }: { status: StatusKey; children: React
 function States() {
   const retry = () => toast("Retrying", { description: "The preview has nothing to retry." });
   return (
-    <div className="grid grid-cols-2 gap-2.5 max-[640px]:grid-cols-1">
+    <div className="grid grid-cols-2 gap-3 max-[640px]:grid-cols-1">
       <Panel title="Loading">
-        <div className="flex flex-col gap-1 px-1.5 pb-1.5" aria-busy aria-label="Loading runs">
+        <div className="flex flex-col px-2" aria-busy aria-label="Loading runs">
           {[62, 48, 71].map((w) => (
-            <div key={w} className="flex h-8 items-center gap-2.5">
+            <div key={w} className="flex h-8 items-center gap-2">
               <Skeleton className="size-3.5 rounded-full" />
               <Skeleton className="h-3 rounded-sm" style={{ width: `${w}%` }} />
               <Skeleton className="ml-auto h-3 w-9 rounded-sm" />
@@ -455,13 +463,13 @@ function States() {
         </div>
       </Panel>
       <Panel title="Empty">
-        <EmptyState icon={History} title="No runs yet" className="px-1.5 py-3" action={<Button variant="outline" size="sm"><FileCode aria-hidden /> Open Scripts</Button>}>
+        <EmptyState icon={History} title="No runs yet" className="px-2 py-3" action={<Button variant="outline" size="sm"><FileCode aria-hidden /> Open Scripts</Button>}>
           Runs show here after an attached script runs. Attach one on the Scripts screen.
         </EmptyState>
       </Panel>
       <ErrorPanel error={new BridgeError("error", "cannot read hedgebuddy.json: invalid JSON at line 1")} onRetry={retry} />
       <ErrorPanel error={new BridgeError("busy", "another HedgeBuddy is busy; try again")} onRetry={retry} />
-      <div className="surface col-span-full flex flex-wrap items-center gap-2 px-3 py-2.5">
+      <div className="surface col-span-full flex flex-wrap items-center gap-2 px-3 py-2">
         <span className="micro-label mr-1">Toasts</span>
         <Button variant="outline" size="sm" onClick={() => toast.success("Saved CLIENT_EMAIL")}>Saved</Button>
         <Button variant="outline" size="sm" onClick={() => toast.error("Couldn't detach on_copy_complete.py", { description: "The OffShoot Helper workspace is read-only." })}>
@@ -493,17 +501,17 @@ function Buttons() {
         <thead>
           <tr className="border-b border-border">
             {["variant", "default", "sm", "icon", "disabled"].map((h) => (
-              <th key={h} scope="col" className="micro-label px-3 py-2 font-normal max-[560px]:px-1.5">{h}</th>
+              <th key={h} scope="col" className="micro-label px-3 py-2 font-normal max-[560px]:px-1">{h}</th>
             ))}
           </tr>
         </thead>
         <tbody>
           {VARIANTS.map((v) => (
             <tr key={v} className="border-b border-border last:border-0">
-              <th scope="row" className="px-3 py-2 font-mono text-xs font-normal text-muted-foreground max-[560px]:px-1.5">{v}</th>
-              <td className="px-3 py-2 max-[560px]:px-1.5"><Button variant={v}>{v === "destructive" && <Trash2 aria-hidden />}{LABELS[v]}</Button></td>
-              <td className="px-3 py-2 max-[560px]:px-1.5"><Button variant={v} size="sm">{LABELS[v]}</Button></td>
-              <td className="px-3 py-2 max-[560px]:px-1.5">
+              <th scope="row" className="px-3 py-2 font-mono text-xs font-normal text-muted-foreground max-[560px]:px-1">{v}</th>
+              <td className="px-3 py-2 max-[560px]:px-1"><Button variant={v}>{v === "destructive" && <Trash2 aria-hidden />}{LABELS[v]}</Button></td>
+              <td className="px-3 py-2 max-[560px]:px-1"><Button variant={v} size="sm">{LABELS[v]}</Button></td>
+              <td className="px-3 py-2 max-[560px]:px-1">
                 {v !== "link" && (
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -515,7 +523,7 @@ function Buttons() {
                   </Tooltip>
                 )}
               </td>
-              <td className="px-3 py-2 max-[560px]:px-1.5"><Button variant={v} size="sm" disabled>{LABELS[v]}</Button></td>
+              <td className="px-3 py-2 max-[560px]:px-1"><Button variant={v} size="sm" disabled>{LABELS[v]}</Button></td>
             </tr>
           ))}
         </tbody>
@@ -531,18 +539,18 @@ function Controls() {
   const [filter, setFilter] = useState("all");
   const [unfinished, setUnfinished] = useState(true);
   return (
-    <div className="grid grid-cols-2 gap-2.5 max-[640px]:grid-cols-1">
+    <div className="grid grid-cols-2 gap-3 max-[640px]:grid-cols-1">
       <div className="surface flex flex-col gap-3 p-3">
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-2">
           <Label htmlFor="g-filter">Filter</Label>
           <Input id="g-filter" placeholder="Filter variables" />
         </div>
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-2">
           <Label htmlFor="g-webhook" className="font-mono text-xs text-foreground-strong">SLACK_WEBHOOK</Label>
           <Input id="g-webhook" className="font-mono" defaultValue="hooks.slack.com/services/T0" aria-invalid aria-describedby="g-webhook-error" />
           <p id="g-webhook-error" className="text-xs text-destructive">Must start with http:// or https://</p>
         </div>
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-2">
           <Label htmlFor="g-disabled">Data folder</Label>
           <Input id="g-disabled" className="font-mono" defaultValue="~/Library/Application Support/HedgeBuddy" disabled />
         </div>
@@ -586,7 +594,7 @@ function Controls() {
           <span className="text-sm font-medium text-foreground">Change preview</span>
           <DetachDialog />
         </div>
-        <div className="flex flex-wrap items-center gap-1.5 pt-1">
+        <div className="flex flex-wrap items-center gap-2 pt-1">
           <Badge>OffShoot · FileCopyCompleted</Badge>
           <Badge variant="outline">no manifest</Badge>
           <Badge variant="link">required by on_copy_complete.py</Badge>
@@ -609,7 +617,7 @@ function DetachDialog() {
           <DialogTitle>Detach <Mono>on_copy_complete.py</Mono>?</DialogTitle>
           <DialogDescription>HedgeBuddy will make these changes in OffShoot for the profile <Mono className="text-foreground">commercial-one-day</Mono>.</DialogDescription>
         </DialogHeader>
-        <ul className="well flex flex-col gap-1 px-2.5 py-2 font-mono text-xs text-foreground">
+        <ul className="well flex flex-col gap-1 px-3 py-2 font-mono text-xs text-foreground">
           <li>FileCopyCompleted: on_copy_complete.py → nothing attached</li>
           <li className="text-muted-foreground">The script file stays in your scripts folder.</li>
         </ul>
@@ -632,6 +640,8 @@ function ListDetailDemo() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const run = RUNS.find((r) => r.id === selectedId) ?? null;
   const days = [...new Set(RUNS.map((r) => dayKey(r.started)))];
+  // Roving tab stop: the list is one stop in the Tab order (the selected row, else the first); arrows move within it.
+  const tabStop = selectedId ?? RUNS[0].id;
 
   const onListKey = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
@@ -652,12 +662,12 @@ function ListDetailDemo() {
         onBack={() => setSelectedId(null)}
         backLabel="Runs"
         list={
-          <div className="min-h-0 flex-1 overflow-y-auto p-1.5" onKeyDown={onListKey}>
+          <div className="min-h-0 flex-1 overflow-y-auto p-1" onKeyDown={onListKey}>
             {days.map((day) => {
               const runs = RUNS.filter((r) => dayKey(r.started) === day);
               return (
                 <div key={day} className="mb-1">
-                  <div className="micro-label px-1.5 pt-1.5 pb-1">
+                  <div className="micro-label px-2 pt-2 pb-1">
                     {dayLabel(day)} · <span className="readout">{runs.length}</span> {plural(runs.length, "run")}
                   </div>
                   {runs.map((r) => {
@@ -667,19 +677,20 @@ function ListDetailDemo() {
                       <button
                         key={r.id}
                         data-run={r.id}
+                        tabIndex={r.id === tabStop ? 0 : -1}
                         onClick={() => setSelectedId(r.id)}
                         aria-current={on ? "true" : undefined}
                         className={cn(
-                          "relative flex h-11 w-full flex-col justify-center gap-0.5 rounded-md px-2 text-left transition-colors duration-120",
-                          on ? "bg-accent before:absolute before:inset-y-2 before:left-0 before:w-0.5 before:rounded-full before:bg-primary" : "hover:bg-accent/50",
+                          "relative grid h-11 w-full grid-cols-[auto_minmax(0,1fr)] content-center items-center gap-x-2 rounded-md px-2 text-left transition-colors duration-120",
+                          on ? SELECTED : "hover:bg-accent/50",
                         )}
                       >
-                        <span className="flex w-full items-center gap-2">
-                          <StatusIcon status={runStatusKey(r.status)} />
+                        <StatusIcon status={runStatusKey(r.status)} />
+                        <span className="flex min-w-0 items-center gap-2">
                           <Mono className="min-w-0 flex-1 truncate text-sm">{r.script}</Mono>
                           <span className="readout text-xs text-muted-foreground">{clock(r.started)}</span>
                         </span>
-                        <span className="readout truncate pl-[22px] text-xs text-muted-foreground">
+                        <span className="readout col-start-2 truncate text-xs text-muted-foreground">
                           {r.event} · {r.status === "failed" ? <span className="text-destructive">exit {r.exit}</span> : (took ?? "no end record")}
                         </span>
                       </button>
@@ -720,12 +731,12 @@ function RunDetail({ run }: { run: FakeRun }) {
       </p>
       <div className="flex flex-col gap-1">
         <div className="micro-label">Log</div>
-        <pre className="well readout overflow-x-auto px-2.5 py-2 font-mono text-xs text-foreground">{run.log.join("\n")}</pre>
+        <pre className="well overflow-x-auto px-3 py-2 font-mono text-xs text-foreground">{run.log.join("\n")}</pre>
       </div>
       {run.traceback && (
         <div className="flex flex-col gap-1">
           <div className="micro-label">Traceback</div>
-          <pre className="well overflow-x-auto border-destructive-border px-2.5 py-2 font-mono text-xs text-foreground">{run.traceback.join("\n")}</pre>
+          <pre className="well overflow-x-auto border-destructive-border px-3 py-2 font-mono text-xs text-foreground">{run.traceback.join("\n")}</pre>
         </div>
       )}
       <div className="mt-auto flex flex-wrap justify-end gap-2">

@@ -11,7 +11,7 @@ export function CountBadge({ count, tone, variant = "pill", className }: {
       className={cn(
         "readout inline-flex items-center justify-center rounded-full font-medium ring-1 ring-inset",
         tone === "destructive" ? "bg-destructive-tint text-destructive ring-destructive-border" : "bg-warning-tint text-warning ring-warning-border",
-        variant === "pill" ? "h-[18px] min-w-[18px] px-1.5 text-xs" : "h-3.5 min-w-3.5 px-1 text-[10.5px] leading-none",
+        variant === "pill" ? "h-5 min-w-5 px-1 text-xs" : "h-4 min-w-4 px-1 text-[10.5px] leading-none",
         className,
       )}
     >
