@@ -1,6 +1,7 @@
-//! Every HedgeBuddy tool, defined once. A tool is a plain function from JSON
-//! arguments to a JSON result over a [`Context`]; the MCP server and
-//! `hedgebuddy call` both dispatch through [`call`].
+//! Every HedgeBuddy tool, defined once, plus the MCP resources and the
+//! `author_script` prompt. A tool is a plain function from JSON arguments to
+//! a JSON result over a [`Context`]; the MCP server, `hedgebuddy call` and the
+//! desktop app all dispatch through [`call`].
 
 use std::sync::{Arc, Mutex};
 
@@ -18,6 +19,7 @@ use serde_json::{json, Value};
 pub(crate) mod apps;
 pub(crate) mod attachments;
 pub(crate) mod profiles;
+pub mod resources;
 pub(crate) mod scripts;
 pub(crate) mod system;
 pub(crate) mod variables;
@@ -26,13 +28,13 @@ pub(crate) mod variables;
 /// handler `fn(&Context, Params) -> ToolResult`.
 macro_rules! tool {
     ($name:literal, $desc:expr, $hints:expr, $params:ty, $f:path) => {
-        $crate::tools::ToolDef {
+        $crate::ToolDef {
             name: $name,
             description: $desc,
             hints: $hints,
-            schema: || $crate::tools::schema_of::<$params>(),
+            schema: || $crate::schema_of::<$params>(),
             run: |ctx, args| {
-                let params: $params = $crate::tools::parse_args(args)?;
+                let params: $params = $crate::parse_args(args)?;
                 $f(ctx, params)
             },
         }
@@ -284,7 +286,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let store = Store::open(dir.path().join("HedgeBuddy"));
         std::fs::create_dir_all(store.catalog_dir()).unwrap();
-        let offshoot = include_str!("../../../../catalog/offshoot.toml");
+        let offshoot = include_str!("../../../catalog/offshoot.toml");
         std::fs::write(
             store.catalog_dir().join("offshoot.toml"),
             format!("{offshoot}\n[[commands]]\nid = \"activate\"\nform = \"url\"\n"),

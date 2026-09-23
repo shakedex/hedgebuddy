@@ -7,7 +7,7 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 
 use super::{to_json, tool, Context, ToolDef, ToolResult, DESTRUCTIVE, READ};
-use crate::tools::profiles::ProfileArg;
+use crate::profiles::ProfileArg;
 
 /// A script in a profile.
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -203,7 +203,7 @@ mod tests {
     use hedgebuddy_core::{FakeHost, Os};
     use serde_json::json;
 
-    use crate::tools::{call, test_ctx};
+    use crate::{call, test_ctx};
 
     const COPY: &str = "\"\"\"\n{\"hedgebuddy\": 1, \"app\": \"offshoot\", \"event\": \"FileCopyCompleted\", \"requires\": {\"HOOK\": {\"type\": \"secret\"}}}\n---\n\"\"\"\nprint('x')\n";
 
@@ -333,7 +333,7 @@ mod tests {
                 &["-c", SYNTAX_CHECK, &script_s],
                 CommandOutput { status: 1, stdout: String::new(), stderr: "SyntaxError: 'return' outside function\n".into() },
             );
-        let ctx = crate::tools::Context::new(
+        let ctx = crate::Context::new(
             hedgebuddy_core::Store::open(&store_root),
             std::sync::Arc::new(host),
         );
@@ -377,7 +377,7 @@ mod tests {
                 &["-c", SYNTAX_CHECK, &script_s],
                 CommandOutput { status: 0, stdout: String::new(), stderr: String::new() },
             );
-        let ctx = crate::tools::Context::new(
+        let ctx = crate::Context::new(
             hedgebuddy_core::Store::open(&store_root),
             std::sync::Arc::new(host),
         );

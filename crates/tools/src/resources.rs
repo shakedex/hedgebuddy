@@ -1,7 +1,7 @@
 //! MCP resources and the `author_script` prompt, as plain functions so they
 //! can be tested without a server.
 
-use crate::tools::{Context, ToolError};
+use crate::{Context, ToolError};
 
 const SCHEMAS: [(&str, &str); 5] = [
     (
@@ -123,7 +123,7 @@ mod tests {
     use hedgebuddy_core::{FakeHost, Os};
 
     use super::*;
-    use crate::tools::test_ctx;
+    use crate::test_ctx;
 
     #[test]
     fn resources_cover_catalog_schemas_and_docs() {

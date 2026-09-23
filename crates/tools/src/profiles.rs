@@ -5,7 +5,7 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 
 use super::{to_json, tool, Context, NoParams, ToolDef, ToolResult, DESTRUCTIVE, READ, WRITE};
-use crate::tools::scripts::attached_to;
+use crate::scripts::attached_to;
 
 /// Which profile (defaults to the active one).
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -150,7 +150,7 @@ mod tests {
     use hedgebuddy_core::{FakeHost, Os};
     use serde_json::json;
 
-    use crate::tools::{call, test_ctx};
+    use crate::{call, test_ctx};
 
     #[test]
     fn create_list_get_and_activate() {

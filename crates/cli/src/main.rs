@@ -6,7 +6,7 @@ use std::process::ExitCode;
 use std::time::Duration;
 
 use clap::{Parser, Subcommand};
-use hedgebuddy_cli::tools::{self, Context};
+use hedgebuddy_tools::{self as tools, Context};
 use serde_json::Value;
 
 #[derive(Parser)]

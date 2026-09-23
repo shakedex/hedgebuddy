@@ -1,7 +1,5 @@
-//! The HedgeBuddy tool layer and MCP server. The `hedgebuddy` binary is a thin
-//! wrapper over this library; every tool is defined once in [`tools`] and
-//! reached both from `hedgebuddy call` and from MCP clients.
+//! The `hedgebuddy` binary's library: the MCP server over the shared tool
+//! layer in `hedgebuddy_tools`. Every tool is defined once there and reached
+//! both from `hedgebuddy call` and from MCP clients.
 
 pub mod mcp;
-pub mod resources;
-pub mod tools;

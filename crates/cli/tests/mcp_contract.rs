@@ -110,10 +110,7 @@ fn mcp_server_speaks_the_protocol() {
     let listed = c.request("tools/list", json!({}));
     let tools = listed["result"]["tools"].as_array().unwrap();
     let names: Vec<&str> = tools.iter().map(|t| t["name"].as_str().unwrap()).collect();
-    let expected: Vec<&str> = hedgebuddy_cli::tools::all()
-        .iter()
-        .map(|t| t.name)
-        .collect();
+    let expected: Vec<&str> = hedgebuddy_tools::all().iter().map(|t| t.name).collect();
     assert_eq!(names, expected);
     let by_name = |n: &str| tools.iter().find(|t| t["name"] == n).unwrap().clone();
     assert_eq!(

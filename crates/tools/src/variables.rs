@@ -187,9 +187,9 @@ mod tests {
     use serde_json::json;
 
     use super::MASK;
-    use crate::tools::{call, test_ctx};
+    use crate::{call, test_ctx};
 
-    fn ctx_with_profile() -> (tempfile::TempDir, crate::tools::Context) {
+    fn ctx_with_profile() -> (tempfile::TempDir, crate::Context) {
         let (d, _f, ctx) = test_ctx(FakeHost::new(Os::Windows));
         ctx.store.create_profile("p", "").unwrap();
         (d, ctx)
@@ -271,7 +271,7 @@ mod tests {
     #[test]
     fn set_var_keeps_the_description_unless_one_is_given() {
         let (_d, ctx) = ctx_with_profile();
-        let desc = |ctx: &crate::tools::Context, name: &str| {
+        let desc = |ctx: &crate::Context, name: &str| {
             call(ctx, "get_var", json!({"name": name})).unwrap()["description"].clone()
         };
         call(

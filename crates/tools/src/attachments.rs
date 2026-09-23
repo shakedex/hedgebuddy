@@ -5,7 +5,7 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 
 use super::{to_json, tool, Context, ToolDef, ToolResult, DESTRUCTIVE, READ};
-use crate::tools::scripts::ScriptDry;
+use crate::scripts::ScriptDry;
 
 const APPLY_NOTE: &str = "On macOS the change is staged in the OffShoot Helper workspace HedgeBuddy.json; the operator applies it from the OffShoot Helper menu. The Hedge app may need a restart to pick up the change (unverified).";
 
@@ -141,7 +141,7 @@ mod tests {
     use hedgebuddy_core::{FakeHost, Os};
     use serde_json::json;
 
-    use crate::tools::{call, test_ctx};
+    use crate::{call, test_ctx};
 
     use super::APPLY_NOTE;
 

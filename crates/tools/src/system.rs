@@ -147,7 +147,7 @@ mod tests {
     use hedgebuddy_core::{FakeHost, Os};
     use serde_json::json;
 
-    use crate::tools::{call, test_ctx};
+    use crate::{call, test_ctx};
 
     #[test]
     fn runs_are_listed_newest_first_and_missing_runs_are_errors() {

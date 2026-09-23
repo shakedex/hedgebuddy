@@ -8,7 +8,7 @@ use serde::Deserialize;
 use serde_json::{json, Map, Value};
 
 use super::{to_json, tool, Context, NoParams, ToolDef, ToolError, ToolResult, DESTRUCTIVE, READ};
-use crate::tools::attachments::AppArg;
+use crate::attachments::AppArg;
 
 /// One command of `run_app_command`.
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -243,7 +243,7 @@ mod tests {
     use hedgebuddy_core::{FakeHost, Os};
     use serde_json::json;
 
-    use crate::tools::{call, test_ctx};
+    use crate::{call, test_ctx};
 
     const KEY: &str = "HKCU\\Software\\Hedge";
 
