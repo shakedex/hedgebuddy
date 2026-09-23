@@ -9,11 +9,13 @@ from ._errors import (
     VariableNotFoundError,
     VariableTypeError,
 )
+from ._event import Event
 from ._vars import Vars
 
 __version__ = "0.11.0"
 
 __all__ = [
+    "Event",
     "HedgeBuddyError",
     "ManifestError",
     "StorageCorruptedError",
