@@ -5,7 +5,8 @@ import { EmptyState } from "@/components/app/empty-state";
 import { Mono } from "@/components/app/mono";
 import { Panel } from "@/components/app/panel";
 import { StatusIcon } from "@/components/app/status-icon";
-import { plural, when } from "@/lib/format";
+import { useRovingList } from "@/hooks/use-roving-list";
+import { plural, whenPhrase } from "@/lib/format";
 import type { StatusKey } from "@/lib/status";
 
 /** The version string before a trailing `" ("` (a build number, say): `"26.2 (1)"` → `"26.2"`. */
@@ -22,7 +23,7 @@ function rowFor(item: AttentionItem, activeProfile: string): { status: StatusKey
         status: "runFailed",
         text: (
           <>
-            <Mono>{item.script}</Mono> failed {when(item.started_at)}
+            <Mono>{item.script}</Mono> failed {whenPhrase(item.started_at)}
             {item.profile !== activeProfile && <span className="text-muted-foreground"> · {item.profile}</span>}
           </>
         ),
@@ -93,14 +94,20 @@ function rowFor(item: AttentionItem, activeProfile: string): { status: StatusKey
   }
 }
 
-function AttentionRow({ item, activeProfile }: { item: AttentionItem; activeProfile: string }) {
+function AttentionRow({ item, activeProfile, tabIndex, onFocus }: {
+  item: AttentionItem; activeProfile: string; tabIndex: number; onFocus: () => void;
+}) {
   const { status, text, href, label } = rowFor(item, activeProfile);
   return (
     <Link
       href={href}
+      data-roving-row
+      tabIndex={tabIndex}
+      onFocus={onFocus}
       className="flex min-h-9 items-center gap-2.5 rounded-md px-2 py-1.5 text-sm text-foreground transition-colors duration-120 hover:bg-accent/60"
     >
-      <StatusIcon status={status} />
+      {/* Decorative: the row text already says "failed" / "is needed but not set" / etc., so a second, silent status word would just be noise for a screen reader. */}
+      <StatusIcon status={status} decorative />
       <span className="min-w-0 flex-1">{text}</span>
       <span className="flex shrink-0 items-center gap-1 text-xs text-link">
         <span className="@max-[640px]:hidden">{label}</span>
@@ -111,15 +118,24 @@ function AttentionRow({ item, activeProfile }: { item: AttentionItem; activeProf
 }
 
 /** Spec §6.1 "Needs attention": every problem, most serious first, each linking to where it gets fixed. */
-export function AttentionPanel({ items, activeProfile, className }: { items: AttentionItem[]; activeProfile: string; className?: string }) {
+export function AttentionPanel({ items, activeProfile, className, headingRef }: {
+  items: AttentionItem[]; activeProfile: string; className?: string; headingRef?: React.Ref<HTMLHeadingElement>;
+}) {
+  const roving = useRovingList();
   return (
-    <Panel title="Needs attention" className={className}>
+    <Panel title="Needs attention" className={className} headingRef={headingRef}>
       {items.length === 0 ? (
         <EmptyState icon={CircleCheck} title="Nothing needs a look" className="px-2 py-3">
           Runs, variables, Hedge apps and Python are all fine.
         </EmptyState>
       ) : (
-        items.map((item, i) => <AttentionRow key={i} item={item} activeProfile={activeProfile} />)
+        <ul onKeyDown={roving.onKeyDown}>
+          {items.map((item, i) => (
+            <li key={i}>
+              <AttentionRow item={item} activeProfile={activeProfile} tabIndex={roving.tabIndex(i)} onFocus={roving.onRowFocus(i)} />
+            </li>
+          ))}
+        </ul>
       )}
     </Panel>
   );

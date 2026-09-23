@@ -54,11 +54,12 @@ function CreateFirstProfile() {
 export function FirstRun({ profiles }: { profiles: string[] }) {
   const hasProfiles = profiles.length > 0;
   return (
-    <div className="h-full overflow-y-auto p-6">
-      <div className="flex max-w-[560px] flex-col items-start gap-5">
+    <div className="@container h-full overflow-y-auto">
+      <div className="flex max-w-[560px] flex-col items-start gap-5 p-4 @max-[640px]:p-3">
         <div className="flex flex-col gap-1">
           <span className="micro-label">Welcome</span>
-          <h1 className="text-lg font-semibold text-foreground-strong">Two steps to get HedgeBuddy ready</h1>
+          {/* h2: the shell already renders the screen's h1 ("Home") in the toolbar above this. */}
+          <h2 className="text-lg font-semibold text-foreground-strong">Two steps to get HedgeBuddy ready</h2>
         </div>
         <ol className="flex w-full flex-col gap-3">
           <li className="surface flex items-start gap-3 p-4">

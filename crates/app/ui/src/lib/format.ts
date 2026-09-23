@@ -35,6 +35,18 @@ export function when(ts: string): string {
   return label === "Today" ? clock(ts) : `${label} ${clock(ts)}`;
 }
 
+/**
+ * `when`, phrased to follow a verb mid-sentence ("… failed {whenPhrase(ts)}"): `at 02:14`,
+ * `yesterday at 23:26`, or `on Mon 21 Sep at 23:26`. `when` itself stays for right-aligned times.
+ */
+export function whenPhrase(ts: string): string {
+  const label = dayLabel(dayKey(ts));
+  const time = clock(ts);
+  if (label === "Today") return `at ${time}`;
+  if (label === "Yesterday") return `yesterday at ${time}`;
+  return `on ${label} at ${time}`;
+}
+
 /** `340 ms`, `1.2 s`, `2 min 5 s`, or null without an end. */
 export function duration(start: string, end: string | null | undefined): string | null {
   if (!end) return null;

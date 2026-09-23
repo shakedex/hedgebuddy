@@ -29,8 +29,12 @@ export function ClaudeLatelyPanel({ records, className }: { records: ActivityRec
       ) : (
         records.slice(0, 3).map((record, i) => (
           <div key={i} className="flex h-8 items-center gap-2 rounded-md px-2 text-sm">
-            <Mono className="shrink-0 text-sm">{record.tool}</Mono>
-            <Mono className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{record.target ?? "—"}</Mono>
+            <Mono className="shrink-0 text-sm" title={record.tool}>
+              {record.tool}
+            </Mono>
+            <Mono className="min-w-0 flex-1 truncate text-xs text-muted-foreground" title={record.target ?? undefined}>
+              {record.target ?? "—"}
+            </Mono>
             {record.outcome !== "ok" && <StatusIcon status={outcomeKey(record.outcome)} />}
             <span className="readout shrink-0 text-xs text-muted-foreground">{when(record.ts)}</span>
           </div>

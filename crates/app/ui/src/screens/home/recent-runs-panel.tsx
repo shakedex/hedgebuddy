@@ -5,16 +5,19 @@ import { EmptyState } from "@/components/app/empty-state";
 import { Mono } from "@/components/app/mono";
 import { Panel } from "@/components/app/panel";
 import { StatusIcon } from "@/components/app/status-icon";
+import { useRovingList } from "@/hooks/use-roving-list";
 import { when } from "@/lib/format";
 import { runStatusKey } from "@/lib/status";
 
 /** Spec §6.1 "Recent runs": the last 5 runs across every profile. */
 export function RecentRunsPanel({ runs, activeProfile, className }: { runs: Run[]; activeProfile: string; className?: string }) {
+  const roving = useRovingList();
   return (
     <Panel
       title="Recent runs"
       action={
-        <Link href="/runs" className="text-xs text-link hover:underline">
+        // `relative` + the inset `::after` gives the link a >=28 px hit target without growing its text.
+        <Link href="/runs" className="relative text-xs text-link after:absolute after:-inset-x-1 after:-inset-y-1.5 hover:underline">
           All runs
         </Link>
       }
@@ -25,18 +28,33 @@ export function RecentRunsPanel({ runs, activeProfile, className }: { runs: Run[
           Each time a Hedge app fires an event, its attached script records a run here.
         </EmptyState>
       ) : (
-        runs.slice(0, 5).map((run) => (
-          <Link
-            key={run.run_id}
-            href={`/runs/${encodeURIComponent(run.run_id)}`}
-            className="flex min-h-8 items-center gap-2 rounded-md px-2 py-1 text-sm transition-colors duration-120 hover:bg-accent/60"
-          >
-            <StatusIcon status={runStatusKey(run.status)} />
-            <Mono className="min-w-0 flex-1 truncate text-sm">{run.script}</Mono>
-            {run.profile !== activeProfile && <span className="shrink-0 truncate text-xs text-muted-foreground">{run.profile}</span>}
-            <span className="readout shrink-0 text-xs text-muted-foreground">{when(run.started_at)}</span>
-          </Link>
-        ))
+        <ul onKeyDown={roving.onKeyDown}>
+          {runs.slice(0, 5).map((run, i) => (
+            <li key={run.run_id}>
+              <Link
+                href={`/runs/${encodeURIComponent(run.run_id)}`}
+                data-roving-row
+                tabIndex={roving.tabIndex(i)}
+                onFocus={roving.onRowFocus(i)}
+                className="flex min-h-8 items-center gap-2 rounded-md px-2 py-1 text-sm transition-colors duration-120 hover:bg-accent/60"
+              >
+                <StatusIcon status={runStatusKey(run.status)} />
+                {/* The script name gets priority; the profile suffix is what gives way (and truncates) first when the row is tight. */}
+                <span className="flex min-w-0 flex-1 items-center gap-2">
+                  <Mono className="max-w-[70%] shrink-0 truncate text-sm" title={run.script}>
+                    {run.script}
+                  </Mono>
+                  {run.profile !== activeProfile && (
+                    <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground" title={run.profile}>
+                      {run.profile}
+                    </span>
+                  )}
+                </span>
+                <span className="readout shrink-0 text-xs text-muted-foreground">{when(run.started_at)}</span>
+              </Link>
+            </li>
+          ))}
+        </ul>
       )}
     </Panel>
   );
