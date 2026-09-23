@@ -23,6 +23,7 @@
 - New public modules: `catalog`, `hedge`, `host`, `python_env`, `volumes`. Crate-root re-exports are added only where a task says so.
 - `cargo fmt --all --check` and `cargo clippy --workspace --all-targets -- -D warnings` stay clean; the existing 62 Rust tests and 12 Python tests stay green.
 - Work happens on branch `feat/phase2b-hedge-integration`. Commit messages end with `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
+- Tests must pass on both CI legs (Windows and macOS). A test using a Windows `FakeHost` still runs against the real filesystem of the machine running it; `expand_path` turns backslashes into slashes on non-Windows builds so Windows catalog templates work there, and tests compare expanded paths with slashes normalised.
 - Shell commands are for Git Bash on Windows; repo root is `E:/Coding/hedgebuddy`.
 
 ## File structure
@@ -1482,6 +1483,7 @@ impl Catalog {
 }
 
 /// Expand a leading `~` (home directory) and `%NAME%` environment variables.
+/// On non-Windows builds, backslashes become slashes.
 pub fn expand_path(host: &dyn Host, template: &str) -> Result<PathBuf> {
     todo!()
 }
@@ -1609,9 +1611,10 @@ docs = "https://example.com"
         let host = FakeHost::new(Os::Windows)
             .with_env("APPDATA", "C:\\Users\\x\\AppData\\Roaming")
             .with_home("/Users/x");
+        let slash = |p: PathBuf| p.to_string_lossy().replace('\\', "/");
         assert_eq!(
-            expand_path(&host, "%APPDATA%\\Hedge\\Presets").unwrap(),
-            PathBuf::from("C:\\Users\\x\\AppData\\Roaming\\Hedge\\Presets")
+            slash(expand_path(&host, "%APPDATA%\\Hedge\\Presets").unwrap()),
+            "C:/Users/x/AppData/Roaming/Hedge/Presets"
         );
         assert_eq!(
             expand_path(&host, "~/Library/Logs/x.txt").unwrap(),
@@ -1793,6 +1796,12 @@ pub fn expand_path(host: &dyn Host, template: &str) -> Result<PathBuf> {
         rest = &after[end + 1..];
     }
     out.push_str(rest);
+    // Windows catalog templates use backslashes. On non-Windows builds they
+    // are only reached from tests with a Windows FakeHost, and those tests
+    // still touch the real Unix filesystem, so make them usable there.
+    if !cfg!(windows) {
+        out = out.replace('\\', "/");
+    }
     Ok(PathBuf::from(out))
 }
 ```
@@ -2048,11 +2057,12 @@ mod tests {
         let h = hedge(FakeHost::new(Os::Windows).with_env("APPDATA", "C:\\Users\\x\\AppData\\Roaming"));
         let d = h.describe_app("offshoot").unwrap();
         assert_eq!(d.manifest.app.id, "offshoot");
+        let slash = |p: Option<PathBuf>| p.map(|p| p.to_string_lossy().replace('\\', "/"));
         assert_eq!(
-            d.files.callback_log,
-            Some(PathBuf::from("C:\\Users\\x\\AppData\\Roaming\\Hedge\\HedgeCallback.log"))
+            slash(d.files.callback_log.clone()).as_deref(),
+            Some("C:/Users/x/AppData/Roaming/Hedge/HedgeCallback.log")
         );
-        assert_eq!(d.files.presets_dir, Some(PathBuf::from("C:\\Users\\x\\AppData\\Roaming\\Hedge\\Presets")));
+        assert_eq!(slash(d.files.presets_dir.clone()).as_deref(), Some("C:/Users/x/AppData/Roaming/Hedge/Presets"));
         assert!(matches!(h.describe_app("nope").unwrap_err(), crate::error::CoreError::AppNotFound(_)));
         let json = serde_json::to_value(&d).unwrap();
         assert_eq!(json["status"]["scripting"], "registry");
@@ -2849,6 +2859,14 @@ pub struct SyncReport {
     pub applied: bool,
 }
 
+fn push_unique(actions: &mut Vec<Action>, new: Vec<Action>) {
+    for a in new {
+        if !actions.contains(&a) {
+            actions.push(a);
+        }
+    }
+}
+
 fn describe_issues(issues: &[RequirementIssue]) -> String {
     issues
         .iter()
@@ -3107,13 +3125,6 @@ impl Hedge {
             actions: Vec::new(),
             applied: false,
         };
-        let mut push = |actions: &mut Vec<Action>, new: Vec<Action>| {
-            for a in new {
-                if !actions.contains(&a) {
-                    actions.push(a);
-                }
-            }
-        };
 
         let mut targets: BTreeMap<(String, String), Vec<String>> = BTreeMap::new();
         for info in scripts {
@@ -3158,7 +3169,7 @@ impl Hedge {
             }
             match self.plan_attach(app, event, &store.script_path(profile, script)) {
                 Ok(actions) => {
-                    push(&mut report.actions, actions);
+                    push_unique(&mut report.actions, actions);
                     report.attach.push(SyncItem { app: app.clone(), event: event.clone(), script: script.clone() });
                 }
                 Err(CoreError::Unsupported(reason)) => {
@@ -3183,7 +3194,7 @@ impl Hedge {
                 let Some((other_profile, other_script)) = managed_script(store, &path) else {
                     continue;
                 };
-                push(&mut report.actions, self.plan_detach(&m.app.id, &e.id)?);
+                push_unique(&mut report.actions, self.plan_detach(&m.app.id, &e.id)?);
                 report.detach.push(SyncItem {
                     app: m.app.id.clone(),
                     event: e.id.clone(),
@@ -3211,7 +3222,7 @@ cargo test --workspace
 cargo fmt --all --check
 cargo clippy --workspace --all-targets -- -D warnings
 ```
-Expected: 4 new tests pass. If clippy flags the `push` closure (`needless_pass_by_ref_mut` or similar), turn it into a private free function `fn push_unique(actions: &mut Vec<Action>, new: Vec<Action>)`.
+Expected: 4 new tests pass.
 
 - [ ] **Step 5: Commit**
 
