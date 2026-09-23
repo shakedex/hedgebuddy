@@ -1,0 +1,55 @@
+# FoolCat (hedge.co). Verified against docs.hedge.video (September 2026) and a
+# Windows machine running FoolCat 26.1.1 (121).
+catalog_version = 1
+tested_against = "26.1.1"
+
+[app]
+id = "foolcat"
+name = "FoolCat"
+scheme = "foolcat"
+requires_pro = true
+docs = "https://docs.hedge.video/foolcat/automation"
+
+[detect.windows]
+registry_key = 'HKCU\Software\FoolCat'
+version_value = "BuildVersion"
+
+[detect.macos]
+app_path = "/Applications/FoolCat.app"
+
+[scripting.windows]
+kind = "registry"
+key = 'HKCU\Software\FoolCat'
+enable_value = "EventScriptAllowScripting"
+value_pattern = "EventScript{registry_name}"
+
+[scripting.macos]
+kind = "manual"
+note = "Attach the script in FoolCat > Settings > Scripting"
+
+[[events]]
+id = "FoolCatStarted"
+description = "FoolCat launched. Empty payload."
+registry_name = "AppStarted"
+payload = []
+
+[[events]]
+id = "ReportCreated"
+description = "A report finished rendering."
+registry_name = "ReportCreated"
+payload = ["ReportCreated_status", "ReportCreated_error", "ReportCreated_pdfPath", "ReportCreated_htmlPath"]
+
+[[commands]]
+id = "open"
+description = "Launch or focus FoolCat."
+form = "url"
+
+[[commands]]
+id = "create"
+description = "Create a report from a source folder into a destination folder."
+form = "url"
+params = { source = "path", destination = "path", name = "string?", description = "string?" }
+confirm = true
+
+[files.macos]
+event_log = "~/Library/Application Support/FoolCat/Event Log/FoolCatEvents.log"

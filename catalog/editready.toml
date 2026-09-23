@@ -1,0 +1,60 @@
+# EditReady (hedge.co). Verified against docs.hedge.video (September 2026).
+# Not installed on the test machine; Windows detection is unverified.
+catalog_version = 1
+tested_against = "25.4"
+
+[app]
+id = "editready"
+name = "EditReady"
+scheme = "editready"
+requires_pro = true
+docs = "https://docs.hedge.video/editready/automation"
+
+[detect.windows]
+registry_key = 'HKCU\Software\EditReady' # unverified
+version_value = "BuildVersion" # unverified
+
+[detect.macos]
+app_path = "/Applications/EditReady.app"
+
+[scripting.windows]
+kind = "manual"
+note = "Attach the script in EditReady's Scripting settings (Windows scripting is not documented)"
+
+[scripting.macos]
+kind = "manual"
+note = "Attach the script in EditReady > Settings > Scripting"
+
+[[events]]
+id = "EditReadyStarted"
+description = "EditReady launched. Empty payload."
+payload = []
+
+[[events]]
+id = "FileConversionCompleted"
+description = "A conversion finished."
+payload = [
+  "FileConversionCompleted_sourcePath", "FileConversionCompleted_destinationPath",
+  "FileConversionCompleted_status", "FileConversionCompleted_error",
+]
+
+[[commands]]
+id = "open"
+description = "Launch or focus EditReady."
+form = "url"
+
+[[commands]]
+id = "add"
+description = "Add a source file."
+form = "url"
+params = { sourcePath = "path" }
+
+[[commands]]
+id = "transcode"
+description = "Transcode a file with a named preset."
+form = "url"
+params = { sourcePath = "path", preset = "string", destinationPath = "path" }
+confirm = true
+
+[files.macos]
+event_log = "~/Library/Application Support/EditReady/Event Log/EditReadyEvents.log"

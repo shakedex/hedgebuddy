@@ -9,6 +9,7 @@
 //! records are all methods on `Store`; [`watch()`] reports external changes.
 //! Every file `Store` writes conforms to the JSON Schemas under `schema/`.
 
+pub mod catalog;
 pub mod error;
 pub(crate) mod fs_util;
 pub mod host;
@@ -22,6 +23,7 @@ pub mod store;
 pub mod variable;
 pub mod watch;
 
+pub use catalog::Catalog;
 pub use error::{CoreError, Result};
 pub use host::{FakeHost, Host, Os, RealHost};
 pub use manifest::{

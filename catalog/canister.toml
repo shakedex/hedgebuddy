@@ -1,0 +1,46 @@
+# Canister (hedge.co). Verified against docs.hedge.video (September 2026).
+# Not installed on the test machine; Windows detection is unverified.
+# Canister has an automation API but no script events.
+catalog_version = 1
+tested_against = "26.1"
+
+[app]
+id = "canister"
+name = "Canister"
+scheme = "canister"
+requires_pro = false
+docs = "https://docs.hedge.video/canister/features/automation"
+
+[detect.windows]
+registry_key = 'HKCU\Software\Canister' # unverified
+version_value = "BuildVersion" # unverified
+
+[detect.macos]
+app_path = "/Applications/Canister.app"
+
+[[commands]]
+id = "open"
+description = "Launch or focus Canister."
+form = "url"
+
+[[commands]]
+id = "addarchive"
+description = "Archive sources to tape."
+form = "url"
+params = { sources = "path[]", destinationtape = "string?", destinationfolder = "string?" }
+list_separator = "|"
+confirm = true
+
+[[commands]]
+id = "addretrieve"
+description = "Retrieve sources from a tape."
+form = "url"
+params = { sources = "path[]", sourcetape = "string", destinationpath = "path" }
+list_separator = "|"
+confirm = true
+
+[[commands]]
+id = "gettapes"
+description = "Write the tape list as JSON to a file. The path is required on macOS."
+form = "url"
+params = { path = "path?" }

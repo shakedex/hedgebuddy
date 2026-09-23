@@ -1,0 +1,183 @@
+# OffShoot (hedge.co). Verified against docs.hedge.video (September 2026) and a
+# Windows machine running OffShoot 26.1 (1023). Lines marked "unverified" are
+# inferred and need a real-machine check before being relied on.
+catalog_version = 1
+tested_against = "26.1"
+
+[app]
+id = "offshoot"
+name = "OffShoot"
+scheme = "offshoot"
+requires_pro = true
+docs = "https://docs.hedge.video/offshoot/features/automation"
+
+[detect.windows]
+registry_key = 'HKCU\Software\Hedge'
+version_value = "BuildVersion"
+
+[detect.macos]
+app_path = "/Applications/OffShoot.app"
+bundle_id = "nl.syncfactory.Hedge.Mac" # unverified
+
+[scripting.windows]
+kind = "registry"
+key = 'HKCU\Software\Hedge'
+enable_value = "EventScriptAllowScripting"
+value_pattern = "EventScript{registry_name}"
+
+# macOS: OffShoot Helper applies workspace JSON files; setPreferences keys are
+# documented on the Helper page. HedgeBuddy writes HedgeBuddy.json and the
+# operator applies it from the Helper menu.
+[scripting.macos]
+kind = "helper_workspace"
+workspace_dir = "~/Library/Preferences/Hedge/Workspaces"
+workspace_file = "HedgeBuddy.json"
+enable_pref = "scripting_opt_in"
+pref_pattern = "scripting_events_{pref_name}"
+
+[[events]]
+id = "OffShootStarted"
+description = "OffShoot launched. Empty payload."
+registry_name = "AppStarted"
+payload = []
+
+[[events]]
+id = "DiskAdded"
+description = "A disk was mounted."
+registry_name = "DiskAdded"
+pref_name = "disk_added"
+payload = [
+  "DiskAdded_allowed", "DiskAdded_availableDiskSpace", "DiskAdded_deviceName",
+  "DiskAdded_diskSize", "DiskAdded_hidden", "DiskAdded_modelName",
+  "DiskAdded_mountedAt", "DiskAdded_protocolName", "DiskAdded_rootFilePath",
+  "DiskAdded_title", "DiskAdded_volumeKind",
+]
+
+[[events]]
+id = "DiskRemoved"
+description = "A disk was unmounted."
+registry_name = "DiskRemoved"
+pref_name = "disk_removed"
+payload = ["DiskRemoved_rootFilePath", "DiskRemoved_title", "DiskRemoved_unmountedAt"]
+
+[[events]]
+id = "DiskBusy"
+description = "A disk started transferring."
+registry_name = "DiskBusy"
+pref_name = "disk_busy"
+payload = ["DiskBusy_rootFilePath", "DiskBusy_title"]
+
+[[events]]
+id = "DiskIdle"
+description = "A disk finished all its transfers."
+registry_name = "DiskIdle"
+pref_name = "disk_idle"
+payload = ["DiskIdle_diskType", "DiskIdle_hasFailedTransfers", "DiskIdle_rootFilePath", "DiskIdle_title"]
+
+[[events]]
+id = "DisksIdle"
+description = "All disks finished their transfers. Empty payload."
+registry_name = "AllDisksIdle"
+pref_name = "disks_idle"
+payload = []
+
+[[events]]
+id = "TransfersAdded"
+description = "Transfers were queued. These keys are not prefixed with the event name."
+registry_name = "TransfersAdded"
+payload = ["transferType", "addedAt", "transferGroups"]
+
+[[events]]
+id = "SourceAdded"
+description = "A source was added (new in 26.1). Attachment location unverified on both platforms."
+payload = ["SourceAdded_name", "SourceAdded_paths"]
+
+[[events]]
+id = "FileCopyCompleted"
+description = "A transfer finished (state is Success, Failed, Warnings, Canceled or Stopped)."
+registry_name = "FileCopyCompleted"
+pref_name = "file_copy_completed"
+payload = [
+  "FileCopyCompleted_sourcePaths", "FileCopyCompleted_presetName", "FileCopyCompleted_state",
+  "FileCopyCompleted_sourceInfo", "FileCopyCompleted_startedAt", "FileCopyCompleted_destinationPath",
+  "FileCopyCompleted_verification_mode", "FileCopyCompleted_duration", "FileCopyCompleted_bytesCopied",
+  "FileCopyCompleted_id", "FileCopyCompleted_transferLogJSONPath",
+]
+json_fields = ["FileCopyCompleted_sourceInfo"]
+
+[[events]]
+id = "VerificationIssue"
+description = "Verification found a problem with a file."
+registry_name = "CheckpointIssue"
+pref_name = "checkpoint_issue"
+payload = ["VerificationIssue_description", "VerificationIssue_filePath"]
+
+[[commands]]
+id = "open"
+description = "Launch or focus OffShoot."
+form = "url"
+
+[[commands]]
+id = "quit"
+description = "Quit OffShoot."
+form = "url"
+confirm = true
+
+[[commands]]
+id = "restart"
+description = "Restart OffShoot."
+form = "url"
+confirm = true
+
+[[commands]]
+id = "reloadPresets"
+description = "Reload presets from disk after writing one."
+form = "url"
+
+[[commands]]
+id = "reset"
+description = "Clear sources or destinations. type is 'sources' or 'destinations'."
+form = "url"
+params = { type = "string" }
+confirm = true
+
+[[commands]]
+id = "setSource"
+description = "Add a source with an optional label."
+form = "action"
+params = { paths = "path[]", label = "string?" }
+
+[[commands]]
+id = "setDestination"
+description = "Add a destination."
+form = "action"
+params = { path = "path" }
+
+[[commands]]
+id = "addTransfers"
+description = "Start transfers for the current sources and destinations."
+form = "url"
+confirm = true
+
+[[commands]]
+id = "restartTransfer"
+description = "Restart a transfer by its id (FileCopyCompleted_id)."
+form = "action"
+params = { id = "string" }
+confirm = true
+
+[files.windows]
+callback_log = '%APPDATA%\Hedge\HedgeCallback.log'
+event_log = '%APPDATA%\Hedge\Hedge.log'
+
+[files.macos]
+callback_log = "~/Library/Logs/Hedge/urlSchemeResponseLog.txt"
+
+# Presets: Windows location observed on the test machine. PresetsLocation is a
+# documented override; SessionVariableSelectedPreset holds the selected preset
+# (observed, undocumented). The macOS location is not documented.
+[presets.windows]
+dir = '%APPDATA%\Hedge\Presets'
+registry_key = 'HKCU\Software\Hedge'
+location_override_value = "PresetsLocation"
+selected_value = "SessionVariableSelectedPreset"
