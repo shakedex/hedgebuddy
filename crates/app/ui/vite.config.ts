@@ -10,8 +10,8 @@ export default defineConfig(({ mode }) => ({
   resolve: { alias: { "@": path.resolve(import.meta.dirname, "src") } },
   clearScreen: false,
   server: {
-    // Tauri's devUrl is 5173; the browser preview with mock data uses 5174.
-    port: mode === "mock" ? 5174 : 5173,
+    // Tauri's devUrl is 5173; the browser preview with mock data uses 5199 (5174 is held by an unrelated local project).
+    port: mode === "mock" ? 5199 : 5173,
     strictPort: true,
     host: host || false,
     hmr: host ? { protocol: "ws", host, port: 1421 } : undefined,

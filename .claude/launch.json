@@ -5,7 +5,7 @@
       "name": "ui-mock",
       "runtimeExecutable": "bun",
       "runtimeArgs": ["run", "--cwd", "crates/app/ui", "dev:mock"],
-      "port": 5174
+      "port": 5199
     }
   ]
 }
