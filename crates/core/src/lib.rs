@@ -22,6 +22,7 @@ pub mod scripts;
 pub mod secrets;
 pub mod store;
 pub mod variable;
+pub mod volumes;
 pub mod watch;
 
 pub use catalog::Catalog;
