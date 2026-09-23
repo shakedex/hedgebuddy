@@ -1,5 +1,6 @@
 """HedgeBuddy for Python scripts run by Hedge apps."""
 
+from ._api import all_vars, exists, inject_env, var
 from ._errors import (
     HedgeBuddyError,
     ManifestError,
@@ -8,6 +9,7 @@ from ._errors import (
     VariableNotFoundError,
     VariableTypeError,
 )
+from ._vars import Vars
 
 __version__ = "0.11.0"
 
@@ -18,5 +20,10 @@ __all__ = [
     "StorageNotFoundError",
     "VariableNotFoundError",
     "VariableTypeError",
+    "Vars",
     "__version__",
+    "all_vars",
+    "exists",
+    "inject_env",
+    "var",
 ]
