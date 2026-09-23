@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "ui-mock",
+      "runtimeExecutable": "bun",
+      "runtimeArgs": ["run", "--cwd", "crates/app/ui", "dev:mock"],
+      "port": 5174
+    }
+  ]
+}

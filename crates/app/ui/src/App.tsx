@@ -1,20 +1,12 @@
-import { useEffect, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { useDataChanged } from "@/api/events";
+import { useHomeSummary } from "@/api/queries";
 
 export default function App() {
-  const [dataDir, setDataDir] = useState<string>("…");
-
-  useEffect(() => {
-    invoke<string>("data_dir")
-      .then(setDataDir)
-      .catch((e: unknown) => setDataDir(`error: ${String(e)}`));
-  }, []);
-
+  useDataChanged();
+  const summary = useHomeSummary();
   return (
-    <main style={{ fontFamily: "system-ui, sans-serif", padding: 24 }}>
-      <h1>HedgeBuddy</h1>
-      <p>Scaffold build. Data directory:</p>
-      <code>{dataDir}</code>
+    <main style={{ padding: 16, fontFamily: "ui-monospace, monospace", fontSize: 12 }}>
+      <pre>{summary.isPending ? "loading…" : summary.isError ? `error: ${summary.error.message}` : JSON.stringify(summary.data, null, 2)}</pre>
     </main>
   );
 }
