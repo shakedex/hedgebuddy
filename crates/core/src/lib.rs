@@ -49,4 +49,6 @@ pub use scripts::{validate_script_name, ScriptCheck, ScriptInfo};
 pub use secrets::{ResolvedVariable, VariableInput};
 pub use store::{Index, Store};
 pub use variable::{validate_slug, validate_var_name, VarType, VarValue, Variable};
-pub use watch::{watch, Change, ChangeKind, WatchHandle};
+pub use watch::{
+    categories, watch, watch_batched, Category, Change, ChangeKind, WatchHandle, BATCH_WINDOW,
+};
