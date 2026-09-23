@@ -56,10 +56,12 @@ pub struct AppDescription {
 /// (`"26.1 (1023)"` compares as `26.1`; missing parts count as 0).
 pub fn compare_versions(a: &str, b: &str) -> Ordering {
     fn parts(v: &str) -> Vec<u64> {
-        v.trim()
-            .split(|c: char| !(c.is_ascii_digit() || c == '.'))
-            .next()
-            .unwrap_or("")
+        let start = v.find(|c: char| c.is_ascii_digit()).unwrap_or(v.len());
+        let rest = &v[start..];
+        let end = rest
+            .find(|c: char| !(c.is_ascii_digit() || c == '.'))
+            .unwrap_or(rest.len());
+        rest[..end]
             .split('.')
             .filter(|p| !p.is_empty())
             .map(|p| p.parse().unwrap_or(0))
@@ -93,14 +95,27 @@ impl Hedge {
         let manifest = self.catalog.app(id)?;
         let os = self.host.os();
         let files = manifest.files.get(os);
-        let resolve = |t: Option<&String>| t.and_then(|t| self.expand(t).ok());
+        let mut status = self.status_of(manifest);
+        let mut resolve = |t: Option<&String>| match t {
+            Some(t) => match self.expand(t) {
+                Ok(p) => Some(p),
+                Err(e) => {
+                    status.warnings.push(e.to_string());
+                    None
+                }
+            },
+            None => None,
+        };
+        let callback_log = resolve(files.and_then(|f| f.callback_log.as_ref()));
+        let event_log = resolve(files.and_then(|f| f.event_log.as_ref()));
+        let presets_dir = resolve(manifest.presets.get(os).map(|p| &p.dir));
         Ok(AppDescription {
-            status: self.status_of(manifest),
+            status,
             manifest: manifest.clone(),
             files: ResolvedFiles {
-                callback_log: resolve(files.and_then(|f| f.callback_log.as_ref())),
-                event_log: resolve(files.and_then(|f| f.event_log.as_ref())),
-                presets_dir: resolve(manifest.presets.get(os).map(|p| &p.dir)),
+                callback_log,
+                event_log,
+                presets_dir,
             },
         })
     }
@@ -178,13 +193,17 @@ impl Hedge {
                         return (false, None);
                     }
                 }
-                let version =
-                    d.version_value
-                        .as_ref()
-                        .and_then(|v| match self.host.registry_read(key, v) {
-                            Ok(Some(RegValue::String(s))) => Some(s.trim().to_owned()),
-                            _ => None,
-                        });
+                let version = match d.version_value.as_ref() {
+                    Some(v) => match self.host.registry_read(key, v) {
+                        Ok(Some(RegValue::String(s))) => Some(s.trim().to_owned()),
+                        Ok(_) => None,
+                        Err(e) => {
+                            warnings.push(format!("cannot read {key}\\{v}: {e}"));
+                            None
+                        }
+                    },
+                    None => None,
+                };
                 (true, version)
             }
             Os::Macos => {
@@ -242,6 +261,8 @@ mod tests {
         assert_eq!(compare_versions("26.10", "26.9"), Ordering::Greater);
         assert_eq!(compare_versions("25.4", "26.1"), Ordering::Less);
         assert_eq!(compare_versions("", "0"), Ordering::Equal);
+        assert_eq!(compare_versions("v26.1", "26.1"), Ordering::Equal);
+        assert_eq!(compare_versions("OffShoot 26.2", "26.1"), Ordering::Greater);
     }
 
     #[test]
