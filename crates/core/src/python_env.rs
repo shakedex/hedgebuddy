@@ -89,10 +89,74 @@ pub fn syntax_check(host: &dyn Host, python: &Path, script: &Path) -> Result<Opt
     Ok(Some(message))
 }
 
+/// Whether `source` imports the `hedgebuddy` package: a line starting with
+/// `import hedgebuddy` or `from hedgebuddy` (followed by the end of the line,
+/// whitespace, `.` or `,`).
+pub fn imports_hedgebuddy(source: &str) -> bool {
+    source.lines().map(str::trim_start).any(|line| {
+        let rest = line
+            .strip_prefix("import hedgebuddy")
+            .or_else(|| line.strip_prefix("from hedgebuddy"));
+        matches!(rest, Some(r) if r.is_empty() || r.starts_with([' ', '\t', '.', ',']))
+    })
+}
+
+/// Why a script importing `hedgebuddy` would fail with `python`, or `None`
+/// when the installed package is exactly `expected`.
+pub fn package_problem(python: &PythonInfo, expected: &str) -> Option<String> {
+    let install = format!(
+        "{} -m pip install hedgebuddy=={expected}",
+        python.launcher.join(" ")
+    );
+    let exe = python.executable.display();
+    match python.hedgebuddy.as_deref() {
+        Some(v) if v == expected => None,
+        Some(v) => Some(format!(
+            "hedgebuddy {v} is installed for {exe}, but this HedgeBuddy needs {expected}; run: {install}"
+        )),
+        None => Some(format!(
+            "hedgebuddy is not installed for {exe}; run: {install}"
+        )),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::host::{CommandOutput, FakeHost};
+
+    #[test]
+    fn detects_hedgebuddy_imports() {
+        assert!(imports_hedgebuddy("import hedgebuddy as hb\n"));
+        assert!(imports_hedgebuddy("  from hedgebuddy import script\n"));
+        assert!(imports_hedgebuddy("import hedgebuddy\n"));
+        assert!(imports_hedgebuddy("from hedgebuddy._runs import log\n"));
+        assert!(!imports_hedgebuddy("import hedgebuddyx\n"));
+        assert!(!imports_hedgebuddy("print('import hedgebuddy')\n"));
+        assert!(!imports_hedgebuddy("import os\n"));
+    }
+
+    #[test]
+    fn package_problem_explains_missing_and_mismatched_versions() {
+        let info = |v: Option<&str>| PythonInfo {
+            launcher: vec!["py".into(), "-3".into()],
+            executable: PathBuf::from("C:\\Python313\\python.exe"),
+            version: "3.13.5".into(),
+            hedgebuddy: v.map(str::to_owned),
+        };
+        assert_eq!(package_problem(&info(Some("0.11.0")), "0.11.0"), None);
+        let missing = package_problem(&info(None), "0.11.0").unwrap();
+        assert!(missing.contains("not installed"), "{missing}");
+        assert!(
+            missing.contains("py -3 -m pip install hedgebuddy==0.11.0"),
+            "{missing}"
+        );
+        let old = package_problem(&info(Some("0.10.0")), "0.11.0").unwrap();
+        assert!(
+            old.contains("0.10.0") && old.contains("needs 0.11.0"),
+            "{old}"
+        );
+    }
 
     fn ok(stdout: &str) -> CommandOutput {
         CommandOutput {

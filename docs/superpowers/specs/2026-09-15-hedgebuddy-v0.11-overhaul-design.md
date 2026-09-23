@@ -255,6 +255,21 @@ def main(event, vars):
 
 Errors: `VariableNotFoundError`, `VariableTypeError`, `StorageNotFoundError`, `StorageCorruptedError`, `ManifestError`.
 
+Decisions made in phase 4:
+- `@hb.script` runs `main` only when its module is `__main__`; imported (for example by a test), it returns the function unchanged.
+- The decorated `main` must be the last top-level definition: `@hb.script` runs it while decorating, so code below it has not run yet (putting helpers below `main` raises `NameError`). Deferring the run to interpreter exit was rejected because it cannot set the exit code without skipping other libraries' exit handlers.
+- `main` returns `None` or an int from 0 to 255. Any other value is recorded as `error` and the exit code is 1.
+- The run record opens as soon as the active profile is known, so manifest and requirement failures are recorded with status `error`. Without an active profile nothing is recorded; the error goes to stderr and the exit code is 1.
+- `hb.var(name, default)` returns the default only when the variable is missing; storage errors are always raised. A variable declared without a value (a secret with nothing in `secrets.json`) counts as missing when a script runs.
+- `load_variables` rejects a `profile.json` whose `name` differs from its folder, just as core does.
+- `VariableNotFoundError` is both a `KeyError` and an `AttributeError`, so `vars.get`, `getattr(vars, name, default)` and `hasattr` work.
+- Payload fields named like `Event` attributes (`raw`, `app`, `name`, `get`) are read with `event["name"]`. A missing or blank `sys.argv[1]` is an empty payload; a payload that is not a JSON object raises `ValueError`.
+- Run records are written under an exclusive file lock (`msvcrt.locking` on Windows, `flock` on macOS) so parallel scripts never interleave lines. On Windows the lock covers one byte at 1 GiB, past the end of the file, because Windows locks are mandatory and would otherwise stop core from reading the runs. Core's `list_runs` skips a run file it cannot read. A record that cannot be written is reported once on stderr and never fails the script. Run ids are ULIDs; timestamps are UTC with milliseconds; all records of one run go to the file named by the local date at its start. The end record is written before a traceback is printed, so it is also recorded when stderr is missing or closed.
+- The library replaces the profile's secret values with `********` in `log` messages and the `end` traceback, and in the traceback it prints to stderr. Values shorter than four characters are not masked, so they cannot mangle unrelated text.
+- Manifest extraction skips a leading UTF-8 BOM, in core and in the library.
+- A requirement's `default` must be a valid value of its type (a string for `secret`). Core and the library both reject a manifest that breaks this. `"default": null` means no default, so the requirement is required.
+- `check_script` reports when a script imports `hedgebuddy` but the package is missing or at another version in the Python the Hedge apps use.
+
 ## 10. Desktop app
 
 Tauri v2, Vite + React + TypeScript, one window with sidebar navigation. Visual design is a fresh pass in phase 5 with mockups; the only constraint is that it must remain usable at a small window size beside OffShoot.

@@ -24,7 +24,7 @@ Across all valid cases together there must be at least one profile, one script, 
 
 `fixtures/invalid/<schema-stem>/*.json` are single documents that must **fail** validation against `<schema-stem>.schema.json`.
 
-Manifest extraction: the module docstring is the first statement in the file after any blank lines and `#` comment lines; it may use `"""` or `'''`; the text before the first line that is `---` (trailing whitespace ignored) is the manifest when it starts with `{`; otherwise there is no manifest.
+Manifest extraction: the module docstring is the first statement in the file after any blank lines and `#` comment lines; it may use `"""` or `'''`; the text before the first line that is `---` (trailing whitespace ignored) is the manifest when it starts with `{`; otherwise there is no manifest. A leading UTF-8 BOM is skipped before any of this.
 
 ## Expected parse results
 

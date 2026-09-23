@@ -74,7 +74,7 @@ pub fn tools() -> Vec<ToolDef> {
         ),
         tool!(
             "check_script",
-            "Check a script without running it: manifest against the catalog, required variables against the profile, and a Python compile check with the interpreter Hedge apps use.",
+            "Check a script without running it: manifest against the catalog, required variables against the profile, a Python compile check with the interpreter Hedge apps use, and whether the hedgebuddy package the script imports is installed there at the right version.",
             READ,
             ScriptArg,
             check_script
@@ -168,11 +168,20 @@ fn check_script(ctx: &Context, p: ScriptArg) -> ToolResult {
                 &info.executable,
                 &ctx.store.script_path(&profile, &p.name),
             )?;
-            (Some(info.executable), err)
+            (Some(info), err)
         }
         None => (None, None),
     };
-    let ok = check.issues.is_empty() && catalog_error.is_none() && syntax_error.is_none();
+    let package_problem = python.as_ref().and_then(|info| {
+        let source = ctx.store.read_script(&profile, &p.name).ok()?;
+        python_env::imports_hedgebuddy(&source)
+            .then(|| python_env::package_problem(info, env!("CARGO_PKG_VERSION")))
+            .flatten()
+    });
+    let ok = check.issues.is_empty()
+        && catalog_error.is_none()
+        && syntax_error.is_none()
+        && package_problem.is_none();
     Ok(json!({
         "profile": profile,
         "name": p.name,
@@ -180,8 +189,9 @@ fn check_script(ctx: &Context, p: ScriptArg) -> ToolResult {
         "unmet": to_json(&check.issues)?,
         "catalog_error": catalog_error,
         "syntax_checked": python.is_some(),
-        "python": python,
+        "python": python.as_ref().map(|info| &info.executable),
         "syntax_error": syntax_error,
+        "package_problem": package_problem,
         "ok": ok,
     }))
 }
@@ -339,6 +349,52 @@ mod tests {
         assert_eq!(
             out["syntax_error"],
             "SyntaxError: 'return' outside function"
+        );
+        assert_eq!(out["package_problem"], serde_json::Value::Null);
+        assert_eq!(out["ok"], false);
+    }
+
+    #[test]
+    fn check_reports_a_missing_hedgebuddy_package() {
+        let dir = tempfile::tempdir().unwrap();
+        let store_root = dir.path().join("HedgeBuddy");
+        let script_s = hedgebuddy_core::Store::open(&store_root)
+            .script_path("p", "uses_hb.py")
+            .to_string_lossy()
+            .to_string();
+        let host = FakeHost::new(Os::Windows)
+            .with_run_response(
+                "py",
+                &["-3", "-c", PROBE],
+                CommandOutput {
+                    status: 0,
+                    stdout: "{\"executable\": \"C:\\\\Py\\\\python.exe\", \"version\": \"3.13.5\", \"hedgebuddy\": null}\n".into(),
+                    stderr: String::new(),
+                },
+            )
+            .with_run_response(
+                "C:\\Py\\python.exe",
+                &["-c", SYNTAX_CHECK, &script_s],
+                CommandOutput { status: 0, stdout: String::new(), stderr: String::new() },
+            );
+        let ctx = crate::tools::Context::new(
+            hedgebuddy_core::Store::open(&store_root),
+            std::sync::Arc::new(host),
+        );
+        ctx.store.create_profile("p", "").unwrap();
+        call(
+            &ctx,
+            "write_script",
+            json!({"name": "uses_hb.py", "source": "import hedgebuddy as hb\n"}),
+        )
+        .unwrap();
+        let out = call(&ctx, "check_script", json!({"name": "uses_hb.py"})).unwrap();
+        assert!(
+            out["package_problem"]
+                .as_str()
+                .unwrap()
+                .contains("not installed"),
+            "{out}"
         );
         assert_eq!(out["ok"], false);
     }

@@ -239,6 +239,12 @@ mod tests {
             CoreError::Manifest(_)
         ));
         assert!(!store.script_path("p", "bad.py").exists());
+        let bad_default = "\"\"\"\n{\"hedgebuddy\": 1, \"requires\": {\"PORT\": {\"type\": \"int\", \"default\": \"8080\"}}}\n---\n\"\"\"\n";
+        assert!(matches!(
+            store.write_script("p", "port.py", bad_default).unwrap_err(),
+            CoreError::Manifest(_)
+        ));
+        assert!(!store.script_path("p", "port.py").exists());
         assert!(store.write_script("p", "../x.py", "").is_err());
         assert!(matches!(
             store.write_script("ghost", "a.py", "").unwrap_err(),

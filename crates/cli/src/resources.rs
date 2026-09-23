@@ -104,7 +104,8 @@ pub fn author_script(ctx: &Context, app: &str, event: &str) -> Result<String, To
     Ok(format!(
         "Write a HedgeBuddy script for {name} event {event}: {description}\n\n\
 Save it with write_script, set any required variables with set_var, check it with check_script, \
-then attach it with attach_script (dry_run first). Template:\n\n\
+then attach it with attach_script (dry_run first). The hedgebuddy package must be installed for \
+the Python the Hedge apps use; check_script reports it. Template:\n\n\
 ```python\n\"\"\"\n{{\"hedgebuddy\": 1, \"app\": \"{app}\", \"event\": \"{event}\", \"requires\": {{}}}}\n---\n\
 Describe what this script does.\n\"\"\"\nimport hedgebuddy as hb\n\n\n@hb.script\ndef main(event, vars):\n\
     # Payload fields for {name} {event}:\n{fields}\

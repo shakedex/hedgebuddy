@@ -7,7 +7,7 @@ use serde_json::Value;
 
 use crate::error::{CoreError, Result};
 use crate::profile::Profile;
-use crate::variable::{validate_var_name, VarType};
+use crate::variable::{validate_var_name, VarType, Variable};
 
 /// One entry of a manifest's `requires` map.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -63,8 +63,9 @@ pub enum RequirementIssue {
 
 /// The text before the `---` line of the first `"""` or `'''` docstring, when that
 /// text begins with `{`. Leading blank lines and comment lines (`#`) are skipped.
-/// Trailing whitespace on the `---` line is ignored.
+/// Trailing whitespace on the `---` line is ignored. A leading UTF-8 BOM is skipped.
 pub fn extract_manifest_text(source: &str) -> Option<String> {
+    let source = source.strip_prefix('\u{feff}').unwrap_or(source);
     // The module docstring is the first statement: skip blank lines and
     // comments, then require the file to open with a triple quote.
     let body = source
@@ -109,10 +110,33 @@ pub fn parse_manifest(source: &str) -> Result<Option<Manifest>> {
     if manifest.event.is_some() && manifest.app.is_none() {
         return Err(CoreError::Manifest("'event' requires 'app'".into()));
     }
-    for name in manifest.requires.keys() {
+    for (name, req) in &manifest.requires {
         validate_var_name(name).map_err(|e| CoreError::Manifest(e.to_string()))?;
+        if let Some(default) = &req.default {
+            check_default(req.ty, default)
+                .map_err(|e| CoreError::Manifest(format!("default for {name}: {e}")))?;
+        }
     }
     Ok(Some(manifest))
+}
+
+/// A default must be a valid value of its requirement's type, by the same
+/// rules as a stored variable. A secret's default must be a string (a stored
+/// secret carries no value in `profile.json`, so it is checked as a string).
+/// `"default": null` deserializes to `None` and never reaches this check.
+fn check_default(ty: VarType, default: &Value) -> Result<()> {
+    let ty = if ty == VarType::Secret {
+        VarType::String
+    } else {
+        ty
+    };
+    Variable {
+        ty,
+        value: Some(default.clone()),
+        description: String::new(),
+    }
+    .typed()
+    .map(|_| ())
 }
 
 /// Every requirement the profile fails, sorted by variable name.
@@ -154,6 +178,16 @@ mod tests {
         assert_eq!(m.event.as_deref(), Some("FileCopyCompleted"));
         assert_eq!(m.requires["SLACK_WEBHOOK"].ty, VarType::Secret);
         assert_eq!(m.requires["PROJECT_NAME"].default, Some(json!("Untitled")));
+    }
+
+    #[test]
+    fn a_leading_bom_is_skipped() {
+        let src = "\u{feff}\"\"\"\n{\"hedgebuddy\": 1}\n---\n\"\"\"\n";
+        // The docstring text starts with the newline after the quotes, as in Python.
+        assert_eq!(
+            extract_manifest_text(src).as_deref(),
+            Some("\n{\"hedgebuddy\": 1}")
+        );
     }
 
     #[test]
@@ -204,6 +238,57 @@ mod tests {
             parse_manifest(bad_type).unwrap_err(),
             CoreError::Manifest(_)
         ));
+    }
+
+    fn with_requirement(requirement: &str) -> String {
+        format!("\"\"\"\n{{\"hedgebuddy\": 1, \"requires\": {{\"PORT\": {requirement}}}}}\n---\n\"\"\"\n")
+    }
+
+    #[test]
+    fn defaults_must_match_their_type() {
+        let err =
+            parse_manifest(&with_requirement(r#"{"type": "int", "default": "8080"}"#)).unwrap_err();
+        assert!(
+            matches!(&err, CoreError::Manifest(m) if m.starts_with("default for PORT: ")),
+            "{err}"
+        );
+        for bad in [
+            r#"{"type": "secret", "default": 5}"#,
+            r#"{"type": "path", "default": ""}"#,
+            r#"{"type": "url", "default": "ftp://e.com"}"#,
+            r#"{"type": "string[]", "default": "a"}"#,
+        ] {
+            assert!(
+                matches!(
+                    parse_manifest(&with_requirement(bad)).unwrap_err(),
+                    CoreError::Manifest(_)
+                ),
+                "{bad}"
+            );
+        }
+        for good in [
+            r#"{"type": "int", "default": 8080}"#,
+            r#"{"type": "secret", "default": "x"}"#,
+            r#"{"type": "float", "default": 2}"#,
+            r#"{"type": "path[]", "default": ["D:/a"]}"#,
+        ] {
+            parse_manifest(&with_requirement(good)).unwrap();
+        }
+    }
+
+    #[test]
+    fn a_null_default_means_no_default() {
+        let m = parse_manifest(&with_requirement(r#"{"type": "int", "default": null}"#))
+            .unwrap()
+            .unwrap();
+        assert_eq!(m.requires["PORT"].default, None);
+        assert_eq!(
+            check_requirements(&m, &Profile::new("p", "")),
+            vec![RequirementIssue::Missing {
+                name: "PORT".into(),
+                ty: VarType::Int
+            }]
+        );
     }
 
     #[test]

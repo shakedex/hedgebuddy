@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "hedgebuddy"
 version = "0.11.0"
-description = "Read HedgeBuddy variables and Hedge app events from Python scripts"
+description = "Typed variables, event payloads and run records for Python scripts run by Hedge apps"
 readme = "README.md"
 requires-python = ">=3.9"
 license = "MIT"
@@ -14,7 +14,6 @@ keywords = ["hedge", "offshoot", "foolcat", "editready", "dit", "environment", "
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Intended Audience :: End Users/Desktop",
-  "License :: OSI Approved :: MIT License",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.9",
   "Programming Language :: Python :: 3.10",
