@@ -34,6 +34,8 @@ enum Command {
         #[arg(default_value = "{}")]
         args: String,
     },
+    /// Serve MCP over stdio (for Claude Desktop, Claude Code, and other MCP clients)
+    Mcp,
 }
 
 fn main() -> ExitCode {
@@ -55,6 +57,36 @@ fn main() -> ExitCode {
             ExitCode::SUCCESS
         }
         Command::Call { tool, args } => run_call(&tool, &args),
+        Command::Mcp => run_mcp(),
+    }
+}
+
+/// Serve MCP over stdio. Nothing here may print to stdout: it carries only
+/// protocol messages, so diagnostics go to stderr.
+fn run_mcp() -> ExitCode {
+    let ctx = match Context::real() {
+        Ok(c) => std::sync::Arc::new(c),
+        Err(e) => {
+            eprintln!("error: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let runtime = match tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+    {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("error: cannot start the async runtime: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    match runtime.block_on(hedgebuddy_cli::mcp::serve(ctx)) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
+            eprintln!("error: {e}");
+            ExitCode::FAILURE
+        }
     }
 }
 
