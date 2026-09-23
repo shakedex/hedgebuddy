@@ -4,6 +4,7 @@ import { isPreview } from "@/api/bridge";
 import { useDataChanged } from "@/api/events";
 import { AppShell } from "@/components/app/app-shell";
 import { DesignGallery } from "@/screens/design/design-gallery";
+import { HomeScreen } from "@/screens/home/home-screen";
 import { Placeholder } from "@/screens/placeholder";
 
 export default function App() {
@@ -12,7 +13,7 @@ export default function App() {
     <Router hook={useHashLocation}>
       <AppShell>
         <Switch>
-          <Route path="/">{/* Task 14: <HomeScreen /> */}<Placeholder screen="home" /></Route>
+          <Route path="/"><HomeScreen /></Route>
           <Route path="/runs">{/* Task 15 */}<Placeholder screen="runs" /></Route>
           <Route path="/runs/:runId">{() => <Placeholder screen="runs" />}</Route>
           <Route path="/variables">{() => <Placeholder screen="variables" />}</Route>
