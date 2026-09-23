@@ -20,7 +20,7 @@ use crate::store::Store;
 /// Actions serialize (to show a dry run) but deliberately do not
 /// deserialize. Plans are produced by core; front ends must re-plan from the
 /// original arguments rather than accepting actions from a client.
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, schemars::JsonSchema)]
 #[serde(tag = "action", rename_all = "snake_case")]
 pub enum Action {
     RegistrySet {
@@ -43,7 +43,7 @@ pub enum Action {
 }
 
 /// What an app event is attached to right now.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(tag = "state", rename_all = "snake_case")]
 pub enum AttachState {
     /// A script in this HedgeBuddy data directory.
@@ -77,7 +77,7 @@ pub enum AttachState {
 
 /// One event's attachment. The state is flattened into the same object:
 /// `{"app": ..., "event": ..., "state": "attached", "path": ..., ...}`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct EventAttachment {
     pub app: String,
     pub event: String,

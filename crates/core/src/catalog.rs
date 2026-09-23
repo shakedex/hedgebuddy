@@ -25,7 +25,7 @@ const EMBEDDED: [(&str, &str); 4] = [
 const LICENSE_COMMANDS: [&str; 3] = ["activate", "deactivate", "update"];
 
 /// A value that may differ between Windows and macOS.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[serde(bound(deserialize = "T: Deserialize<'de>"))]
 pub struct PerOs<T> {
@@ -55,7 +55,7 @@ impl<T> PerOs<T> {
 }
 
 /// `[app]`: identity of a Hedge app.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct AppInfo {
     pub id: String,
@@ -68,7 +68,7 @@ pub struct AppInfo {
 }
 
 /// `[detect.<os>]`: how to tell whether the app is installed.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Detect {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -82,7 +82,7 @@ pub struct Detect {
 }
 
 /// `[scripting.<os>]`: where script attachments live on that platform.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Scripting {
     Registry {
@@ -102,7 +102,7 @@ pub enum Scripting {
 }
 
 /// `[[events]]`: one scripting event.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct EventSpec {
     pub id: String,
@@ -119,7 +119,7 @@ pub struct EventSpec {
 }
 
 /// How a command is encoded as a URL.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum CommandForm {
     Url,
@@ -127,7 +127,7 @@ pub enum CommandForm {
 }
 
 /// `[[commands]]`: one URL-scheme command.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct CommandSpec {
     pub id: String,
@@ -145,7 +145,7 @@ pub struct CommandSpec {
 }
 
 /// `[files.<os>]`: app log files.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Files {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -155,7 +155,7 @@ pub struct Files {
 }
 
 /// `[presets.<os>]`: where presets live and how one is selected.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct PresetsSpec {
     pub dir: String,
@@ -168,7 +168,7 @@ pub struct PresetsSpec {
 }
 
 /// One catalog file.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct AppManifest {
     pub catalog_version: u32,
@@ -189,7 +189,7 @@ pub struct AppManifest {
 }
 
 /// Types a command parameter can have.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ParamType {
     String,
@@ -201,7 +201,7 @@ pub enum ParamType {
 }
 
 /// A parsed parameter declaration such as `"path[]?"`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ParamSpec {
     pub ty: ParamType,
     pub optional: bool,

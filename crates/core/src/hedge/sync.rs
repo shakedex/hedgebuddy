@@ -22,7 +22,7 @@ pub fn validate_manifest(catalog: &Catalog, manifest: &Manifest) -> Result<()> {
 }
 
 /// A script attached to (or detached from) an app event.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, schemars::JsonSchema)]
 pub struct SyncItem {
     pub app: String,
     pub event: String,
@@ -36,7 +36,7 @@ pub struct SyncItem {
 
 /// Result of [`Hedge::attach_script`]: the script, the event it targets,
 /// what attaching replaces, and the actions (applied unless it was a dry run).
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, schemars::JsonSchema)]
 pub struct AttachPlan {
     pub app: String,
     pub event: String,
@@ -48,7 +48,7 @@ pub struct AttachPlan {
 }
 
 /// Several scripts of one profile target the same app event.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, schemars::JsonSchema)]
 pub struct SyncConflict {
     pub app: String,
     pub event: String,
@@ -56,14 +56,14 @@ pub struct SyncConflict {
 }
 
 /// A script that could not be attached, and why.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, schemars::JsonSchema)]
 pub struct SyncSkip {
     pub script: String,
     pub reason: String,
 }
 
 /// Result of [`Hedge::sync_attachments`].
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, schemars::JsonSchema)]
 pub struct SyncReport {
     pub profile: String,
     pub attach: Vec<SyncItem>,

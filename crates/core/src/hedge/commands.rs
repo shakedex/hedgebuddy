@@ -23,7 +23,7 @@ pub struct CommandCall {
 
 /// The URLs a list of commands turns into, and which commands the operator
 /// should confirm first.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, schemars::JsonSchema)]
 pub struct CommandPlan {
     pub app: String,
     pub urls: Vec<String>,
@@ -31,7 +31,7 @@ pub struct CommandPlan {
 }
 
 /// What happened when the URLs were opened.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, schemars::JsonSchema)]
 pub struct CommandOutcome {
     pub plan: CommandPlan,
     pub responses: Vec<String>,

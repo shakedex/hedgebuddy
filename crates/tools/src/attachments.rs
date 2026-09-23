@@ -1,21 +1,18 @@
 //! Attaching scripts to Hedge app events.
 
+use hedgebuddy_core::hedge::{Action, AttachPlan, EventAttachment, SyncReport};
 use schemars::JsonSchema;
-use serde::Deserialize;
-use serde_json::{json, Value};
+use serde::{Deserialize, Serialize};
 
-use super::{to_json, tool, Context, ToolDef, ToolResult, DESTRUCTIVE, READ};
+use super::{tool, Context, ToolDef, ToolError, DESTRUCTIVE, READ};
 use crate::scripts::ScriptDry;
 
 const APPLY_NOTE: &str = "On macOS the change is staged in the OffShoot Helper workspace HedgeBuddy.json; the operator applies it from the OffShoot Helper menu. The Hedge app may need a restart to pick up the change (unverified).";
 
-/// Add the OffShoot Helper apply note, but only when the change was actually
+/// The OffShoot Helper apply note, but only when the change was actually
 /// applied: on a dry run nothing was staged, so the note would be misleading.
-fn with_note(mut out: Value, applied: bool) -> Value {
-    if applied {
-        out["note"] = json!(APPLY_NOTE);
-    }
-    out
+fn note(applied: bool) -> Option<String> {
+    applied.then(|| APPLY_NOTE.to_owned())
 }
 
 /// An app id.
@@ -51,6 +48,71 @@ pub struct AppEventDry {
     pub dry_run: bool,
 }
 
+/// Result of `list_attachments`.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct ListAttachmentsResult {
+    /// Catalog app id.
+    pub app: String,
+    /// Every event of the app and what it runs.
+    pub events: Vec<EventAttachment>,
+}
+
+/// Result of `attach_script`.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct AttachScriptResult {
+    /// The planned (or applied) attachment.
+    #[serde(flatten)]
+    pub plan: AttachPlan,
+    /// False on a dry run.
+    pub applied: bool,
+    /// How to apply the change on macOS; absent on a dry run.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
+}
+
+/// Result of `detach_script`.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct DetachScriptResult {
+    /// Profile name.
+    pub profile: String,
+    /// Script file name.
+    pub script: String,
+    /// The changes to the Hedge app's settings.
+    pub actions: Vec<Action>,
+    /// False on a dry run.
+    pub applied: bool,
+    /// How to apply the change on macOS; absent on a dry run.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
+}
+
+/// Result of `sync_attachments`.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct SyncAttachmentsResult {
+    /// What was (or would be) attached and detached.
+    #[serde(flatten)]
+    pub report: SyncReport,
+    /// How to apply the change on macOS; absent on a dry run.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
+}
+
+/// Result of `clear_stale_attachment`.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct ClearStaleResult {
+    /// Catalog app id.
+    pub app: String,
+    /// Event id.
+    pub event: String,
+    /// The changes to the Hedge app's settings.
+    pub actions: Vec<Action>,
+    /// False on a dry run.
+    pub applied: bool,
+    /// How to apply the change on macOS; absent on a dry run.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
+}
+
 /// The attachment tools.
 pub fn tools() -> Vec<ToolDef> {
     vec![
@@ -59,6 +121,7 @@ pub fn tools() -> Vec<ToolDef> {
             "Show what every event of a Hedge app is attached to: attached (a HedgeBuddy script), external (the operator's own file), stale (a file that no longer exists), staged (macOS, waiting to be applied in OffShoot Helper), detached, manual, or unsupported.",
             READ,
             AppArg,
+            ListAttachmentsResult,
             list_attachments
         ),
         tool!(
@@ -66,6 +129,7 @@ pub fn tools() -> Vec<ToolDef> {
             "Attach a script to the app event its manifest names. Changes the Hedge app's settings: run with dry_run first and show the operator the planned change, including `replaces` if something else was attached. Refuses scripts with unmet requirements.",
             DESTRUCTIVE,
             ScriptDry,
+            AttachScriptResult,
             attach_script
         ),
         tool!(
@@ -73,6 +137,7 @@ pub fn tools() -> Vec<ToolDef> {
             "Detach a script from its app event, only if that event is attached to this script. Run with dry_run first.",
             DESTRUCTIVE,
             ScriptDry,
+            DetachScriptResult,
             detach_script
         ),
         tool!(
@@ -80,6 +145,7 @@ pub fn tools() -> Vec<ToolDef> {
             "Make the Hedge apps run this profile's scripts: attach every script whose manifest names an app event, and detach other profiles' HedgeBuddy scripts from events this profile does not use. The operator's own (external) scripts are never detached. Run with dry_run first and show the report.",
             DESTRUCTIVE,
             ProfileDry,
+            SyncAttachmentsResult,
             sync_attachments
         ),
         tool!(
@@ -87,52 +153,68 @@ pub fn tools() -> Vec<ToolDef> {
             "Detach an app event that points at a script file that no longer exists (state stale). Refuses any other state. Run with dry_run first.",
             DESTRUCTIVE,
             AppEventDry,
+            ClearStaleResult,
             clear_stale_attachment
         ),
     ]
 }
 
-fn list_attachments(ctx: &Context, p: AppArg) -> ToolResult {
-    Ok(json!({ "app": p.app, "events": to_json(&ctx.hedge.attachments(&p.app, &ctx.store)?)? }))
+fn list_attachments(ctx: &Context, p: AppArg) -> Result<ListAttachmentsResult, ToolError> {
+    let events = ctx.hedge.attachments(&p.app, &ctx.store)?;
+    Ok(ListAttachmentsResult { app: p.app, events })
 }
 
-fn attach_script(ctx: &Context, p: ScriptDry) -> ToolResult {
+fn attach_script(ctx: &Context, p: ScriptDry) -> Result<AttachScriptResult, ToolError> {
     let profile = ctx.profile(p.profile.as_deref())?;
     let plan = ctx
         .hedge
         .attach_script(&ctx.store, &profile, &p.name, p.dry_run)?;
     let applied = !p.dry_run;
-    let mut out = to_json(&plan)?;
-    out["applied"] = json!(applied);
-    Ok(with_note(out, applied))
+    Ok(AttachScriptResult {
+        plan,
+        applied,
+        note: note(applied),
+    })
 }
 
-fn detach_script(ctx: &Context, p: ScriptDry) -> ToolResult {
+fn detach_script(ctx: &Context, p: ScriptDry) -> Result<DetachScriptResult, ToolError> {
     let profile = ctx.profile(p.profile.as_deref())?;
     let actions = ctx
         .hedge
         .detach_script(&ctx.store, &profile, &p.name, p.dry_run)?;
     let applied = !p.dry_run;
-    let out = json!({ "profile": profile, "script": p.name, "actions": to_json(&actions)?, "applied": applied });
-    Ok(with_note(out, applied))
+    Ok(DetachScriptResult {
+        profile,
+        script: p.name,
+        actions,
+        applied,
+        note: note(applied),
+    })
 }
 
-fn sync_attachments(ctx: &Context, p: ProfileDry) -> ToolResult {
+fn sync_attachments(ctx: &Context, p: ProfileDry) -> Result<SyncAttachmentsResult, ToolError> {
     let profile = ctx.profile(p.profile.as_deref())?;
     let report = ctx
         .hedge
         .sync_attachments(&ctx.store, &profile, p.dry_run)?;
-    let applied = report.applied;
-    Ok(with_note(to_json(&report)?, applied))
+    Ok(SyncAttachmentsResult {
+        note: note(report.applied),
+        report,
+    })
 }
 
-fn clear_stale_attachment(ctx: &Context, p: AppEventDry) -> ToolResult {
+fn clear_stale_attachment(ctx: &Context, p: AppEventDry) -> Result<ClearStaleResult, ToolError> {
     let actions = ctx
         .hedge
         .clear_stale_attachment(&p.app, &p.event, &ctx.store, p.dry_run)?;
     let applied = !p.dry_run;
-    let out = json!({ "app": p.app, "event": p.event, "actions": to_json(&actions)?, "applied": applied });
-    Ok(with_note(out, applied))
+    Ok(ClearStaleResult {
+        app: p.app,
+        event: p.event,
+        actions,
+        applied,
+        note: note(applied),
+    })
 }
 
 #[cfg(test)]

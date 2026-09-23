@@ -1595,6 +1595,7 @@ dependencies = [
  "jsonschema",
  "notify",
  "open",
+ "schemars 1.2.2",
  "serde",
  "serde_json",
  "sysinfo",
@@ -1610,6 +1611,7 @@ version = "0.11.0"
 dependencies = [
  "hedgebuddy-core",
  "jiff",
+ "jsonschema",
  "schemars 1.2.2",
  "serde",
  "serde_json",

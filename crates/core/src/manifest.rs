@@ -10,7 +10,7 @@ use crate::profile::Profile;
 use crate::variable::{validate_var_name, VarType, Variable};
 
 /// One entry of a manifest's `requires` map.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Requirement {
     #[serde(rename = "type")]
@@ -27,7 +27,7 @@ pub struct Requirement {
 /// patterns for known apps and events (`^[a-z][a-z0-9-]*$` and
 /// `^[A-Za-z][A-Za-z0-9]*$`) are enforced against the phase 2B catalog, not
 /// by this type.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Manifest {
     pub hedgebuddy: u32,
@@ -40,7 +40,7 @@ pub struct Manifest {
 }
 
 /// Why a profile does not satisfy a manifest.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum RequirementIssue {
     /// The profile has no variable with this name.

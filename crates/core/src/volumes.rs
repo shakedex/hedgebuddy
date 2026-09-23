@@ -18,14 +18,14 @@ const FRAMES: &[&str] = &["ari", "arx", "dng"];
 const AUDIO: &[&str] = &["wav", "bwf"];
 
 /// Which kind of card a volume looks like, and the evidence.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, schemars::JsonSchema)]
 pub struct CardGuess {
     pub kind: String,
     pub evidence: String,
 }
 
 /// What is on a volume.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, schemars::JsonSchema)]
 pub struct VolumeReport {
     pub root: PathBuf,
     pub card: Option<CardGuess>,

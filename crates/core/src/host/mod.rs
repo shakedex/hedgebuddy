@@ -18,7 +18,19 @@ pub use fake::FakeHost;
 pub use real::RealHost;
 
 /// The two supported desktop platforms.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Hash,
+    PartialOrd,
+    Ord,
+    Serialize,
+    Deserialize,
+    schemars::JsonSchema,
+)]
 #[serde(rename_all = "lowercase")]
 pub enum Os {
     Windows,
@@ -45,7 +57,7 @@ impl Os {
 }
 
 /// A registry value HedgeBuddy reads or writes.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(tag = "type", content = "data", rename_all = "lowercase")]
 pub enum RegValue {
     String(String),
@@ -68,7 +80,7 @@ pub struct CommandOutput {
 }
 
 /// A mounted volume as the operating system reports it.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct VolumeInfo {
     pub name: String,
     pub mount_point: PathBuf,

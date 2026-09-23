@@ -2,12 +2,14 @@
 
 use std::path::{Path, PathBuf};
 
-use hedgebuddy_core::{python_env, volumes, RunFilter};
+use hedgebuddy_core::host::VolumeInfo;
+use hedgebuddy_core::python_env::PythonInfo;
+use hedgebuddy_core::volumes::VolumeReport;
+use hedgebuddy_core::{python_env, volumes, Run, RunFilter};
 use schemars::JsonSchema;
-use serde::Deserialize;
-use serde_json::json;
+use serde::{Deserialize, Serialize};
 
-use super::{to_json, tool, Context, NoParams, ToolDef, ToolError, ToolResult, READ};
+use super::{tool, Context, NoParams, ToolDef, ToolError, READ};
 
 /// Arguments of `list_runs`.
 #[derive(Debug, Default, Deserialize, JsonSchema)]
@@ -43,6 +45,72 @@ pub struct PathArg {
     pub path: PathBuf,
 }
 
+/// Result of `list_runs`.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct ListRunsResult {
+    /// Runs, newest first.
+    pub runs: Vec<Run>,
+}
+
+/// Result of `list_volumes`.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct ListVolumesResult {
+    /// Mounted volumes.
+    pub volumes: Vec<VolumeInfo>,
+}
+
+/// Result of `inspect_volume`.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct InspectVolumeResult {
+    /// What is on the volume or folder.
+    pub report: VolumeReport,
+    /// The mounted volume at that path, if it is one.
+    pub volume: Option<VolumeInfo>,
+}
+
+/// Catalog overrides in effect.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct CatalogState {
+    /// Apps whose catalog file is overridden from `<data>/catalog/`.
+    pub overridden: Vec<String>,
+    /// Why the overrides were ignored, if they were.
+    pub error: Option<String>,
+}
+
+/// One Hedge app in `environment`.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct EnvironmentApp {
+    /// Catalog app id.
+    pub id: String,
+    /// Whether it is installed.
+    pub installed: bool,
+    /// Installed version.
+    pub version: Option<String>,
+    /// Warnings such as a version newer than tested.
+    pub warnings: Vec<String>,
+}
+
+/// Result of `environment`.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct EnvironmentResult {
+    /// HedgeBuddy's version.
+    pub version: String,
+    /// "windows" or "macos".
+    pub os: String,
+    /// The data folder.
+    pub data_dir: PathBuf,
+    /// The active profile.
+    pub active_profile: Option<String>,
+    /// Catalog overrides.
+    pub catalog: CatalogState,
+    /// The Python the Hedge apps use, if found.
+    pub python: Option<PythonInfo>,
+    /// Whether that Python has this HedgeBuddy's `hedgebuddy` package.
+    pub python_package_matches: bool,
+    /// Hedge app status.
+    pub apps: Vec<EnvironmentApp>,
+}
+
 /// The run and system tools.
 pub fn tools() -> Vec<ToolDef> {
     vec![
@@ -51,14 +119,23 @@ pub fn tools() -> Vec<ToolDef> {
             "List recent script runs (newest first) with status, exit code, and log lines. Runs older than 30 days are pruned.",
             READ,
             ListRuns,
+            ListRunsResult,
             list_runs
         ),
-        tool!("get_run", "Show one script run with its log lines and traceback, if any.", READ, RunId, get_run),
+        tool!(
+            "get_run",
+            "Show one script run with its log lines and traceback, if any.",
+            READ,
+            RunId,
+            Run,
+            get_run
+        ),
         tool!(
             "list_volumes",
             "List mounted volumes with name, mount point, file system, size, free space, and whether the OS reports them removable (many card readers report false).",
             READ,
             NoParams,
+            ListVolumesResult,
             list_volumes
         ),
         tool!(
@@ -66,6 +143,7 @@ pub fn tools() -> Vec<ToolDef> {
             "Look inside a volume or folder: camera-card guess (sony, canon, panasonic, red, arri, blackmagic, avchd, dcim, audio) with evidence, clip count, media size, and top-level folders.",
             READ,
             PathArg,
+            InspectVolumeResult,
             inspect_volume
         ),
         tool!(
@@ -73,31 +151,34 @@ pub fn tools() -> Vec<ToolDef> {
             "HedgeBuddy's environment: version, data directory, active profile, catalog overrides and errors, the Python interpreter Hedge apps use and whether the hedgebuddy package there matches, and Hedge app status.",
             READ,
             NoParams,
+            EnvironmentResult,
             environment
         ),
     ]
 }
 
-fn list_runs(ctx: &Context, p: ListRuns) -> ToolResult {
+fn list_runs(ctx: &Context, p: ListRuns) -> Result<ListRunsResult, ToolError> {
     let filter = RunFilter {
         profile: p.profile,
         script: p.script,
         app: p.app,
         limit: Some(p.limit.unwrap_or(20)),
     };
-    Ok(json!({ "runs": to_json(&ctx.store.list_recent_runs(&filter)?)? }))
+    Ok(ListRunsResult {
+        runs: ctx.store.list_recent_runs(&filter)?,
+    })
 }
 
-fn get_run(ctx: &Context, p: RunId) -> ToolResult {
-    let run = ctx
-        .store
+fn get_run(ctx: &Context, p: RunId) -> Result<Run, ToolError> {
+    ctx.store
         .get_run(&p.run_id)?
-        .ok_or_else(|| ToolError::new(format!("run '{}' not found", p.run_id)))?;
-    to_json(&run)
+        .ok_or_else(|| ToolError::new(format!("run '{}' not found", p.run_id)))
 }
 
-fn list_volumes(ctx: &Context, _: NoParams) -> ToolResult {
-    Ok(json!({ "volumes": to_json(&ctx.hedge.host().volumes()?)? }))
+fn list_volumes(ctx: &Context, _: NoParams) -> Result<ListVolumesResult, ToolError> {
+    Ok(ListVolumesResult {
+        volumes: ctx.hedge.host().volumes()?,
+    })
 }
 
 fn trimmed(p: &Path) -> String {
@@ -106,7 +187,7 @@ fn trimmed(p: &Path) -> String {
         .to_string()
 }
 
-fn inspect_volume(ctx: &Context, p: PathArg) -> ToolResult {
+fn inspect_volume(ctx: &Context, p: PathArg) -> Result<InspectVolumeResult, ToolError> {
     let report = volumes::inspect_volume(&p.path)?;
     let volume = ctx
         .hedge
@@ -115,30 +196,38 @@ fn inspect_volume(ctx: &Context, p: PathArg) -> ToolResult {
         .unwrap_or_default()
         .into_iter()
         .find(|v| trimmed(&v.mount_point) == trimmed(&p.path));
-    Ok(json!({ "report": to_json(&report)?, "volume": to_json(&volume)? }))
+    Ok(InspectVolumeResult { report, volume })
 }
 
-fn environment(ctx: &Context, _: NoParams) -> ToolResult {
+fn environment(ctx: &Context, _: NoParams) -> Result<EnvironmentResult, ToolError> {
     let host = ctx.hedge.host();
     let python = python_env::find_python(host)?;
     let matches =
         python.as_ref().and_then(|p| p.hedgebuddy.as_deref()) == Some(env!("CARGO_PKG_VERSION"));
-    let apps: Vec<serde_json::Value> = ctx
+    let apps: Vec<EnvironmentApp> = ctx
         .hedge
         .apps()?
         .into_iter()
-        .map(|a| json!({ "id": a.id, "installed": a.installed, "version": a.version, "warnings": a.warnings }))
+        .map(|a| EnvironmentApp {
+            id: a.id,
+            installed: a.installed,
+            version: a.version,
+            warnings: a.warnings,
+        })
         .collect();
-    Ok(json!({
-        "version": env!("CARGO_PKG_VERSION"),
-        "os": host.os().as_str(),
-        "data_dir": ctx.store.root(),
-        "active_profile": ctx.store.active_profile_name()?,
-        "catalog": { "overridden": ctx.hedge.catalog().overridden(), "error": ctx.catalog_error },
-        "python": to_json(&python)?,
-        "python_package_matches": matches,
-        "apps": apps,
-    }))
+    Ok(EnvironmentResult {
+        version: env!("CARGO_PKG_VERSION").to_owned(),
+        os: host.os().as_str().to_owned(),
+        data_dir: ctx.store.root().to_path_buf(),
+        active_profile: ctx.store.active_profile_name()?,
+        catalog: CatalogState {
+            overridden: ctx.hedge.catalog().overridden().to_vec(),
+            error: ctx.catalog_error.clone(),
+        },
+        python,
+        python_package_matches: matches,
+        apps,
+    })
 }
 
 #[cfg(test)]

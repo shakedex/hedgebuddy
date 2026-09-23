@@ -1,10 +1,10 @@
 //! Profile tools.
 
+use hedgebuddy_core::Profile;
 use schemars::JsonSchema;
-use serde::Deserialize;
-use serde_json::{json, Value};
+use serde::{Deserialize, Serialize};
 
-use super::{to_json, tool, Context, NoParams, ToolDef, ToolResult, DESTRUCTIVE, READ, WRITE};
+use super::{tool, Context, NoParams, ToolDef, ToolError, DESTRUCTIVE, READ, WRITE};
 use crate::scripts::attached_to;
 
 /// Which profile (defaults to the active one).
@@ -46,15 +46,105 @@ pub struct DeleteProfile {
     pub dry_run: bool,
 }
 
+/// Result of `list_profiles`.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct ListProfilesResult {
+    /// The active profile, or null when there is none.
+    pub active: Option<String>,
+    /// Every profile name.
+    pub profiles: Vec<String>,
+}
+
+/// Result of `get_profile`.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct GetProfileResult {
+    /// The profile; secret values are never included.
+    pub profile: Profile,
+    /// Whether it is the active profile.
+    pub active: bool,
+    /// Its script file names.
+    pub scripts: Vec<String>,
+}
+
+/// Result of `create_profile`.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct CreateProfileResult {
+    /// The new, empty profile.
+    pub profile: Profile,
+    /// Whether it became the active profile (the first one does).
+    pub active: bool,
+}
+
+/// Result of `set_active_profile`.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct SetActiveProfileResult {
+    /// The profile that is now active.
+    pub active: String,
+}
+
+/// An app event attached to one of a profile's scripts.
+#[derive(Debug, Clone, Serialize, JsonSchema)]
+pub struct ScriptEvent {
+    /// Catalog app id.
+    pub app: String,
+    /// Event id.
+    pub event: String,
+    /// Script file name.
+    pub script: String,
+}
+
+/// What `delete_profile` would delete.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct ProfileDeletion {
+    /// Profile name.
+    pub profile: String,
+    /// How many variables it holds.
+    pub variables: usize,
+    /// Its script file names.
+    pub scripts: Vec<String>,
+}
+
+/// Result of `delete_profile`.
+#[derive(Debug, Serialize, JsonSchema)]
+#[serde(untagged)]
+pub enum DeleteProfileResult {
+    /// With `dry_run`: what would be deleted.
+    DryRun {
+        /// Always true.
+        dry_run: bool,
+        /// What would be deleted.
+        would_delete: ProfileDeletion,
+        /// App events attached to its scripts.
+        attached_to: Vec<ScriptEvent>,
+    },
+    /// The profile was deleted.
+    Deleted {
+        /// The deleted profile's name.
+        deleted: String,
+        /// The active profile afterwards.
+        active: Option<String>,
+        /// App events that pointed at its scripts.
+        attached_to: Vec<ScriptEvent>,
+    },
+}
+
 /// The profile tools.
 pub fn tools() -> Vec<ToolDef> {
     vec![
-        tool!("list_profiles", "List profiles and which one is active.", READ, NoParams, list_profiles),
+        tool!(
+            "list_profiles",
+            "List profiles and which one is active.",
+            READ,
+            NoParams,
+            ListProfilesResult,
+            list_profiles
+        ),
         tool!(
             "get_profile",
             "Show a profile: its variables (secret values are never included), its scripts, and whether it is active. Defaults to the active profile.",
             READ,
             ProfileArg,
+            GetProfileResult,
             get_profile
         ),
         tool!(
@@ -62,6 +152,7 @@ pub fn tools() -> Vec<ToolDef> {
             "Create an empty profile. The name uses lowercase letters, digits and dashes. The first profile created becomes active.",
             WRITE,
             CreateProfile,
+            CreateProfileResult,
             create_profile
         ),
         tool!(
@@ -69,6 +160,7 @@ pub fn tools() -> Vec<ToolDef> {
             "Make a profile active. Scripts read the active profile's variables.",
             WRITE,
             NameArg,
+            SetActiveProfileResult,
             set_active_profile
         ),
         tool!(
@@ -76,19 +168,20 @@ pub fn tools() -> Vec<ToolDef> {
             "Delete a profile with its variables, secrets and scripts. Run with dry_run first and confirm with the operator; attached_to lists the Hedge app events attached to its scripts. Detach those first (sync another profile or use detach_script), or the events will point at missing files.",
             DESTRUCTIVE,
             DeleteProfile,
+            DeleteProfileResult,
             delete_profile
         ),
     ]
 }
 
-fn list_profiles(ctx: &Context, _: NoParams) -> ToolResult {
-    Ok(json!({
-        "active": ctx.store.active_profile_name()?,
-        "profiles": ctx.store.list_profiles()?,
-    }))
+fn list_profiles(ctx: &Context, _: NoParams) -> Result<ListProfilesResult, ToolError> {
+    Ok(ListProfilesResult {
+        active: ctx.store.active_profile_name()?,
+        profiles: ctx.store.list_profiles()?,
+    })
 }
 
-fn get_profile(ctx: &Context, p: ProfileArg) -> ToolResult {
+fn get_profile(ctx: &Context, p: ProfileArg) -> Result<GetProfileResult, ToolError> {
     let name = ctx.profile(p.profile.as_deref())?;
     let profile = ctx.store.load_profile(&name)?;
     let scripts: Vec<String> = ctx
@@ -98,21 +191,25 @@ fn get_profile(ctx: &Context, p: ProfileArg) -> ToolResult {
         .map(|s| s.name)
         .collect();
     let active = ctx.store.active_profile_name()?.as_deref() == Some(name.as_str());
-    Ok(json!({ "profile": to_json(&profile)?, "active": active, "scripts": scripts }))
+    Ok(GetProfileResult {
+        profile,
+        active,
+        scripts,
+    })
 }
 
-fn create_profile(ctx: &Context, p: CreateProfile) -> ToolResult {
+fn create_profile(ctx: &Context, p: CreateProfile) -> Result<CreateProfileResult, ToolError> {
     let profile = ctx.store.create_profile(&p.name, &p.description)?;
     let active = ctx.store.active_profile_name()?.as_deref() == Some(p.name.as_str());
-    Ok(json!({ "profile": to_json(&profile)?, "active": active }))
+    Ok(CreateProfileResult { profile, active })
 }
 
-fn set_active_profile(ctx: &Context, p: NameArg) -> ToolResult {
+fn set_active_profile(ctx: &Context, p: NameArg) -> Result<SetActiveProfileResult, ToolError> {
     ctx.store.set_active_profile(&p.name)?;
-    Ok(json!({ "active": p.name }))
+    Ok(SetActiveProfileResult { active: p.name })
 }
 
-fn delete_profile(ctx: &Context, p: DeleteProfile) -> ToolResult {
+fn delete_profile(ctx: &Context, p: DeleteProfile) -> Result<DeleteProfileResult, ToolError> {
     let profile = ctx.store.load_profile(&p.name)?;
     let scripts: Vec<String> = ctx
         .store
@@ -121,28 +218,35 @@ fn delete_profile(ctx: &Context, p: DeleteProfile) -> ToolResult {
         .map(|s| s.name)
         .collect();
     // App events attached to this profile's scripts go stale once it is gone.
-    let attached: Vec<Value> = scripts
+    let attached: Vec<ScriptEvent> = scripts
         .iter()
         .flat_map(|script| {
             attached_to(ctx, &p.name, script)
                 .into_iter()
-                .map(move |mut a| {
-                    a["script"] = json!(script);
-                    a
+                .map(move |a| ScriptEvent {
+                    app: a.app,
+                    event: a.event,
+                    script: script.clone(),
                 })
         })
         .collect();
     if p.dry_run {
-        return Ok(json!({
-            "dry_run": true,
-            "would_delete": { "profile": p.name, "variables": profile.variables.len(), "scripts": scripts },
-            "attached_to": attached,
-        }));
+        return Ok(DeleteProfileResult::DryRun {
+            dry_run: true,
+            would_delete: ProfileDeletion {
+                profile: p.name,
+                variables: profile.variables.len(),
+                scripts,
+            },
+            attached_to: attached,
+        });
     }
     ctx.store.delete_profile(&p.name)?;
-    Ok(
-        json!({ "deleted": p.name, "active": ctx.store.active_profile_name()?, "attached_to": attached }),
-    )
+    Ok(DeleteProfileResult::Deleted {
+        deleted: p.name,
+        active: ctx.store.active_profile_name()?,
+        attached_to: attached,
+    })
 }
 
 #[cfg(test)]

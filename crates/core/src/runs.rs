@@ -15,7 +15,7 @@ use crate::store::Store;
 pub const RUN_RETENTION_DAYS: i32 = 30;
 
 /// Status of a completed run.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum RunStatus {
     /// Run succeeded.
@@ -59,7 +59,7 @@ pub enum RunRecord {
 }
 
 /// One `log` record, reassociated with its run.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct LogLine {
     /// When the log line was written.
     pub ts: String,
@@ -68,7 +68,7 @@ pub struct LogLine {
 }
 
 /// A start record with its logs and (if any) its end record.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct Run {
     /// The run's unique ID, from the `start` record.
     pub run_id: String,

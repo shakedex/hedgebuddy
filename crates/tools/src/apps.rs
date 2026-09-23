@@ -2,12 +2,14 @@
 
 use std::time::Duration;
 
-use hedgebuddy_core::hedge::{CommandCall, LogKind, Preset};
+use hedgebuddy_core::hedge::{
+    Action, AppDescription, AppStatus, CommandCall, CommandOutcome, CommandPlan, LogKind, Preset,
+};
 use schemars::JsonSchema;
-use serde::Deserialize;
-use serde_json::{json, Map, Value};
+use serde::{Deserialize, Serialize};
+use serde_json::{Map, Value};
 
-use super::{to_json, tool, Context, NoParams, ToolDef, ToolError, ToolResult, DESTRUCTIVE, READ};
+use super::{tool, Context, NoParams, ToolDef, ToolError, DESTRUCTIVE, READ};
 use crate::attachments::AppArg;
 
 /// One command of `run_app_command`.
@@ -94,6 +96,94 @@ pub struct SelectPreset {
     pub dry_run: bool,
 }
 
+/// Result of `list_apps`.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct ListAppsResult {
+    /// Every catalog app and its status on this machine.
+    pub apps: Vec<AppStatus>,
+}
+
+/// Result of `run_app_command`.
+#[derive(Debug, Serialize, JsonSchema)]
+#[serde(untagged)]
+pub enum RunAppCommandResult {
+    /// With `dry_run`: the planned URLs; nothing ran.
+    DryRun {
+        /// Always false.
+        executed: bool,
+        /// Always true.
+        dry_run: bool,
+        /// The URLs that would open.
+        plan: CommandPlan,
+    },
+    /// Some commands need the operator's approval; nothing ran.
+    NeedsConfirmation {
+        /// Always false.
+        executed: bool,
+        /// Commands the operator must approve.
+        requires_confirmation: Vec<String>,
+        /// The URLs that would open.
+        plan: CommandPlan,
+        /// What to do next.
+        message: String,
+    },
+    /// The commands ran.
+    Executed {
+        /// Always true.
+        executed: bool,
+        /// The URLs opened and the app's responses.
+        outcome: CommandOutcome,
+    },
+}
+
+/// Result of `read_app_log`.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct ReadAppLogResult {
+    /// Catalog app id.
+    pub app: String,
+    /// "callback" or "event".
+    pub log: String,
+    /// The last lines, oldest first.
+    pub lines: Vec<String>,
+}
+
+/// Result of `list_presets`.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct ListPresetsResult {
+    /// Catalog app id.
+    pub app: String,
+    /// The app's presets.
+    pub presets: Vec<Preset>,
+    /// The selected preset, if known.
+    pub selected: Option<String>,
+}
+
+/// Result of `write_preset`.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct WritePresetResult {
+    /// The preset written (or planned).
+    pub preset: Preset,
+    /// The file changes.
+    pub actions: Vec<Action>,
+    /// False on a dry run.
+    pub applied: bool,
+    /// What to do next.
+    pub next: String,
+}
+
+/// Result of `select_preset`.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct SelectPresetResult {
+    /// Catalog app id.
+    pub app: String,
+    /// The preset selected.
+    pub selected: String,
+    /// The settings changes.
+    pub actions: Vec<Action>,
+    /// False on a dry run.
+    pub applied: bool,
+}
+
 /// The Hedge app tools.
 pub fn tools() -> Vec<ToolDef> {
     vec![
@@ -102,6 +192,7 @@ pub fn tools() -> Vec<ToolDef> {
             "List Hedge apps: installed or not, version, whether scripting is enabled, and warnings (for example an app newer than HedgeBuddy's catalog).",
             READ,
             NoParams,
+            ListAppsResult,
             list_apps
         ),
         tool!(
@@ -109,6 +200,7 @@ pub fn tools() -> Vec<ToolDef> {
             "Everything about one Hedge app: status, events with the exact payload keys scripts receive, commands with parameter types, file locations, and the documentation URL.",
             READ,
             AppArg,
+            AppDescription,
             describe_app
         ),
         tool!(
@@ -116,6 +208,7 @@ pub fn tools() -> Vec<ToolDef> {
             "Run Hedge app URL commands in order (for OffShoot: reset, setSource, setDestination, addTransfers, reloadPresets...). Run with dry_run first and show the operator the plan. Commands listed in requires_confirmation run only when called again with confirmed: true after the operator agrees. Returns the app's callback-log responses.",
             DESTRUCTIVE,
             RunCommand,
+            RunAppCommandResult,
             run_app_command
         ),
         tool!(
@@ -123,6 +216,7 @@ pub fn tools() -> Vec<ToolDef> {
             "Read the last lines of a Hedge app's callback log (URL command responses) or event log.",
             READ,
             ReadLog,
+            ReadAppLogResult,
             read_app_log
         ),
         tool!(
@@ -130,6 +224,7 @@ pub fn tools() -> Vec<ToolDef> {
             "List the app's presets (folder pattern, label pattern, counter) and which one is selected.",
             READ,
             AppArg,
+            ListPresetsResult,
             list_presets
         ),
         tool!(
@@ -137,6 +232,7 @@ pub fn tools() -> Vec<ToolDef> {
             "Create or update a preset file. Run with dry_run first. Afterwards run run_app_command with reloadPresets so the app sees it.",
             DESTRUCTIVE,
             WritePreset,
+            WritePresetResult,
             write_preset
         ),
         tool!(
@@ -144,20 +240,23 @@ pub fn tools() -> Vec<ToolDef> {
             "Make a preset the selected one (Windows). Whether a running app picks up the change is unverified; a restart may be needed.",
             DESTRUCTIVE,
             SelectPreset,
+            SelectPresetResult,
             select_preset
         ),
     ]
 }
 
-fn list_apps(ctx: &Context, _: NoParams) -> ToolResult {
-    Ok(json!({ "apps": to_json(&ctx.hedge.apps()?)? }))
+fn list_apps(ctx: &Context, _: NoParams) -> Result<ListAppsResult, ToolError> {
+    Ok(ListAppsResult {
+        apps: ctx.hedge.apps()?,
+    })
 }
 
-fn describe_app(ctx: &Context, p: AppArg) -> ToolResult {
-    to_json(&ctx.hedge.describe_app(&p.app)?)
+fn describe_app(ctx: &Context, p: AppArg) -> Result<AppDescription, ToolError> {
+    Ok(ctx.hedge.describe_app(&p.app)?)
 }
 
-fn run_app_command(ctx: &Context, p: RunCommand) -> ToolResult {
+fn run_app_command(ctx: &Context, p: RunCommand) -> Result<RunAppCommandResult, ToolError> {
     let calls: Vec<CommandCall> = p
         .commands
         .into_iter()
@@ -168,22 +267,29 @@ fn run_app_command(ctx: &Context, p: RunCommand) -> ToolResult {
         .collect();
     let plan = ctx.hedge.plan_commands(&p.app, &calls)?;
     if p.dry_run {
-        return Ok(json!({ "executed": false, "dry_run": true, "plan": to_json(&plan)? }));
+        return Ok(RunAppCommandResult::DryRun {
+            executed: false,
+            dry_run: true,
+            plan,
+        });
     }
     if !plan.confirm.is_empty() && !p.confirmed {
-        return Ok(json!({
-            "executed": false,
-            "requires_confirmation": plan.confirm.clone(),
-            "plan": to_json(&plan)?,
-            "message": "Ask the operator to approve these commands, then call run_app_command again with confirmed: true.",
-        }));
+        return Ok(RunAppCommandResult::NeedsConfirmation {
+            executed: false,
+            requires_confirmation: plan.confirm.clone(),
+            plan,
+            message: "Ask the operator to approve these commands, then call run_app_command again with confirmed: true.".to_owned(),
+        });
     }
     let wait = Duration::from_secs(p.wait_seconds.unwrap_or(5).min(30));
     let outcome = ctx.hedge.run_commands(&p.app, &calls, wait)?;
-    Ok(json!({ "executed": true, "outcome": to_json(&outcome)? }))
+    Ok(RunAppCommandResult::Executed {
+        executed: true,
+        outcome,
+    })
 }
 
-fn read_app_log(ctx: &Context, p: ReadLog) -> ToolResult {
+fn read_app_log(ctx: &Context, p: ReadLog) -> Result<ReadAppLogResult, ToolError> {
     let kind = match p.log.as_str() {
         "callback" => LogKind::Callback,
         "event" => LogKind::Event,
@@ -196,16 +302,24 @@ fn read_app_log(ctx: &Context, p: ReadLog) -> ToolResult {
     let lines = ctx
         .hedge
         .read_app_log(&p.app, kind, p.lines.unwrap_or(50).min(500))?;
-    Ok(json!({ "app": p.app, "log": p.log, "lines": lines }))
+    Ok(ReadAppLogResult {
+        app: p.app,
+        log: p.log,
+        lines,
+    })
 }
 
-fn list_presets(ctx: &Context, p: AppArg) -> ToolResult {
+fn list_presets(ctx: &Context, p: AppArg) -> Result<ListPresetsResult, ToolError> {
     let presets = ctx.hedge.list_presets(&p.app)?;
     let selected = ctx.hedge.selected_preset(&p.app).ok().flatten();
-    Ok(json!({ "app": p.app, "presets": to_json(&presets)?, "selected": selected }))
+    Ok(ListPresetsResult {
+        app: p.app,
+        presets,
+        selected,
+    })
 }
 
-fn write_preset(ctx: &Context, p: WritePreset) -> ToolResult {
+fn write_preset(ctx: &Context, p: WritePreset) -> Result<WritePresetResult, ToolError> {
     let preset = Preset {
         name: p.name,
         folder_pattern: p.folder_pattern,
@@ -219,22 +333,25 @@ fn write_preset(ctx: &Context, p: WritePreset) -> ToolResult {
     if !p.dry_run {
         ctx.hedge.apply(&actions)?;
     }
-    Ok(json!({
-        "preset": to_json(&preset)?,
-        "actions": to_json(&actions)?,
-        "applied": !p.dry_run,
-        "next": "Run run_app_command with reloadPresets so the app sees the preset.",
-    }))
+    Ok(WritePresetResult {
+        preset,
+        actions,
+        applied: !p.dry_run,
+        next: "Run run_app_command with reloadPresets so the app sees the preset.".to_owned(),
+    })
 }
 
-fn select_preset(ctx: &Context, p: SelectPreset) -> ToolResult {
+fn select_preset(ctx: &Context, p: SelectPreset) -> Result<SelectPresetResult, ToolError> {
     let actions = ctx.hedge.plan_select_preset(&p.app, &p.name)?;
     if !p.dry_run {
         ctx.hedge.apply(&actions)?;
     }
-    Ok(
-        json!({ "app": p.app, "selected": p.name, "actions": to_json(&actions)?, "applied": !p.dry_run }),
-    )
+    Ok(SelectPresetResult {
+        app: p.app,
+        selected: p.name,
+        actions,
+        applied: !p.dry_run,
+    })
 }
 
 #[cfg(test)]

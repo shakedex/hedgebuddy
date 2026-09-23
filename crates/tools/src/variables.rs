@@ -5,10 +5,10 @@ use std::str::FromStr;
 
 use hedgebuddy_core::{ResolvedVariable, VarType, VariableInput};
 use schemars::JsonSchema;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
-use super::{tool, Context, ToolDef, ToolError, ToolResult, DESTRUCTIVE, READ, WRITE};
+use super::{tool, Context, ToolDef, ToolError, DESTRUCTIVE, READ, WRITE};
 
 /// What a masked secret value looks like.
 pub const MASK: &str = "********";
@@ -72,6 +72,101 @@ pub struct DeleteVar {
     pub dry_run: bool,
 }
 
+/// A variable's JSON value, for the schema only: text (string, secret,
+/// path, url), a number (int, float), a flag (bool) or a list of strings
+/// (string[], path[]).
+#[derive(JsonSchema)]
+#[serde(untagged)]
+#[allow(dead_code)]
+enum VarValueShape {
+    Text(String),
+    Number(f64),
+    Flag(bool),
+    List(Vec<String>),
+}
+
+/// A variable as the tools return it.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct VarView {
+    /// Variable name.
+    pub name: String,
+    /// Variable type.
+    #[serde(rename = "type")]
+    pub ty: VarType,
+    /// What the variable is for.
+    pub description: String,
+    /// The value; `********` for a secret unless revealed; null when not set.
+    #[schemars(with = "Option<VarValueShape>")]
+    pub value: Option<Value>,
+    /// True when the variable has no value (a secret with nothing stored).
+    pub missing: bool,
+}
+
+/// Result of `list_vars`.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct ListVarsResult {
+    /// Profile name.
+    pub profile: String,
+    /// Its variables, sorted by name.
+    pub variables: Vec<VarView>,
+}
+
+/// Result of `get_var`.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct GetVarResult {
+    /// The variable.
+    #[serde(flatten)]
+    pub var: VarView,
+    /// Profile name.
+    pub profile: String,
+}
+
+/// Result of `set_var`. Never includes the value.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct SetVarResult {
+    /// Profile name.
+    pub profile: String,
+    /// Variable name.
+    pub name: String,
+    /// Variable type.
+    #[serde(rename = "type")]
+    pub ty: VarType,
+    /// The description now stored.
+    pub description: String,
+}
+
+/// What `delete_var` would delete.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct VarDeletion {
+    /// Profile name.
+    pub profile: String,
+    /// Variable name.
+    pub name: String,
+    /// Variable type.
+    #[serde(rename = "type")]
+    pub ty: VarType,
+}
+
+/// Result of `delete_var`.
+#[derive(Debug, Serialize, JsonSchema)]
+#[serde(untagged)]
+pub enum DeleteVarResult {
+    /// With `dry_run`: what would be deleted.
+    DryRun {
+        /// Always true.
+        dry_run: bool,
+        /// The variable that would be deleted.
+        would_delete: VarDeletion,
+    },
+    /// The variable was deleted.
+    Deleted {
+        /// Variable name.
+        deleted: String,
+        /// Profile name.
+        profile: String,
+    },
+}
+
 /// The variable tools.
 pub fn tools() -> Vec<ToolDef> {
     vec![
@@ -80,6 +175,7 @@ pub fn tools() -> Vec<ToolDef> {
             "List a profile's variables. Secret values are shown as ******** unless reveal is true; set reveal only when the operator explicitly asks to see a secret.",
             READ,
             ListVars,
+            ListVarsResult,
             list_vars
         ),
         tool!(
@@ -87,6 +183,7 @@ pub fn tools() -> Vec<ToolDef> {
             "Show one variable. Secret values are masked unless reveal is true (only on the operator's explicit request).",
             READ,
             GetVar,
+            GetVarResult,
             get_var
         ),
         tool!(
@@ -94,6 +191,7 @@ pub fn tools() -> Vec<ToolDef> {
             "Create or replace a variable. type is string, secret, int, float, bool, path, url, string[] or path[]; value must match it. Secret values are stored separately and never returned by this tool.",
             WRITE,
             SetVar,
+            SetVarResult,
             set_var
         ),
         tool!(
@@ -101,48 +199,50 @@ pub fn tools() -> Vec<ToolDef> {
             "Delete a variable and its secret value. Run with dry_run first.",
             DESTRUCTIVE,
             DeleteVar,
+            DeleteVarResult,
             delete_var
         ),
     ]
 }
 
 /// A variable as tools return it, with secrets masked unless `reveal`.
-pub(crate) fn var_json(v: &ResolvedVariable, reveal: bool) -> Value {
+pub(crate) fn var_view(v: &ResolvedVariable, reveal: bool) -> VarView {
     let masked = v.ty == VarType::Secret && !reveal;
     let value = match &v.value {
-        Some(_) if masked => json!(MASK),
-        Some(value) => value.clone(),
-        None => Value::Null,
+        Some(_) if masked => Some(json!(MASK)),
+        Some(value) => Some(value.clone()),
+        None => None,
     };
-    json!({
-        "name": v.name,
-        "type": v.ty.as_str(),
-        "description": v.description,
-        "value": value,
-        "missing": v.value.is_none(),
-    })
+    VarView {
+        name: v.name.clone(),
+        ty: v.ty,
+        description: v.description.clone(),
+        value,
+        missing: v.value.is_none(),
+    }
 }
 
-fn list_vars(ctx: &Context, p: ListVars) -> ToolResult {
+fn list_vars(ctx: &Context, p: ListVars) -> Result<ListVarsResult, ToolError> {
     let profile = ctx.profile(p.profile.as_deref())?;
-    let vars: Vec<Value> = ctx
+    let variables: Vec<VarView> = ctx
         .store
         .list_variables(&profile)?
         .iter()
-        .map(|v| var_json(v, p.reveal))
+        .map(|v| var_view(v, p.reveal))
         .collect();
-    Ok(json!({ "profile": profile, "variables": vars }))
+    Ok(ListVarsResult { profile, variables })
 }
 
-fn get_var(ctx: &Context, p: GetVar) -> ToolResult {
+fn get_var(ctx: &Context, p: GetVar) -> Result<GetVarResult, ToolError> {
     let profile = ctx.profile(p.profile.as_deref())?;
     let v = ctx.store.get_variable(&profile, &p.name)?;
-    let mut out = var_json(&v, p.reveal);
-    out["profile"] = json!(profile);
-    Ok(out)
+    Ok(GetVarResult {
+        var: var_view(&v, p.reveal),
+        profile,
+    })
 }
 
-fn set_var(ctx: &Context, p: SetVar) -> ToolResult {
+fn set_var(ctx: &Context, p: SetVar) -> Result<SetVarResult, ToolError> {
     let profile = ctx.profile(p.profile.as_deref())?;
     let ty = VarType::from_str(&p.ty).map_err(ToolError::from)?;
     let description = match p.description {
@@ -164,21 +264,32 @@ fn set_var(ctx: &Context, p: SetVar) -> ToolResult {
             description: description.clone(),
         },
     )?;
-    Ok(
-        json!({ "profile": profile, "name": p.name, "type": ty.as_str(), "description": description }),
-    )
+    Ok(SetVarResult {
+        profile,
+        name: p.name,
+        ty,
+        description,
+    })
 }
 
-fn delete_var(ctx: &Context, p: DeleteVar) -> ToolResult {
+fn delete_var(ctx: &Context, p: DeleteVar) -> Result<DeleteVarResult, ToolError> {
     let profile = ctx.profile(p.profile.as_deref())?;
     let v = ctx.store.get_variable(&profile, &p.name)?;
     if p.dry_run {
-        return Ok(
-            json!({ "dry_run": true, "would_delete": { "profile": profile, "name": v.name, "type": v.ty.as_str() } }),
-        );
+        return Ok(DeleteVarResult::DryRun {
+            dry_run: true,
+            would_delete: VarDeletion {
+                profile,
+                name: v.name,
+                ty: v.ty,
+            },
+        });
     }
     ctx.store.delete_variable(&profile, &p.name)?;
-    Ok(json!({ "deleted": p.name, "profile": profile }))
+    Ok(DeleteVarResult::Deleted {
+        deleted: p.name,
+        profile,
+    })
 }
 
 #[cfg(test)]

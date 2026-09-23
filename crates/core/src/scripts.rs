@@ -12,7 +12,7 @@ use crate::manifest::{check_requirements, parse_manifest, Manifest, RequirementI
 use crate::store::Store;
 
 /// One entry of a profile's `scripts/` folder with its parsed manifest, if any.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ScriptInfo {
     /// The script's file name.
     pub name: String,
@@ -23,7 +23,7 @@ pub struct ScriptInfo {
 }
 
 /// Result of comparing a script's manifest against its profile.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ScriptCheck {
     /// The script's file name.
     pub name: String,

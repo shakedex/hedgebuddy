@@ -1,12 +1,15 @@
 //! Script tools.
 
-use hedgebuddy_core::hedge::{managed_script, validate_manifest, AttachState};
-use hedgebuddy_core::{parse_manifest, python_env, validate_script_name};
-use schemars::JsonSchema;
-use serde::Deserialize;
-use serde_json::{json, Value};
+use std::path::PathBuf;
 
-use super::{to_json, tool, Context, ToolDef, ToolResult, DESTRUCTIVE, READ};
+use hedgebuddy_core::hedge::{managed_script, validate_manifest, AttachState};
+use hedgebuddy_core::{
+    parse_manifest, python_env, validate_script_name, Manifest, RequirementIssue, ScriptInfo,
+};
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+
+use super::{tool, Context, ToolDef, ToolError, DESTRUCTIVE, READ};
 use crate::profiles::ProfileArg;
 
 /// A script in a profile.
@@ -47,6 +50,110 @@ pub struct ScriptDry {
     pub dry_run: bool,
 }
 
+/// A Hedge app event.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
+pub struct AppEvent {
+    /// Catalog app id.
+    pub app: String,
+    /// Event id.
+    pub event: String,
+}
+
+/// Result of `list_scripts`.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct ListScriptsResult {
+    /// The profile listed.
+    pub profile: String,
+    /// Its scripts with their manifests.
+    pub scripts: Vec<ScriptInfo>,
+}
+
+/// Result of `read_script`.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct ReadScriptResult {
+    /// The profile the script belongs to.
+    pub profile: String,
+    /// Script file name.
+    pub name: String,
+    /// The full Python source.
+    pub source: String,
+}
+
+/// Result of `write_script`.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct WriteScriptResult {
+    /// The profile written to.
+    pub profile: String,
+    /// Script file name.
+    pub name: String,
+    /// Whether an existing script was replaced.
+    pub replaced: bool,
+    /// App events still attached to the replaced script.
+    pub attached_to: Vec<AppEvent>,
+    /// The parsed manifest, or null when the script has none.
+    pub manifest: Option<Manifest>,
+    /// Requirements the profile does not meet.
+    pub unmet: Vec<RequirementIssue>,
+}
+
+/// A script in a profile.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct ScriptRef {
+    /// Profile name.
+    pub profile: String,
+    /// Script file name.
+    pub name: String,
+}
+
+/// Result of `delete_script`.
+#[derive(Debug, Serialize, JsonSchema)]
+#[serde(untagged)]
+pub enum DeleteScriptResult {
+    /// With `dry_run`: what would be deleted.
+    DryRun {
+        /// Always true.
+        dry_run: bool,
+        /// The script that would be deleted.
+        would_delete: ScriptRef,
+        /// App events attached to it.
+        attached_to: Vec<AppEvent>,
+    },
+    /// The script was deleted.
+    Deleted {
+        /// Script file name.
+        deleted: String,
+        /// Profile name.
+        profile: String,
+        /// App events that still point at the deleted file.
+        left_attached: Vec<AppEvent>,
+    },
+}
+
+/// Result of `check_script`.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct CheckScriptResult {
+    /// Profile name.
+    pub profile: String,
+    /// Script file name.
+    pub name: String,
+    /// The parsed manifest, or null.
+    pub manifest: Option<Manifest>,
+    /// Requirements the profile does not meet.
+    pub unmet: Vec<RequirementIssue>,
+    /// Why the manifest's app or event is not in the catalog, if so.
+    pub catalog_error: Option<String>,
+    /// Whether a Python compile check ran.
+    pub syntax_checked: bool,
+    /// The interpreter used for the compile check.
+    pub python: Option<PathBuf>,
+    /// The compile error, if any.
+    pub syntax_error: Option<String>,
+    /// Why the script's `import hedgebuddy` would fail, if so.
+    pub package_problem: Option<String>,
+    /// True when nothing above is a problem.
+    pub ok: bool,
+}
+
 /// The script tools.
 pub fn tools() -> Vec<ToolDef> {
     vec![
@@ -55,14 +162,23 @@ pub fn tools() -> Vec<ToolDef> {
             "List a profile's scripts with their manifests (target app/event and required variables). Defaults to the active profile.",
             READ,
             ProfileArg,
+            ListScriptsResult,
             list_scripts
         ),
-        tool!("read_script", "Return a script's source.", READ, ScriptArg, read_script),
+        tool!(
+            "read_script",
+            "Return a script's source.",
+            READ,
+            ScriptArg,
+            ReadScriptResult,
+            read_script
+        ),
         tool!(
             "write_script",
             "Create or replace a script. The source must start with a docstring whose first part is the JSON manifest, e.g. {\"hedgebuddy\": 1, \"app\": \"offshoot\", \"event\": \"FileCopyCompleted\", \"requires\": {...}} followed by a line ---. The app and event are checked against the catalog (see describe_app). Returns unmet requirements; set them with set_var before attaching. When it replaces a script, attached_to lists the app events still attached to it; if the manifest's event changed, detach the old one with detach_script.",
             DESTRUCTIVE,
             WriteScript,
+            WriteScriptResult,
             write_script
         ),
         tool!(
@@ -70,6 +186,7 @@ pub fn tools() -> Vec<ToolDef> {
             "Delete a script. Run with dry_run first; the result lists Hedge app events still attached to it (detach them first with detach_script).",
             DESTRUCTIVE,
             ScriptDry,
+            DeleteScriptResult,
             delete_script
         ),
         tool!(
@@ -77,6 +194,7 @@ pub fn tools() -> Vec<ToolDef> {
             "Check a script without running it: manifest against the catalog, required variables against the profile, a Python compile check with the interpreter Hedge apps use, and whether the hedgebuddy package the script imports is installed there at the right version.",
             READ,
             ScriptArg,
+            CheckScriptResult,
             check_script
         ),
     ]
@@ -84,7 +202,7 @@ pub fn tools() -> Vec<ToolDef> {
 
 /// Events currently attached to (or staged for) `profile/script`, across all
 /// apps. Apps whose attachment state cannot be read are skipped.
-pub(crate) fn attached_to(ctx: &Context, profile: &str, script: &str) -> Vec<Value> {
+pub(crate) fn attached_to(ctx: &Context, profile: &str, script: &str) -> Vec<AppEvent> {
     let mut out = Vec::new();
     for app in ctx.hedge.catalog().apps() {
         let Ok(list) = ctx.hedge.attachments(&app.app.id, &ctx.store) else {
@@ -96,26 +214,33 @@ pub(crate) fn attached_to(ctx: &Context, profile: &str, script: &str) -> Vec<Val
                 _ => continue,
             };
             if managed_script(&ctx.store, path) == Some((profile.to_owned(), script.to_owned())) {
-                out.push(json!({ "app": a.app, "event": a.event }));
+                out.push(AppEvent {
+                    app: a.app,
+                    event: a.event,
+                });
             }
         }
     }
     out
 }
 
-fn list_scripts(ctx: &Context, p: ProfileArg) -> ToolResult {
+fn list_scripts(ctx: &Context, p: ProfileArg) -> Result<ListScriptsResult, ToolError> {
     let profile = ctx.profile(p.profile.as_deref())?;
-    Ok(json!({ "profile": profile, "scripts": to_json(&ctx.store.list_scripts(&profile)?)? }))
+    let scripts = ctx.store.list_scripts(&profile)?;
+    Ok(ListScriptsResult { profile, scripts })
 }
 
-fn read_script(ctx: &Context, p: ScriptArg) -> ToolResult {
+fn read_script(ctx: &Context, p: ScriptArg) -> Result<ReadScriptResult, ToolError> {
     let profile = ctx.profile(p.profile.as_deref())?;
-    Ok(
-        json!({ "profile": profile, "name": p.name, "source": ctx.store.read_script(&profile, &p.name)? }),
-    )
+    let source = ctx.store.read_script(&profile, &p.name)?;
+    Ok(ReadScriptResult {
+        profile,
+        name: p.name,
+        source,
+    })
 }
 
-fn write_script(ctx: &Context, p: WriteScript) -> ToolResult {
+fn write_script(ctx: &Context, p: WriteScript) -> Result<WriteScriptResult, ToolError> {
     let profile = ctx.profile(p.profile.as_deref())?;
     validate_script_name(&p.name)?;
     if let Some(manifest) = parse_manifest(&p.source)? {
@@ -129,30 +254,39 @@ fn write_script(ctx: &Context, p: WriteScript) -> ToolResult {
     } else {
         Vec::new()
     };
-    Ok(json!({
-        "profile": profile,
-        "name": p.name,
-        "replaced": replaced,
-        "attached_to": attached,
-        "manifest": to_json(&check.manifest)?,
-        "unmet": to_json(&check.issues)?,
-    }))
+    Ok(WriteScriptResult {
+        profile,
+        name: p.name,
+        replaced,
+        attached_to: attached,
+        manifest: check.manifest,
+        unmet: check.issues,
+    })
 }
 
-fn delete_script(ctx: &Context, p: ScriptDry) -> ToolResult {
+fn delete_script(ctx: &Context, p: ScriptDry) -> Result<DeleteScriptResult, ToolError> {
     let profile = ctx.profile(p.profile.as_deref())?;
     ctx.store.read_script(&profile, &p.name)?; // exists?
     let attached = attached_to(ctx, &profile, &p.name);
     if p.dry_run {
-        return Ok(
-            json!({ "dry_run": true, "would_delete": { "profile": profile, "name": p.name }, "attached_to": attached }),
-        );
+        return Ok(DeleteScriptResult::DryRun {
+            dry_run: true,
+            would_delete: ScriptRef {
+                profile,
+                name: p.name,
+            },
+            attached_to: attached,
+        });
     }
     ctx.store.delete_script(&profile, &p.name)?;
-    Ok(json!({ "deleted": p.name, "profile": profile, "left_attached": attached }))
+    Ok(DeleteScriptResult::Deleted {
+        deleted: p.name,
+        profile,
+        left_attached: attached,
+    })
 }
 
-fn check_script(ctx: &Context, p: ScriptArg) -> ToolResult {
+fn check_script(ctx: &Context, p: ScriptArg) -> Result<CheckScriptResult, ToolError> {
     let profile = ctx.profile(p.profile.as_deref())?;
     let check = ctx.store.check_script(&profile, &p.name)?;
     let catalog_error = check
@@ -182,18 +316,18 @@ fn check_script(ctx: &Context, p: ScriptArg) -> ToolResult {
         && catalog_error.is_none()
         && syntax_error.is_none()
         && package_problem.is_none();
-    Ok(json!({
-        "profile": profile,
-        "name": p.name,
-        "manifest": to_json(&check.manifest)?,
-        "unmet": to_json(&check.issues)?,
-        "catalog_error": catalog_error,
-        "syntax_checked": python.is_some(),
-        "python": python.as_ref().map(|info| &info.executable),
-        "syntax_error": syntax_error,
-        "package_problem": package_problem,
-        "ok": ok,
-    }))
+    Ok(CheckScriptResult {
+        profile,
+        name: p.name,
+        manifest: check.manifest,
+        unmet: check.issues,
+        catalog_error,
+        syntax_checked: python.is_some(),
+        python: python.map(|info| info.executable),
+        syntax_error,
+        package_problem,
+        ok,
+    })
 }
 
 #[cfg(test)]

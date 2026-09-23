@@ -24,18 +24,20 @@ pub(crate) mod scripts;
 pub(crate) mod system;
 pub(crate) mod variables;
 
-/// Build a [`ToolDef`] from a name, description, hints, parameter type, and
-/// handler `fn(&Context, Params) -> ToolResult`.
+/// Build a [`ToolDef`] from a name, description, hints, parameter type,
+/// result type, and handler `fn(&Context, Params) -> Result<Output, ToolError>`.
 macro_rules! tool {
-    ($name:literal, $desc:expr, $hints:expr, $params:ty, $f:path) => {
+    ($name:literal, $desc:expr, $hints:expr, $params:ty, $output:ty, $f:path) => {
         $crate::ToolDef {
             name: $name,
             description: $desc,
             hints: $hints,
             schema: || $crate::schema_of::<$params>(),
+            output_schema: || $crate::output_schema_of::<$output>(),
             run: |ctx, args| {
                 let params: $params = $crate::parse_args(args)?;
-                $f(ctx, params)
+                let output: $output = $f(ctx, params)?;
+                $crate::to_json(&output)
             },
         }
     };
@@ -153,7 +155,10 @@ pub struct ToolDef {
     pub name: &'static str,
     pub description: &'static str,
     pub hints: Hints,
+    /// JSON Schema of the arguments.
     pub schema: fn() -> Value,
+    /// JSON Schema of the result.
+    pub output_schema: fn() -> Value,
     pub run: fn(&Context, Value) -> ToolResult,
 }
 
@@ -166,6 +171,40 @@ pub fn parse_args<T: DeserializeOwned>(args: Value) -> Result<T, ToolError> {
 /// The JSON Schema of a parameter type.
 pub fn schema_of<T: JsonSchema>() -> Value {
     serde_json::to_value(schemars::schema_for!(T)).expect("schemas serialize")
+}
+
+/// The JSON Schema of a result type. A root without `type` (an untagged
+/// union, whose variants are all objects) gets `"type": "object"`, which
+/// MCP clients expect of an output schema.
+pub fn output_schema_of<T: JsonSchema>() -> Value {
+    let mut schema = schema_of::<T>();
+    if let Some(map) = schema.as_object_mut() {
+        map.entry("type").or_insert_with(|| json!("object"));
+    }
+    schema
+}
+
+/// Every tool's input and output schema: `{"<tool>": {"input", "output"}}`.
+pub fn schemas() -> Value {
+    let map: serde_json::Map<String, Value> = all()
+        .into_iter()
+        .map(|t| {
+            let entry = json!({ "input": (t.schema)(), "output": (t.output_schema)() });
+            (t.name.to_owned(), entry)
+        })
+        .collect();
+    Value::Object(map)
+}
+
+/// Why `value` does not match `def`'s output schema (empty when it does).
+#[cfg(test)]
+pub(crate) fn output_errors(def: &ToolDef, value: &Value) -> Vec<String> {
+    let schema = (def.output_schema)();
+    let validator = jsonschema::validator_for(&schema).expect("output schema compiles");
+    validator
+        .iter_errors(value)
+        .map(|e| format!("{} at {}", e, e.instance_path()))
+        .collect()
 }
 
 /// Serialize a result value.
@@ -197,13 +236,23 @@ pub fn call(ctx: &Context, name: &str, args: Value) -> ToolResult {
         .into_iter()
         .find(|t| t.name == name)
         .ok_or_else(|| ToolError::new(format!("unknown tool '{name}'")))?;
-    if def.hints.read_only {
-        return (def.run)(ctx, args);
+    let result = if def.hints.read_only {
+        (def.run)(ctx, args)
+    } else {
+        // A tool that panicked while holding the lock leaves nothing half-held
+        // in `()`, so a poisoned lock is still safe to take.
+        let _guard = ctx.write_lock.lock().unwrap_or_else(|e| e.into_inner());
+        (def.run)(ctx, args)
+    };
+    #[cfg(test)]
+    if let Ok(value) = &result {
+        let errors = output_errors(&def, value);
+        assert!(
+            errors.is_empty(),
+            "{name} result does not match its output schema: {errors:?}\n{value:#}"
+        );
     }
-    // A tool that panicked while holding the lock leaves nothing half-held
-    // in `()`, so a poisoned lock is still safe to take.
-    let _guard = ctx.write_lock.lock().unwrap_or_else(|e| e.into_inner());
-    (def.run)(ctx, args)
+    result
 }
 
 #[cfg(test)]
@@ -238,6 +287,39 @@ mod tests {
                 "{} is both read-only and destructive",
                 t.name
             );
+        }
+    }
+
+    #[test]
+    fn every_tool_has_object_input_and_output_schemas() {
+        for t in all() {
+            let input = (t.schema)();
+            let output = (t.output_schema)();
+            assert_eq!(input["type"], "object", "{} input: {input}", t.name);
+            assert_eq!(output["type"], "object", "{} output: {output}", t.name);
+            jsonschema::validator_for(&output)
+                .unwrap_or_else(|e| panic!("{} output schema does not compile: {e}", t.name));
+        }
+    }
+
+    #[test]
+    fn the_output_check_rejects_a_wrong_shape() {
+        let def = all()
+            .into_iter()
+            .find(|t| t.name == "list_profiles")
+            .unwrap();
+        assert!(output_errors(&def, &json!({"active": null, "profiles": []})).is_empty());
+        assert!(!output_errors(&def, &json!({"active": null, "profiles": 3})).is_empty());
+    }
+
+    #[test]
+    fn schemas_cover_every_tool() {
+        let s = schemas();
+        let map = s.as_object().unwrap();
+        assert_eq!(map.len(), all().len());
+        for t in all() {
+            assert!(map[t.name]["input"].is_object(), "{}", t.name);
+            assert!(map[t.name]["output"].is_object(), "{}", t.name);
         }
     }
 
