@@ -14,12 +14,10 @@ import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useListKeyboard } from "@/hooks/use-list-keyboard";
 import { clock, dayKey, dayLabel, duration } from "@/lib/format";
-import { runStatusKey } from "@/lib/status";
+import { isFailedRun, runStatusKey } from "@/lib/status";
 import { cn } from "@/lib/utils";
 
 type Mode = "all" | "failed";
-
-const isFailedRun = (run: Run) => run.status === "failed" || run.status === "error";
 
 /** Case-insensitive match against the fields the toolbar's filter promises to search (spec: script, event, app, profile). */
 function matchesFilter(run: Run, q: string): boolean {
@@ -48,8 +46,13 @@ function RunRow({ run, selected, activeProfile }: { run: Run; selected: boolean;
       id={`run-${run.run_id}`}
       role="option"
       aria-selected={selected}
+      // The listbox itself owns keyboard focus (aria-activedescendant); rows are click targets only, so
+      // they don't each become their own Tab stop (spec §7's "arrow keys move through lists" means the
+      // listbox, not 14+ individual link stops).
+      tabIndex={-1}
       className={cn(
-        "flex flex-col gap-0.5 border-l-2 px-2.5 py-1.5 transition-colors duration-120",
+        // scroll-mt-7 keeps a row clear of the 28 px sticky day header when scrollIntoView brings it into view.
+        "flex scroll-mt-7 flex-col gap-0.5 border-l-2 px-2.5 py-1 transition-colors duration-120",
         selected ? "border-l-primary bg-accent" : "border-l-transparent hover:bg-accent/50",
       )}
     >
@@ -60,16 +63,17 @@ function RunRow({ run, selected, activeProfile }: { run: Run; selected: boolean;
         </Mono>
         <span className="readout shrink-0 text-xs text-muted-foreground">{clock(run.started_at)}</span>
       </span>
-      <span className="truncate pl-[21px] text-xs text-muted-foreground">{metaLine(run, activeProfile)}</span>
+      <span className="truncate pl-5 text-xs text-muted-foreground">{metaLine(run, activeProfile)}</span>
     </Link>
   );
 }
 
+/** Caps the newer runs above it (a primary-tinted rule, label trailing) — deliberately unlike a day header, which introduces the runs below it. */
 function SinceDivider() {
   return (
     <div role="separator" aria-label="since you last opened" className="flex h-6 items-center gap-2 px-2">
+      <span aria-hidden className="h-px flex-1 bg-primary/50" />
       <span className="micro-label shrink-0">Since you last opened</span>
-      <span aria-hidden className="h-px flex-1 bg-border" />
     </div>
   );
 }
@@ -82,6 +86,38 @@ function RunListSkeleton() {
       ))}
     </div>
   );
+}
+
+type GroupItem = { kind: "row"; run: Run } | { kind: "divider" };
+type DayGroup = { key: string; label: string; count: number; items: GroupItem[] };
+
+/**
+ * `displayed` (already newest-first) grouped by local day, with a "since you last opened" divider spliced
+ * in right after the last run newer than `since` — wherever that row landed, even mid-group.
+ */
+function buildGroups(displayed: Run[], since: string | null): DayGroup[] {
+  const groups: DayGroup[] = [];
+  for (const run of displayed) {
+    const key = dayKey(run.started_at);
+    const current = groups[groups.length - 1];
+    const group = current && current.key === key ? current : { key, label: dayLabel(key), count: 0, items: [] };
+    if (group !== current) groups.push(group);
+    group.items.push({ kind: "row", run });
+    group.count++;
+  }
+  if (since) {
+    const idx = displayed.findIndex((run) => !(run.started_at > since));
+    if (idx > 0 && idx < displayed.length) {
+      const dividerAfterId = displayed[idx - 1].run_id;
+      for (const group of groups) {
+        const pos = group.items.findIndex((item) => item.kind === "row" && item.run.run_id === dividerAfterId);
+        if (pos === -1) continue;
+        group.items.splice(pos + 1, 0, { kind: "divider" });
+        break;
+      }
+    }
+  }
+  return groups;
 }
 
 /**
@@ -132,34 +168,11 @@ export function RunList({
     );
   }
 
-  // Newest-first day boundaries: `since` splits the (already newest-first) `displayed` list into the runs
-  // after it and the runs at or before it. The divider goes right before the first "at or before" run, but
-  // only when the list actually holds one on each side of the cutoff.
-  const dividerBeforeIndex = since ? displayed.findIndex((run) => !(run.started_at > since)) : -1;
-  const showDivider = dividerBeforeIndex > 0 && dividerBeforeIndex < displayed.length;
-
-  const rows: React.ReactNode[] = [];
-  let lastDayKey = "";
-  displayed.forEach((run, i) => {
-    if (showDivider && i === dividerBeforeIndex) rows.push(<SinceDivider key="since-divider" />);
-    const key = dayKey(run.started_at);
-    if (key !== lastDayKey) {
-      lastDayKey = key;
-      let count = 0;
-      for (let j = i; j < displayed.length && dayKey(displayed[j].started_at) === key; j++) count++;
-      rows.push(
-        <div key={`head-${key}`} className="sticky top-0 z-10 flex h-7 items-center justify-between bg-background/95 px-2 backdrop-blur-[2px]">
-          <span className="micro-label">{dayLabel(key)}</span>
-          <span className="readout text-xs text-muted-foreground">{count}</span>
-        </div>,
-      );
-    }
-    rows.push(<RunRow key={run.run_id} run={run} selected={run.run_id === selectedId} activeProfile={activeProfile} />);
-  });
+  const groups = buildGroups(displayed, since);
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex shrink-0 items-center gap-2 border-b border-border px-2 py-1.5 max-[479px]:flex-wrap">
+      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border px-2 py-1.5">
         <ToggleGroup
           type="single"
           variant="outline"
@@ -171,12 +184,20 @@ export function RunList({
           <ToggleGroupItem value="all" aria-label="All runs">
             All
           </ToggleGroupItem>
-          <ToggleGroupItem value="failed" aria-label="Failed runs" className="gap-1.5">
+          <ToggleGroupItem value="failed" aria-label={`Failed, ${failedCount} run${failedCount === 1 ? "" : "s"}`} className="gap-1.5">
             Failed
             <CountBadge count={failedCount} tone="destructive" />
           </ToggleGroupItem>
         </ToggleGroup>
-        <div className="relative min-w-0 flex-1 max-[479px]:order-3 max-[479px]:basis-full max-[479px]:pt-1.5">
+        {activeProfile && (
+          <label className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+            <Switch size="sm" checked={allProfiles} onCheckedChange={onAllProfilesChange} />
+            All profiles
+          </label>
+        )}
+        {/* min-w-40 (160 px) + flex-1 + the row's flex-wrap: plain flexbox wraps this onto its own line
+            whenever the toggle and switch don't leave it at least 160 px, with no hardcoded breakpoint. */}
+        <div className="relative min-w-40 flex-1">
           <Search aria-hidden className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground" strokeWidth={1.75} />
           <Input
             value={filterText}
@@ -186,14 +207,8 @@ export function RunList({
             className="h-7 pl-7"
           />
         </div>
-        {activeProfile && (
-          <label className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground max-[479px]:order-2">
-            <Switch size="sm" checked={allProfiles} onCheckedChange={onAllProfilesChange} />
-            All profiles
-          </label>
-        )}
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="relative min-h-0 flex-1 overflow-y-auto">
         {query.isPending && lastError.current === null ? (
           <RunListSkeleton />
         ) : allRuns.length === 0 ? (
@@ -215,7 +230,23 @@ export function RunList({
             onKeyDown={onKeyDown}
             className="focus-visible:outline-offset-[-2px]"
           >
-            {rows}
+            {groups.map((group) => (
+              <div key={group.key} role="group" aria-labelledby={`day-${group.key}`}>
+                <div className="sticky top-0 z-10 flex h-7 items-center justify-between bg-background/95 px-2 backdrop-blur-[2px]">
+                  <span id={`day-${group.key}`} className="micro-label">
+                    {group.label}
+                  </span>
+                  <span className="readout text-xs text-muted-foreground">{group.count}</span>
+                </div>
+                {group.items.map((item) =>
+                  item.kind === "divider" ? (
+                    <SinceDivider key="since-divider" />
+                  ) : (
+                    <RunRow key={item.run.run_id} run={item.run} selected={item.run.run_id === selectedId} activeProfile={activeProfile} />
+                  ),
+                )}
+              </div>
+            ))}
           </div>
         )}
       </div>

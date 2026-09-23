@@ -56,10 +56,15 @@ export function useProfiles() {
   return useQuery({ queryKey: queryKey.tool("list_profiles", {}), queryFn: () => callTool("list_profiles", {}) });
 }
 
-/** Runs of one profile, or of every profile when `profile` is null. */
-export function useRuns(profile: string | null) {
+/**
+ * Runs of one profile, or of every profile when `profile` is null. `enabled` (default true) lets a caller
+ * hold off fetching until it actually knows which profile to scope to, e.g. until `home_summary` resolves
+ * `active_profile` — otherwise a screen would fetch every profile's runs first, then immediately refetch
+ * scoped to the active one once it's known.
+ */
+export function useRuns(profile: string | null, enabled = true) {
   const args: ToolTypes["list_runs"]["input"] = profile ? { profile, limit: 1000 } : { limit: 1000 };
-  return useQuery({ queryKey: queryKey.tool("list_runs", args), queryFn: () => callTool("list_runs", args) });
+  return useQuery({ queryKey: queryKey.tool("list_runs", args), queryFn: () => callTool("list_runs", args), enabled });
 }
 
 export function useRun(runId: string | null) {

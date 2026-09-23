@@ -2,7 +2,7 @@ import {
   AppWindow, Ban, Braces, CircleCheck, CircleDashed, CirclePause, CircleX, FileCode, FileX, Hand,
   History, Hourglass, House, Link, Package, Plug, Settings, TriangleAlert, Unlink, type LucideIcon,
 } from "lucide-react";
-import type { ActivityOutcome, RunStatus } from "@/api/tools.gen";
+import type { ActivityOutcome, Run, RunStatus } from "@/api/tools.gen";
 
 /** Colour only marks problems (spec §2.7): red failed, amber needs a look; fine is neutral grey. */
 export type Tone = "neutral" | "muted" | "destructive" | "warning";
@@ -41,6 +41,11 @@ export function runStatusKey(status: RunStatus | null | undefined): StatusKey {
   if (status === "ok") return "runOk";
   if (status === "failed" || status === "error") return "runFailed";
   return "runUnfinished";
+}
+
+/** A run that ended badly (spec §6.2: the red icon and pill carry this, so the word "failed" isn't repeated). */
+export function isFailedRun(run: Pick<Run, "status">): boolean {
+  return runStatusKey(run.status) === "runFailed";
 }
 
 export function outcomeKey(outcome: ActivityOutcome): StatusKey {
