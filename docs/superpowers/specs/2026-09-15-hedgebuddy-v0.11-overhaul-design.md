@@ -264,6 +264,7 @@ Decisions made in phase 4:
 - `VariableNotFoundError` is both a `KeyError` and an `AttributeError`, so `vars.get`, `getattr(vars, name, default)` and `hasattr` work.
 - Payload fields named like `Event` attributes (`raw`, `app`, `name`, `get`) are read with `event["name"]`. A missing or blank `sys.argv[1]` is an empty payload; a payload that is not a JSON object raises `ValueError`.
 - Run records are written under an exclusive file lock (`msvcrt.locking` on Windows, `flock` on macOS) so parallel scripts never interleave lines. A record that cannot be written is reported once on stderr and never fails the script. Run ids are ULIDs; timestamps are UTC with milliseconds; all records of one run go to the file named by the local date at its start. The end record is written before a traceback is printed, so it is also recorded when stderr is missing or closed.
+- The library replaces the profile's secret values with `********` in `log` messages and the `end` traceback, and in the traceback it prints to stderr. Values shorter than four characters are not masked, so they cannot mangle unrelated text.
 - Manifest extraction skips a leading UTF-8 BOM, in core and in the library.
 - `check_script` reports when a script imports `hedgebuddy` but the package is missing or at another version in the Python the Hedge apps use.
 

@@ -136,6 +136,34 @@ def test_an_exception_is_recorded_with_its_traceback(hb_root, tmp_path, capsys):
     assert _runs._current is None
 
 
+def run_text(root: Path) -> str:
+    return "".join(p.read_text(encoding="utf-8") for p in sorted((root / "runs").glob("*.jsonl")))
+
+
+def test_a_secret_in_a_traceback_is_masked(hb_root, tmp_path, capsys):
+    hook_profile(hb_root)
+
+    def main(event, vars):
+        raise ValueError(f"unknown url type: {vars.HOOK!r}")  # as urllib reports a bad URL
+
+    assert run(main, source_path=script_file(tmp_path), argv=["probe.py"]) == 1
+    err = capsys.readouterr().err
+    assert "https://hook" not in run_text(hb_root) and "https://hook" not in err
+    assert "unknown url type: '********'" in ends(hb_root)[0]["traceback"]
+    assert "unknown url type: '********'" in err
+
+
+def test_a_secret_in_a_log_message_is_masked(hb_root, tmp_path, capsys):
+    hook_profile(hb_root)
+
+    def main(event, vars):
+        hb.log(f"posting to {vars.HOOK}")
+
+    assert run(main, source_path=script_file(tmp_path), argv=["probe.py"]) == 0
+    assert "https://hook" not in run_text(hb_root) and "https://hook" not in capsys.readouterr().err
+    assert [r["message"] for r in run_lines(hb_root) if r["phase"] == "log"] == ["posting to ********"]
+
+
 def test_a_non_integer_return_is_an_error(hb_root, tmp_path):
     hook_profile(hb_root)
     assert run(lambda event, vars: "done", source_path=script_file(tmp_path), argv=["probe.py"]) == 1

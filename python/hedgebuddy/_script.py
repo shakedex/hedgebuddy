@@ -79,6 +79,8 @@ def run(func: Main, *, source_path: Optional[str], argv: Sequence[str]) -> int:
         if manifest_error is not None:
             raise manifest_error
         variables = load_variables(root, profile)
+        # Keep secret values out of the run record and the stderr traceback.
+        run_log.hide(v.raw for v in variables.values() if v.type == "secret")
         defaults: Dict[str, Any] = {}
         if manifest is not None:
             declared = {n: v.type for n, v in variables.items() if v.raw is not None}
@@ -100,7 +102,7 @@ def run(func: Main, *, source_path: Optional[str], argv: Sequence[str]) -> int:
     except SystemExit as e:
         code = _system_exit_code(e)
     except BaseException:
-        text = traceback.format_exc()
+        text = run_log.mask(traceback.format_exc())
         run_log.end("error", 1, text)
         try:
             print(text, end="", file=sys.stderr)

@@ -74,6 +74,19 @@ def test_non_serializable_end_warns_once_and_never_raises(hb_root, capsys):
     assert capsys.readouterr().err.count("cannot write the run record") == 1
 
 
+def test_hidden_values_are_masked_in_logs_and_tracebacks(hb_root):
+    run = RunLog(hb_root)
+    run.hide(["s3cret-token", "abc", None, 1234, "s3cret"])  # "abc" is too short to hide
+    run.start(script="s3cret-token.py", profile="p")  # only log and end are masked
+    run.log("sent s3cret-token and abc")
+    run.end("error", 1, traceback="ValueError: 's3cret'")
+    records = run_lines(hb_root)
+    assert records[0]["script"] == "s3cret-token.py"
+    assert records[1]["message"] == "sent ******** and abc"  # the longer value is masked whole
+    assert records[2]["traceback"] == "ValueError: '********'"
+    assert run.mask("x s3cret y") == "x ******** y"
+
+
 def test_run_log_log_coerces_message_to_str(hb_root):
     run = RunLog(hb_root)
     run.log(42)
