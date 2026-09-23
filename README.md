@@ -44,9 +44,13 @@ claude mcp add hedgebuddy -- hedgebuddy mcp
 }
 ```
 
-**From a shell:** every MCP tool also runs as `hedgebuddy call <tool> '<json arguments>'` (or `-` to read the arguments from stdin), for example `hedgebuddy call list_apps`.
+**From a shell:** every MCP tool also runs as `hedgebuddy call <tool> '<json arguments>'` (or `-` to read the arguments from stdin), for example `hedgebuddy call list_apps`. In Windows PowerShell 5.1 the inline JSON argument loses its quotes, so pipe the JSON and pass `-` instead:
 
-Tools that change a Hedge app's settings or start transfers take `dry_run`, and commands that start transfers need `confirmed: true`, so the agent shows you the plan first.
+```powershell
+'{"name": "p"}' | hedgebuddy call create_profile -
+```
+
+Tools that change a Hedge app's settings, run app commands, or delete something take `dry_run`. Commands the catalog marks for confirmation need `confirmed: true` (for OffShoot: `addTransfers`, `reset`, `quit`, `restart`, `restartTransfer`), so the agent shows you the plan first.
 
 ## Development
 

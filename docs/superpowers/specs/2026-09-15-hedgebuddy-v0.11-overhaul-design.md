@@ -284,7 +284,7 @@ Out of scope: in-app code editing beyond read-only preview, running scripts from
 
 - **Core unit tests** (Rust): storage, profiles, validation, manifest parsing, catalog loading, URL building. OS integration behind a trait with a fake; real implementations get a small integration test gated behind an env flag for machines with Hedge apps installed.
 - **Conformance fixtures** (`schema/fixtures/`): sample data directories and script files with expected parsed output; run by both `cargo test` and `pytest`.
-- **MCP contract tests**: spawn `hedgebuddy mcp` against a temp data directory and exercise every tool including dry runs. Doubles as the GUI's logic tests since Tauri commands call the same functions.
+- **Tool and MCP contract tests**: unit tests cover every tool through `tools::call` with `FakeHost`, dry runs included. They double as the GUI's logic tests, since Tauri commands call the same functions. The MCP contract test spawns `hedgebuddy mcp` against a temp data directory and covers the protocol: initialize, `tools/list` with annotations, tool calls and errors, resources, prompts, and exit when stdin closes. It calls only tools that touch the data directory or the catalog.
 - **Manual smoke checklist**: attach in OffShoot and FoolCat on a real Windows and macOS machine; confirm whether attachments are picked up live or need an app restart; fire `run_app_command` and read the callback log; run the card scenario end to end from Claude Desktop.
 - No React unit tests in this version.
 
