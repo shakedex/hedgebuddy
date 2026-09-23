@@ -50,9 +50,9 @@ pub struct SetVar {
     pub ty: String,
     /// The value, as JSON matching the type (secret and url are strings; string[] and path[] are arrays of strings).
     pub value: Value,
-    /// What the variable is for.
+    /// What the variable is for. Omit it to keep the existing variable's description.
     #[serde(default)]
-    pub description: String,
+    pub description: Option<String>,
     /// Profile name; defaults to the active profile.
     #[serde(default)]
     pub profile: Option<String>,
@@ -145,17 +145,27 @@ fn get_var(ctx: &Context, p: GetVar) -> ToolResult {
 fn set_var(ctx: &Context, p: SetVar) -> ToolResult {
     let profile = ctx.profile(p.profile.as_deref())?;
     let ty = VarType::from_str(&p.ty).map_err(ToolError::from)?;
+    let description = match p.description {
+        Some(d) => d,
+        None => ctx
+            .store
+            .load_profile(&profile)?
+            .variables
+            .get(&p.name)
+            .map(|v| v.description.clone())
+            .unwrap_or_default(),
+    };
     ctx.store.set_variable(
         &profile,
         &p.name,
         VariableInput {
             ty,
             value: Some(p.value),
-            description: p.description.clone(),
+            description: description.clone(),
         },
     )?;
     Ok(
-        json!({ "profile": profile, "name": p.name, "type": ty.as_str(), "description": p.description }),
+        json!({ "profile": profile, "name": p.name, "type": ty.as_str(), "description": description }),
     )
 }
 
@@ -256,6 +266,47 @@ mod tests {
             .unwrap_err()
             .0
             .contains("not found"));
+    }
+
+    #[test]
+    fn set_var_keeps_the_description_unless_one_is_given() {
+        let (_d, ctx) = ctx_with_profile();
+        let desc = |ctx: &crate::tools::Context, name: &str| {
+            call(ctx, "get_var", json!({"name": name})).unwrap()["description"].clone()
+        };
+        call(
+            &ctx,
+            "set_var",
+            json!({"name": "A", "type": "string", "value": "x", "description": "What A is"}),
+        )
+        .unwrap();
+        let out = call(
+            &ctx,
+            "set_var",
+            json!({"name": "A", "type": "string", "value": "y"}),
+        )
+        .unwrap();
+        assert_eq!(out["description"], "What A is");
+        assert_eq!(desc(&ctx, "A"), "What A is");
+        assert_eq!(
+            call(&ctx, "get_var", json!({"name": "A"})).unwrap()["value"],
+            "y"
+        );
+        call(
+            &ctx,
+            "set_var",
+            json!({"name": "A", "type": "string", "value": "z", "description": ""}),
+        )
+        .unwrap();
+        assert_eq!(desc(&ctx, "A"), "");
+        let new = call(
+            &ctx,
+            "set_var",
+            json!({"name": "B", "type": "int", "value": 3}),
+        )
+        .unwrap();
+        assert_eq!(new["description"], "");
+        assert_eq!(desc(&ctx, "B"), "");
     }
 
     #[test]

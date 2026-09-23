@@ -60,7 +60,7 @@ pub fn tools() -> Vec<ToolDef> {
         tool!("read_script", "Return a script's source.", READ, ScriptArg, read_script),
         tool!(
             "write_script",
-            "Create or replace a script. The source must start with a docstring whose first part is the JSON manifest, e.g. {\"hedgebuddy\": 1, \"app\": \"offshoot\", \"event\": \"FileCopyCompleted\", \"requires\": {...}} followed by a line ---. The app and event are checked against the catalog (see describe_app). Returns unmet requirements; set them with set_var before attaching.",
+            "Create or replace a script. The source must start with a docstring whose first part is the JSON manifest, e.g. {\"hedgebuddy\": 1, \"app\": \"offshoot\", \"event\": \"FileCopyCompleted\", \"requires\": {...}} followed by a line ---. The app and event are checked against the catalog (see describe_app). Returns unmet requirements; set them with set_var before attaching. When it replaces a script, attached_to lists the app events still attached to it; if the manifest's event changed, detach the old one with detach_script.",
             DESTRUCTIVE,
             WriteScript,
             write_script
@@ -124,10 +124,16 @@ fn write_script(ctx: &Context, p: WriteScript) -> ToolResult {
     let replaced = ctx.store.script_path(&profile, &p.name).is_file();
     ctx.store.write_script(&profile, &p.name, &p.source)?;
     let check = ctx.store.check_script(&profile, &p.name)?;
+    let attached = if replaced {
+        attached_to(ctx, &profile, &p.name)
+    } else {
+        Vec::new()
+    };
     Ok(json!({
         "profile": profile,
         "name": p.name,
         "replaced": replaced,
+        "attached_to": attached,
         "manifest": to_json(&check.manifest)?,
         "unmet": to_json(&check.issues)?,
     }))
@@ -193,7 +199,8 @@ mod tests {
 
     #[test]
     fn write_validates_against_the_catalog_and_reports_unmet() {
-        let (_d, _f, ctx) = test_ctx(FakeHost::new(Os::Windows));
+        let (_d, _f, ctx) =
+            test_ctx(FakeHost::new(Os::Windows).with_registry_key("HKCU\\Software\\Hedge"));
         ctx.store.create_profile("p", "").unwrap();
         let out = call(
             &ctx,
@@ -202,16 +209,32 @@ mod tests {
         )
         .unwrap();
         assert_eq!(out["replaced"], false);
+        assert_eq!(out["attached_to"], json!([]));
         assert_eq!(out["manifest"]["event"], "FileCopyCompleted");
         assert_eq!(out["unmet"][0]["name"], "HOOK");
+
+        // Replacing an attached script with a different event reports the
+        // event that is still attached.
+        call(
+            &ctx,
+            "set_var",
+            json!({"name": "HOOK", "type": "secret", "value": "https://h"}),
+        )
+        .unwrap();
+        ctx.hedge
+            .attach_script(&ctx.store, "p", "copy.py", false)
+            .unwrap();
+        let moved = COPY.replace("FileCopyCompleted", "DiskAdded");
+        let again = call(
+            &ctx,
+            "write_script",
+            json!({"name": "copy.py", "source": moved}),
+        )
+        .unwrap();
+        assert_eq!(again["replaced"], true);
         assert_eq!(
-            call(
-                &ctx,
-                "write_script",
-                json!({"name": "copy.py", "source": COPY})
-            )
-            .unwrap()["replaced"],
-            true
+            again["attached_to"],
+            json!([{"app": "offshoot", "event": "FileCopyCompleted"}])
         );
         let bad = COPY.replace("FileCopyCompleted", "Nope");
         assert!(call(
@@ -231,7 +254,7 @@ mod tests {
         .is_err());
         assert_eq!(
             call(&ctx, "read_script", json!({"name": "copy.py"})).unwrap()["source"],
-            COPY
+            moved
         );
         assert_eq!(
             call(&ctx, "list_scripts", json!({})).unwrap()["scripts"][0]["name"],

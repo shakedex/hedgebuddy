@@ -2,9 +2,10 @@
 
 use schemars::JsonSchema;
 use serde::Deserialize;
-use serde_json::json;
+use serde_json::{json, Value};
 
 use super::{to_json, tool, Context, NoParams, ToolDef, ToolResult, DESTRUCTIVE, READ, WRITE};
+use crate::tools::scripts::attached_to;
 
 /// Which profile (defaults to the active one).
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -72,7 +73,7 @@ pub fn tools() -> Vec<ToolDef> {
         ),
         tool!(
             "delete_profile",
-            "Delete a profile with its variables, secrets and scripts. Run with dry_run first and confirm with the operator. Detach its scripts first (sync another profile or use detach_script), or their Hedge app events will point at missing files.",
+            "Delete a profile with its variables, secrets and scripts. Run with dry_run first and confirm with the operator; attached_to lists the Hedge app events attached to its scripts. Detach those first (sync another profile or use detach_script), or the events will point at missing files.",
             DESTRUCTIVE,
             DeleteProfile,
             delete_profile
@@ -119,14 +120,29 @@ fn delete_profile(ctx: &Context, p: DeleteProfile) -> ToolResult {
         .into_iter()
         .map(|s| s.name)
         .collect();
+    // App events attached to this profile's scripts go stale once it is gone.
+    let attached: Vec<Value> = scripts
+        .iter()
+        .flat_map(|script| {
+            attached_to(ctx, &p.name, script)
+                .into_iter()
+                .map(move |mut a| {
+                    a["script"] = json!(script);
+                    a
+                })
+        })
+        .collect();
     if p.dry_run {
         return Ok(json!({
             "dry_run": true,
             "would_delete": { "profile": p.name, "variables": profile.variables.len(), "scripts": scripts },
+            "attached_to": attached,
         }));
     }
     ctx.store.delete_profile(&p.name)?;
-    Ok(json!({ "deleted": p.name, "active": ctx.store.active_profile_name()? }))
+    Ok(
+        json!({ "deleted": p.name, "active": ctx.store.active_profile_name()?, "attached_to": attached }),
+    )
 }
 
 #[cfg(test)]
@@ -166,9 +182,21 @@ mod tests {
     }
 
     #[test]
-    fn delete_has_a_dry_run() {
-        let (_d, _f, ctx) = test_ctx(FakeHost::new(Os::Windows));
+    fn delete_has_a_dry_run_and_reports_attachments() {
+        let (_d, _f, ctx) =
+            test_ctx(FakeHost::new(Os::Windows).with_registry_key("HKCU\\Software\\Hedge"));
         call(&ctx, "create_profile", json!({"name": "p"})).unwrap();
+        let copy = "\"\"\"\n{\"hedgebuddy\": 1, \"app\": \"offshoot\", \"event\": \"FileCopyCompleted\"}\n---\n\"\"\"\nprint('x')\n";
+        ctx.store.write_script("p", "copy.py", copy).unwrap();
+        ctx.store
+            .write_script("p", "plain.py", "print('y')\n")
+            .unwrap();
+        ctx.hedge
+            .attach_script(&ctx.store, "p", "copy.py", false)
+            .unwrap();
+        let attached =
+            json!([{"app": "offshoot", "event": "FileCopyCompleted", "script": "copy.py"}]);
+
         let dry = call(
             &ctx,
             "delete_profile",
@@ -176,9 +204,17 @@ mod tests {
         )
         .unwrap();
         assert_eq!(dry["would_delete"]["profile"], "p");
+        assert_eq!(
+            dry["would_delete"]["scripts"],
+            json!(["copy.py", "plain.py"])
+        );
+        assert_eq!(dry["attached_to"], attached);
         assert!(ctx.store.profile_exists("p"));
         let done = call(&ctx, "delete_profile", json!({"name": "p"})).unwrap();
-        assert_eq!(done, json!({"deleted": "p", "active": null}));
+        assert_eq!(
+            done,
+            json!({"deleted": "p", "active": null, "attached_to": attached})
+        );
         assert!(call(&ctx, "delete_profile", json!({"name": "p"})).is_err());
     }
 }
