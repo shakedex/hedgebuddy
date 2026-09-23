@@ -66,10 +66,18 @@ pub fn schemas() -> Value {
     Value::Object(map)
 }
 
-/// How long the Python check behind `home_summary` is reused.
+/// How long the Python check behind `home_summary` is reused when an
+/// interpreter is found.
 pub const PYTHON_CACHE_TTL: Duration = Duration::from_secs(60);
 
-/// The Python the Hedge apps use, probed at most once per `ttl`: starting
+/// How long a "not found" probe is reused, regardless of the cache's
+/// configured `ttl`. On macOS without developer tools installed, running
+/// `python3` pops an installation dialog, so a miss must never be retried
+/// on every call the way a found interpreter's `ttl` allows.
+pub const PYTHON_MISSING_TTL: Duration = Duration::from_secs(600);
+
+/// The Python the Hedge apps use, probed at most once per `ttl` (once per
+/// [`PYTHON_MISSING_TTL`] when the last probe found nothing): starting
 /// Python costs tens to hundreds of milliseconds, and Home asks often.
 pub struct PythonCache {
     ttl: Duration,
@@ -77,7 +85,8 @@ pub struct PythonCache {
 }
 
 impl PythonCache {
-    /// A cache that probes again after `ttl`.
+    /// A cache that reuses a found interpreter for `ttl`, and a "not found"
+    /// result for [`PYTHON_MISSING_TTL`] regardless of `ttl`.
     pub fn new(ttl: Duration) -> PythonCache {
         PythonCache {
             ttl,
@@ -85,17 +94,30 @@ impl PythonCache {
         }
     }
 
-    /// The cached probe, or a fresh one when it is older than the ttl.
+    /// The cached probe, or a fresh one when it has aged past its ttl: `ttl`
+    /// for a found interpreter, [`PYTHON_MISSING_TTL`] for a miss.
     pub fn get(&self, host: &dyn Host) -> Result<Option<PythonInfo>, ToolError> {
         let mut slot = self.slot.lock().unwrap_or_else(|e| e.into_inner());
         if let Some((at, info)) = slot.as_ref() {
-            if at.elapsed() < self.ttl {
+            let ttl = if info.is_some() {
+                self.ttl
+            } else {
+                PYTHON_MISSING_TTL
+            };
+            if at.elapsed() < ttl {
                 return Ok(info.clone());
             }
         }
         let info = python_env::find_python(host)?;
         *slot = Some((Instant::now(), info.clone()));
         Ok(info)
+    }
+
+    /// Forget the cached probe, so the next `get` probes again no matter how
+    /// recently the last one ran (used after the operator installs Python
+    /// or the package, so Home reflects it immediately).
+    pub fn invalidate(&self) {
+        *self.slot.lock().unwrap_or_else(|e| e.into_inner()) = None;
     }
 }
 
@@ -114,15 +136,22 @@ pub struct SessionStart {
     pub warning: Option<String>,
 }
 
+/// How long `start_session` waits for the data folder's lock: short enough
+/// that a busy lock never makes the app feel stuck at launch.
+const START_SESSION_LOCK_WAIT: Duration = Duration::from_secs(1);
+
 /// Start an app session: keep the stored `last_opened` for this session's
 /// "since you last opened" figures, then store now. A busy lock or an
-/// unreadable file never stops the app from starting.
+/// unreadable file never stops the app from starting: the write waits at
+/// most [`START_SESSION_LOCK_WAIT`] for the data folder's lock (or the
+/// context's own timeout, if shorter), not the full write-guard timeout.
 pub fn start_session(ctx: &Context) -> SessionStart {
     let (since, mut warning) = match ctx.store.preferences() {
         Ok(p) => (p.last_opened, None),
         Err(e) => (None, Some(e.to_string())),
     };
-    let stored = ctx.write_guard().and_then(|_guard| {
+    let wait = START_SESSION_LOCK_WAIT.min(ctx.lock_timeout);
+    let stored = ctx.write_guard_within(wait).and_then(|_guard| {
         let now = PreferencesPatch {
             last_opened: Some(Some(now_rfc3339())),
             editor_command: None,
@@ -173,12 +202,26 @@ pub fn preferences_set(ctx: &Context, patch: PreferencesPatch) -> Result<Prefere
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeSet;
-    use std::time::Duration;
+    use std::time::{Duration, Instant};
 
+    use hedgebuddy_core::host::CommandOutput;
+    use hedgebuddy_core::python_env::PROBE;
     use hedgebuddy_core::{ActivityOutcome, FakeHost, Os, Store};
 
     use super::*;
     use crate::test_ctx;
+
+    fn with_found_python(host: FakeHost) -> FakeHost {
+        host.with_run_response(
+            "py",
+            &["-3", "-c", PROBE],
+            CommandOutput {
+                status: 0,
+                stdout: "{\"executable\": \"C:\\\\Py\\\\python.exe\", \"version\": \"3.13.5\", \"hedgebuddy\": null}\n".into(),
+                stderr: String::new(),
+            },
+        )
+    }
 
     #[test]
     fn app_commands_are_never_tools_and_have_object_schemas() {
@@ -215,6 +258,23 @@ mod tests {
         let s = start_session(&ctx);
         assert_eq!(s.since, None);
         assert_eq!(s.warning.as_deref(), Some(hedgebuddy_core::BUSY_MESSAGE));
+    }
+
+    #[test]
+    fn a_busy_lock_does_not_stall_startup_even_with_the_default_timeout() {
+        // The context's own lock_timeout (10s by default) must not be what
+        // start_session waits on, or a busy lock at launch would make the
+        // app appear to hang for the full ten seconds.
+        let (_d, _f, ctx) = test_ctx(FakeHost::new(Os::Windows));
+        let _held = Store::open(ctx.store.root()).lock().unwrap();
+        let started = Instant::now();
+        let s = start_session(&ctx);
+        let elapsed = started.elapsed();
+        assert_eq!(s.warning.as_deref(), Some(hedgebuddy_core::BUSY_MESSAGE));
+        assert!(
+            elapsed < Duration::from_secs(2),
+            "start_session took {elapsed:?}"
+        );
     }
 
     #[test]
@@ -262,15 +322,40 @@ mod tests {
     }
 
     #[test]
-    fn the_python_probe_is_cached() {
-        let (_d, fake, ctx) = test_ctx(FakeHost::new(Os::Windows));
+    fn a_found_probe_is_cached_per_its_own_ttl() {
+        let (_d, fake, ctx) = test_ctx(with_found_python(FakeHost::new(Os::Windows)));
         let cache = PythonCache::new(Duration::from_secs(60));
-        assert_eq!(cache.get(ctx.hedge.host()).unwrap(), None);
-        assert_eq!(cache.get(ctx.hedge.host()).unwrap(), None);
+        assert!(cache.get(ctx.hedge.host()).unwrap().is_some());
+        assert!(cache.get(ctx.hedge.host()).unwrap().is_some());
         assert_eq!(fake.runs().len(), 1, "{:?}", fake.runs());
         let fresh = PythonCache::new(Duration::ZERO);
         fresh.get(ctx.hedge.host()).unwrap();
         fresh.get(ctx.hedge.host()).unwrap();
         assert_eq!(fake.runs().len(), 3);
+    }
+
+    #[test]
+    fn a_missing_probe_is_not_reprobed_once_its_found_ttl_elapses() {
+        // A miss uses PYTHON_MISSING_TTL, not the cache's `ttl`: a
+        // zero-second `ttl` (which would force a reprobe every call for a
+        // found interpreter) must not do the same for a miss, or macOS
+        // would pop an installer dialog on every `home_summary` call.
+        let (_d, fake, ctx) = test_ctx(FakeHost::new(Os::Windows));
+        let cache = PythonCache::new(Duration::ZERO);
+        assert_eq!(cache.get(ctx.hedge.host()).unwrap(), None);
+        assert_eq!(cache.get(ctx.hedge.host()).unwrap(), None);
+        assert_eq!(fake.runs().len(), 1, "{:?}", fake.runs());
+    }
+
+    #[test]
+    fn invalidate_forces_a_fresh_probe() {
+        let (_d, fake, ctx) = test_ctx(with_found_python(FakeHost::new(Os::Windows)));
+        let cache = PythonCache::new(Duration::from_secs(60));
+        cache.get(ctx.hedge.host()).unwrap();
+        cache.get(ctx.hedge.host()).unwrap();
+        assert_eq!(fake.runs().len(), 1, "{:?}", fake.runs());
+        cache.invalidate();
+        cache.get(ctx.hedge.host()).unwrap();
+        assert_eq!(fake.runs().len(), 2, "{:?}", fake.runs());
     }
 }

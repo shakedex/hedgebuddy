@@ -96,10 +96,18 @@ impl Context {
     /// Serialise a write: this process's mutex first, then the data folder's
     /// cross-process lock. Hold the guard for the whole write.
     pub fn write_guard(&self) -> Result<WriteGuard<'_>, ToolError> {
+        self.write_guard_within(self.lock_timeout)
+    }
+
+    /// The same as [`Context::write_guard`], but waiting at most `timeout`
+    /// for the data folder's cross-process lock regardless of
+    /// [`Context::lock_timeout`]. Callers that must not stall (app startup)
+    /// pass a short timeout here instead of changing the context's own.
+    pub fn write_guard_within(&self, timeout: Duration) -> Result<WriteGuard<'_>, ToolError> {
         // A tool that panicked while holding the mutex leaves nothing
         // half-held in `()`, so a poisoned mutex is still safe to take.
         let process = self.write_lock.lock().unwrap_or_else(|e| e.into_inner());
-        let data = self.store.lock_within(self.lock_timeout)?;
+        let data = self.store.lock_within(timeout)?;
         Ok(WriteGuard {
             _data: data,
             _process: process,

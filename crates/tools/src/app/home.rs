@@ -217,8 +217,23 @@ pub fn home_summary(
 
     let mut stale_total = 0;
     let mut attached = BTreeSet::new();
-    let mut app_items = Vec::new();
+    let mut stale_items = Vec::new();
+    let mut newer_items = Vec::new();
+    let mut scripting_off_items = Vec::new();
     for status in ctx.hedge.apps()? {
+        // Checked before the attachments read below, so a failed read (a
+        // stale registry key an app can't currently see, say) never hides
+        // that the app itself is newer than HedgeBuddy was tested against.
+        if status.installed && status.newer_than_tested {
+            if let Some(version) = &status.version {
+                newer_items.push(AttentionItem::AppNewer {
+                    app: status.id.clone(),
+                    app_name: status.name.clone(),
+                    version: version.clone(),
+                    tested_against: status.tested_against.clone(),
+                });
+            }
+        }
         let Ok(events) = ctx.hedge.attachments(&status.id, &ctx.store) else {
             continue;
         };
@@ -249,30 +264,25 @@ pub fn home_summary(
         }
         if stale > 0 {
             stale_total += stale;
-            app_items.push(AttentionItem::StaleEntries {
+            stale_items.push(AttentionItem::StaleEntries {
                 app: status.id.clone(),
                 app_name: status.name.clone(),
                 count: stale,
             });
         }
-        if status.installed && status.newer_than_tested {
-            if let Some(version) = &status.version {
-                app_items.push(AttentionItem::AppNewer {
-                    app: status.id.clone(),
-                    app_name: status.name.clone(),
-                    version: version.clone(),
-                    tested_against: status.tested_against.clone(),
-                });
-            }
-        }
         if status.scripting_enabled == Some(false) && in_use > 0 {
-            app_items.push(AttentionItem::ScriptingOff {
+            scripting_off_items.push(AttentionItem::ScriptingOff {
                 app: status.id.clone(),
                 app_name: status.name.clone(),
                 events: in_use,
             });
         }
     }
+
+    // Grouped by kind across every app, not interleaved app by app (spec
+    // §6.1 order): stale entries, the package problem, newer apps, then
+    // scripting off.
+    attention.extend(stale_items);
 
     let python = python_status(python.get(ctx.hedge.host())?);
     if python.problem.is_some() {
@@ -282,13 +292,8 @@ pub fn home_summary(
             required: python.required.clone(),
         });
     }
-    // Stale entries before the package, the rest after (spec §6.1 order).
-    let (stale_items, other_app_items): (Vec<_>, Vec<_>) = app_items
-        .into_iter()
-        .partition(|i| matches!(i, AttentionItem::StaleEntries { .. }));
-    let package_at = attention.len() - usize::from(python.problem.is_some());
-    attention.splice(package_at..package_at, stale_items);
-    attention.extend(other_app_items);
+    attention.extend(newer_items);
+    attention.extend(scripting_off_items);
 
     Ok(HomeSummary {
         since: since.filter(|_| since_ts.is_some()).map(str::to_owned),
@@ -653,5 +658,53 @@ mod tests {
         let s = home_summary(&ctx, None, &PythonCache::default()).unwrap();
         assert_eq!(kinds(&s), ["scripting_off"]);
         assert_eq!(serde_json::to_value(&s.attention[0]).unwrap()["events"], 1);
+    }
+
+    #[test]
+    fn app_items_are_grouped_by_kind_across_apps_not_interleaved_per_app() {
+        const FOOLCAT_KEY: &str = "HKCU\\Software\\FoolCat";
+        let offshoot_script = tempfile::NamedTempFile::new().unwrap();
+        let foolcat_script = tempfile::NamedTempFile::new().unwrap();
+        let host = with_python(
+            FakeHost::new(Os::Windows)
+                .with_registry_value(KEY, "BuildVersion", RegValue::String("26.2 (1)".into()))
+                .with_registry_value(
+                    KEY,
+                    "EventScriptDiskAdded",
+                    RegValue::String(offshoot_script.path().display().to_string()),
+                )
+                .with_registry_value(
+                    FOOLCAT_KEY,
+                    "BuildVersion",
+                    RegValue::String("26.2 (1)".into()),
+                )
+                .with_registry_value(
+                    FOOLCAT_KEY,
+                    "EventScriptReportCreated",
+                    RegValue::String(foolcat_script.path().display().to_string()),
+                ),
+            Some(env!("CARGO_PKG_VERSION")),
+        );
+        let (_d, _f, ctx) = test_ctx(host);
+        let s = home_summary(&ctx, None, &PythonCache::default()).unwrap();
+        // Both OffShoot and FoolCat are newer than tested and have scripting
+        // off with something attached: every app_newer must come before
+        // every scripting_off, not app-by-app (foolcat sorts before
+        // offshoot in the catalog).
+        assert_eq!(
+            kinds(&s),
+            ["app_newer", "app_newer", "scripting_off", "scripting_off"]
+        );
+        let apps: Vec<String> = s
+            .attention
+            .iter()
+            .map(|i| {
+                serde_json::to_value(i).unwrap()["app"]
+                    .as_str()
+                    .unwrap()
+                    .to_owned()
+            })
+            .collect();
+        assert_eq!(apps, ["foolcat", "offshoot", "foolcat", "offshoot"]);
     }
 }

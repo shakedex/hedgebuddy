@@ -65,8 +65,20 @@ impl Host for RealHost {
     }
 
     fn run(&self, program: &str, args: &[&str]) -> Result<CommandOutput> {
-        let out = std::process::Command::new(program)
-            .args(args)
+        let mut command = std::process::Command::new(program);
+        command.args(args);
+        // The desktop app is a windowless GUI program, but a console
+        // subsystem child (`py`, `python3`) otherwise flashes its own
+        // console window; `home_summary` alone probes Python up to once a
+        // minute. `.output()` already pipes stdout/stderr, so hiding the
+        // window changes nothing about what is captured.
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+            command.creation_flags(CREATE_NO_WINDOW);
+        }
+        let out = command
             .output()
             .map_err(|e| CoreError::Host(format!("cannot run {program}: {e}")))?;
         Ok(CommandOutput {
