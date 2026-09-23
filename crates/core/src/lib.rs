@@ -17,6 +17,7 @@ pub mod host;
 pub mod manifest;
 pub mod paths;
 pub mod profile;
+pub mod python_env;
 pub mod runs;
 pub mod scripts;
 pub mod secrets;
