@@ -85,7 +85,7 @@ Deleted from the old tree: `app/`, `updater/`, `python-lib/`, `tests/`, `example
 - **app** is a Tauri v2 shell. It calls the same tools as Claude through one generic command, plus a few app-only commands for OS actions and the home summary (phase 5 design: `2026-09-23-phase5-desktop-app-design.md`). The CLI binary is bundled as a sidecar so hosts can reach the MCP server whether or not the window is open.
 - **catalog** manifests are embedded in both binaries and can be overridden per file from `<data>/catalog/`.
 - **python** reads the data directory directly and never invokes Rust.
-- **schema** holds JSON Schemas for `hedgebuddy.json`, `profile.json`, `secrets.json`, run records, and the script manifest, plus fixtures both Rust and Python test against.
+- **schema** holds JSON Schemas for `hedgebuddy.json`, `profile.json`, `secrets.json`, run records, the script manifest, Claude activity records (`activity.jsonl`, phase 5) and `preferences.json` (phase 5), plus fixtures both Rust and Python test against.
 
 ## 5. Storage format
 
