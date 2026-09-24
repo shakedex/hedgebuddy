@@ -4,10 +4,12 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
+use std::io::Read;
 use std::path::Path;
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use crate::error::{CoreError, Result};
 use crate::fs_util;
@@ -56,16 +58,45 @@ pub struct ImportSummary {
 }
 
 impl Store {
-    /// A profile, its scripts and, with `include_secrets`, its secret values.
+    /// A profile, its scripts and, with `include_secrets`, its secret
+    /// values. Only the values of secret-typed variables are included; a
+    /// key left behind in `secrets.json` by a deleted or retyped variable
+    /// (core tolerates such orphans) is dropped rather than exported.
+    /// Refuses when any script's manifest fails to parse, since importing
+    /// such a file would fail anyway.
     pub fn export_profile(&self, name: &str, include_secrets: bool) -> Result<ProfileExport> {
         let profile = self.load_profile(name)?;
         let secrets = if include_secrets {
-            Some(self.load_secrets(name)?)
+            let all = self.load_secrets(name)?;
+            Some(
+                all.into_iter()
+                    .filter(|(k, _)| {
+                        profile
+                            .variables
+                            .get(k)
+                            .is_some_and(|v| v.ty == VarType::Secret)
+                    })
+                    .collect(),
+            )
         } else {
             None
         };
+
+        let infos = self.list_scripts(name)?;
+        let broken: Vec<&str> = infos
+            .iter()
+            .filter(|i| i.manifest_error.is_some())
+            .map(|i| i.name.as_str())
+            .collect();
+        if !broken.is_empty() {
+            return Err(CoreError::Validation(format!(
+                "fix the manifest of {} before exporting",
+                broken.join(", ")
+            )));
+        }
+
         let mut scripts = BTreeMap::new();
-        for info in self.list_scripts(name)? {
+        for info in infos {
             let source = self.read_script(name, &info.name)?;
             scripts.insert(info.name, source);
         }
@@ -108,13 +139,23 @@ impl Store {
                 "the file has a secret value for '{key}', which is not a secret variable of the profile"
             )));
         }
+        let mut seen_lower: BTreeSet<String> = BTreeSet::new();
         for (script, source) in &export.scripts {
             validate_script_name(script)?;
             parse_manifest(source)?;
+            if !seen_lower.insert(script.to_lowercase()) {
+                return Err(CoreError::Validation(format!(
+                    "script name '{script}' differs only by case from another script in this file"
+                )));
+            }
         }
 
+        // Only roll back a profile this call itself created: if
+        // `create_profile` fails (for example because something else won
+        // a race and created `name` first, or the index is unreadable),
+        // there is nothing of ours to delete.
+        self.create_profile(name, &profile.description)?;
         let written = (|| {
-            self.create_profile(name, &profile.description)?;
             self.save_profile(&profile)?;
             if !secrets.is_empty() {
                 self.save_secrets(name, &secrets)?;
@@ -130,7 +171,10 @@ impl Store {
         }
         Ok(ImportSummary {
             profile: name.to_owned(),
-            active: self.active_profile_name()?.as_deref() == Some(name),
+            // Everything above is already written; a failed read here does
+            // not mean the import failed, only that we cannot say it is
+            // active.
+            active: self.active_profile_name().unwrap_or(None).as_deref() == Some(name),
             variables: profile.variables.len(),
             scripts: export.scripts.len(),
             secrets_imported: secrets.len(),
@@ -149,18 +193,41 @@ pub fn write_profile_export(path: &Path, export: &ProfileExport) -> Result<()> {
     fs_util::write_json_atomic(path, export, export.secrets.is_some())
 }
 
-/// Read an export file, refusing one larger than `max_bytes`.
+/// Read an export file, refusing one larger than `max_bytes` (checked
+/// against bytes actually read, not trusted file metadata). The version is
+/// checked before the rest is deserialized, so a file from a future,
+/// incompatible export version is reported clearly rather than as a
+/// generic "unknown field" JSON error.
 pub fn read_profile_export(path: &Path, max_bytes: u64) -> Result<ProfileExport> {
-    let size = fs::metadata(path)
-        .map_err(|e| CoreError::io(path, e))?
-        .len();
-    if size > max_bytes {
+    let file = fs::File::open(path).map_err(|e| CoreError::io(path, e))?;
+    let mut buf = Vec::new();
+    file.take(max_bytes + 1)
+        .read_to_end(&mut buf)
+        .map_err(|e| CoreError::io(path, e))?;
+    if buf.len() as u64 > max_bytes {
         return Err(CoreError::Validation(format!(
-            "{} is {size} bytes, too large to be a profile export",
+            "{} is larger than {max_bytes} bytes, too large to be a profile export",
             path.display()
         )));
     }
-    fs_util::read_json(path)
+
+    let value: Value = serde_json::from_slice(&buf).map_err(|e| CoreError::Json {
+        path: path.to_path_buf(),
+        source: e,
+    })?;
+    let version = value.get("hedgebuddy_profile_export");
+    if !matches!(version, Some(Value::Number(n)) if n.as_u64() == Some(1)) {
+        let shown = version
+            .map(|v| v.to_string())
+            .unwrap_or_else(|| "missing".to_owned());
+        return Err(CoreError::Validation(format!(
+            "unsupported profile export version {shown} (expected 1)"
+        )));
+    }
+    serde_json::from_value(value).map_err(|e| CoreError::Json {
+        path: path.to_path_buf(),
+        source: e,
+    })
 }
 
 #[cfg(test)]
@@ -306,6 +373,72 @@ mod tests {
             export
         );
         assert!(read_profile_export(&path, 10).is_err());
+    }
+
+    #[test]
+    fn export_leaves_orphaned_secrets_out_and_the_export_imports_cleanly() {
+        let (_d, store) = store_with_profile();
+        // An orphaned secret: a key in secrets.json with no matching
+        // secret-typed variable in profile.json (see secrets.rs
+        // `delete_variable_cleans_an_orphaned_secret`; core tolerates it).
+        let mut secrets = store.load_secrets("a").unwrap();
+        secrets.insert("ORPHAN".into(), "leftover".into());
+        store.save_secrets("a", &secrets).unwrap();
+
+        let export = store.export_profile("a", true).unwrap();
+        let exported_secrets = export.secrets.as_ref().unwrap();
+        assert!(!exported_secrets.contains_key("ORPHAN"));
+        assert_eq!(exported_secrets.len(), 1);
+        assert_eq!(exported_secrets["HOOK"], "https://secret");
+
+        let summary = store.import_profile(&export, "b").unwrap();
+        assert_eq!(summary.secrets_imported, 1);
+        assert_eq!(summary.secrets_missing, Vec::<String>::new());
+    }
+
+    #[test]
+    fn export_refuses_a_profile_with_a_broken_manifest() {
+        let (_d, store) = store_with_profile();
+        std::fs::write(
+            store.script_path("a", "broken.py"),
+            "\"\"\"\n{\"hedgebuddy\": 1,\n---\n\"\"\"\n",
+        )
+        .unwrap();
+        let err = store.export_profile("a", false).unwrap_err();
+        match err {
+            CoreError::Validation(msg) => assert!(msg.contains("broken.py"), "{msg}"),
+            other => panic!("expected Validation, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn import_refuses_script_names_that_collide_case_insensitively() {
+        let (_d, store) = store_with_profile();
+        let mut export = store.export_profile("a", false).unwrap();
+        export.scripts.insert("Copy.py".into(), "print(1)\n".into());
+        assert!(store.import_profile(&export, "c").is_err());
+        assert!(!store.profile_dir("c").exists(), "nothing was written");
+    }
+
+    #[test]
+    fn read_profile_export_reports_a_clear_version_error_before_deserializing() {
+        let (dir, _store) = store_with_profile();
+        let path = dir.path().join("v2.json");
+        std::fs::write(
+            &path,
+            r#"{"hedgebuddy_profile_export": 2, "exported_at": "x", "profile": {}, "unexpected_field": true}"#,
+        )
+        .unwrap();
+        let err = read_profile_export(&path, EXPORT_MAX_BYTES).unwrap_err();
+        match err {
+            CoreError::Validation(msg) => {
+                assert!(
+                    msg.contains("unsupported profile export version 2"),
+                    "{msg}"
+                )
+            }
+            other => panic!("expected Validation, got {other:?}"),
+        }
     }
 
     #[cfg(unix)]
