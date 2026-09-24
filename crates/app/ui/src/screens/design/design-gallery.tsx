@@ -923,6 +923,9 @@ const EDITOR_INVALID: { type: VarType; edit: EditValue }[] = [
 
 const FAKE_SECRET = "sk_live_9f2c3f1a2b";
 
+/** `[]` isn't welcome in an id (list types are "string[]"/"path[]"). */
+const fieldId = (prefix: string, type: VarType) => `${prefix}-${type.replace("[]", "-list")}`;
+
 function Editors() {
   const [values, setValues] = useState<Record<VarType, EditValue>>(() => {
     const entries = VAR_TYPES.map((t) => [t, t === "secret" ? emptyEdit(t) : toEdit(t, EDITOR_SEED[t])] as const);
@@ -935,38 +938,48 @@ function Editors() {
   return (
     <div className="flex flex-col gap-3">
       <div className="surface divide-y divide-border">
-        {VAR_TYPES.map((type) => (
-          <div key={type} className="flex flex-col gap-1.5 p-3">
-            <div className="micro-label">Value · {type}</div>
-            {type === "secret" ? (
-              <VarEditor id="demo-secret" type={type} value="" onChange={() => undefined} error={null} secret={secret} onSecretChange={setSecret} reveal={revealFake} />
-            ) : (
-              <VarEditor
-                id={`demo-${type}`}
-                type={type}
-                value={values[type]}
-                onChange={(v) => setValues((prev) => ({ ...prev, [type]: v }))}
-                error={validateValue(type, values[type])}
-              />
-            )}
-          </div>
-        ))}
+        {VAR_TYPES.map((type) => {
+          const id = fieldId("demo", type);
+          return (
+            <div key={type} className="flex flex-col gap-1.5 p-3">
+              <label htmlFor={id} className="micro-label">
+                Value · {type}
+              </label>
+              {type === "secret" ? (
+                <VarEditor id={id} type={type} value="" onChange={() => undefined} error={null} secret={{ state: secret, onChange: setSecret, reveal: revealFake }} />
+              ) : (
+                <VarEditor
+                  id={id}
+                  type={type}
+                  value={values[type]}
+                  onChange={(v) => setValues((prev) => ({ ...prev, [type]: v }))}
+                  error={validateValue(type, values[type])}
+                />
+              )}
+            </div>
+          );
+        })}
       </div>
       <div className="flex flex-col gap-1">
         <div className="micro-label px-1">Invalid, to check the message under the field</div>
         <div className="surface divide-y divide-border">
-          {EDITOR_INVALID.map((demo, i) => (
-            <div key={demo.type} className="flex flex-col gap-1.5 p-3">
-              <div className="micro-label">Value · {demo.type}</div>
-              <VarEditor
-                id={`demo-invalid-${demo.type}`}
-                type={demo.type}
-                value={invalid[i]}
-                onChange={(v) => setInvalid((prev) => prev.map((cur, idx) => (idx === i ? v : cur)))}
-                error={validateValue(demo.type, invalid[i])}
-              />
-            </div>
-          ))}
+          {EDITOR_INVALID.map((demo, i) => {
+            const id = fieldId("demo-invalid", demo.type);
+            return (
+              <div key={demo.type} className="flex flex-col gap-1.5 p-3">
+                <label htmlFor={id} className="micro-label">
+                  Value · {demo.type}
+                </label>
+                <VarEditor
+                  id={id}
+                  type={demo.type}
+                  value={invalid[i]}
+                  onChange={(v) => setInvalid((prev) => prev.map((cur, idx) => (idx === i ? v : cur)))}
+                  error={validateValue(demo.type, invalid[i])}
+                />
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>

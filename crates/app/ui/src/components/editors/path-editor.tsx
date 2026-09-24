@@ -1,9 +1,11 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { FolderOpen, TriangleAlert } from "lucide-react";
 import { callApp } from "@/api/bridge";
 import { usePathStatus } from "@/api/queries";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { useDebounced } from "@/hooks/use-debounced";
 import { showError } from "@/lib/toast";
 
 /** Joins the ids of whichever helper text is showing, for `aria-describedby`. */
@@ -12,14 +14,15 @@ export function describedBy(...ids: (string | null | false | undefined)[]): stri
 }
 
 /**
- * A Windows path names its drive letter; anything else (macOS, `/Volumes/...`) is "the volume" (spec §7's
- * two wordings). Being unmounted never blocks Save — this is a warning, not a validation error.
+ * A Windows path names its drive letter, a UNC path names the share, and anything else (macOS,
+ * `/Volumes/...`) is "the volume" (spec §7's wordings). Being unreachable never blocks Save — this is a
+ * warning, not a validation error.
  */
 export function notMountedMessage(path: string): string {
   const drive = /^([A-Za-z]):[\\/]/.exec(path)?.[1];
-  return drive
-    ? `Drive ${drive.toUpperCase()}: is not connected. You can still save it.`
-    : "The volume is not mounted. You can still save it.";
+  if (drive) return `Drive ${drive.toUpperCase()}: is not connected. You can still save it.`;
+  if (/^\\\\[^\\]+\\[^\\]+/.test(path)) return "The network share is not reachable. You can still save it.";
+  return "The volume is not mounted. You can still save it.";
 }
 
 /** A mono text field plus a folder picker, with an amber note when the path's drive isn't mounted. */
@@ -30,13 +33,18 @@ export function PathEditor({ id, value, onChange, error }: {
   error?: string | null;
 }) {
   const [picking, setPicking] = useState(false);
+  const pickingRef = useRef(false);
   const trimmed = value.trim();
-  const status = usePathStatus(trimmed ? [trimmed] : []);
-  const notMounted = !error && status.data?.paths[0]?.mounted === false;
+  // Settle the path before querying it, so a fast typist doesn't fire (and flicker) a check per keystroke.
+  const debounced = useDebounced(trimmed, 300);
+  const status = usePathStatus(debounced ? [debounced] : []);
+  const notMounted = !error && status.data?.paths.find((p) => p.path === debounced)?.mounted === false;
   const errorId = `${id}-error`;
   const warningId = `${id}-warning`;
 
   const pick = async () => {
+    if (pickingRef.current) return;
+    pickingRef.current = true;
     setPicking(true);
     try {
       const { path } = await callApp("pick_folder", { title: "Choose a folder" });
@@ -44,6 +52,7 @@ export function PathEditor({ id, value, onChange, error }: {
     } catch (e) {
       showError(e);
     } finally {
+      pickingRef.current = false;
       setPicking(false);
     }
   };
@@ -54,14 +63,25 @@ export function PathEditor({ id, value, onChange, error }: {
         <Input
           id={id}
           className="font-mono"
+          spellCheck={false}
           value={value}
           onChange={(e) => onChange(e.target.value)}
           aria-invalid={!!error}
           aria-describedby={describedBy(error && errorId, notMounted && warningId)}
         />
-        <Button type="button" variant="outline" size="icon" aria-label="Choose a folder" onClick={pick} disabled={picking} aria-busy={picking}>
-          <FolderOpen aria-hidden />
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            {/* aria-disabled (not disabled) while picking: a focused button that goes natively `disabled`
+                is blurred to <body> by the browser, dropping keyboard focus. */}
+            <Button
+              type="button" variant="outline" size="icon" className="size-8 aria-disabled:pointer-events-none aria-disabled:opacity-45"
+              aria-label="Choose a folder" onClick={pick} aria-disabled={picking} aria-busy={picking}
+            >
+              <FolderOpen aria-hidden />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Choose a folder</TooltipContent>
+        </Tooltip>
       </div>
       {error && (
         <p id={errorId} className="text-xs text-destructive">
@@ -71,7 +91,7 @@ export function PathEditor({ id, value, onChange, error }: {
       {notMounted && (
         <p id={warningId} className="flex items-center gap-1.5 text-xs text-warning">
           <TriangleAlert aria-hidden className="size-3.5 shrink-0" strokeWidth={1.75} />
-          {notMountedMessage(trimmed)}
+          {notMountedMessage(debounced)}
         </p>
       )}
     </div>

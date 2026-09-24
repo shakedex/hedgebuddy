@@ -25,6 +25,10 @@ export function toEdit(type: VarType, value: unknown): EditValue {
 export function fromEdit(type: VarType, edit: EditValue): unknown {
   if (type === "int") return Number.parseInt(String(edit).trim(), 10);
   if (type === "float") return Number(String(edit).trim());
+  // path and url are validated trimmed (validateValue below); save what was validated, not the raw text,
+  // so " https://x.com" (which passes here) doesn't reach core as a value it rejects.
+  if (type === "path" || type === "url") return (edit as string).trim();
+  if (type === "path[]") return (edit as string[]).map((p) => p.trim());
   return edit;
 }
 

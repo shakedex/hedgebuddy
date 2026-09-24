@@ -1,7 +1,10 @@
 import { useRef } from "react";
-import { QueryClient, useMutation, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, QueryClient, useMutation, useQuery } from "@tanstack/react-query";
 import { BridgeError, callApp, callTool } from "./bridge";
 import type { AppCommandName, AppCommandTypes, CreateProfileOutput, ToolName, ToolTypes } from "./tools.gen";
+
+/** `path_status`'s own limit (its input's doc comment: "at most 64"). */
+const PATH_STATUS_LIMIT = 64;
 
 export const queryClient = new QueryClient({
   defaultOptions: {
@@ -181,16 +184,31 @@ export function useAppDescription(app: string | null) {
   });
 }
 
-/** Whether each path exists and its drive is mounted (a path-typed variable's "not mounted" warning). Keyed
- *  on the sorted, deduplicated, non-empty paths so re-renders with the same set share one cache entry. */
+/**
+ * Whether each path exists and its drive is mounted (a path-typed variable's "not mounted" warning). Keyed
+ * on the sorted, deduplicated, non-empty paths so re-renders with the same set share one cache entry. Over
+ * the limit, only the first 64 distinct paths (in the order given) are checked rather than refusing the
+ * whole call. `placeholderData` keeps the previous answer on screen while a new set of paths is checked, so
+ * a caller that debounces its input (typing a path, editing a list) doesn't flash back to "unknown" between
+ * keystrokes and the next settled query.
+ */
 export function usePathStatus(paths: string[]) {
-  const unique = Array.from(new Set(paths.filter((p) => p.length > 0))).sort();
+  const seen = new Set<string>();
+  const capped: string[] = [];
+  for (const p of paths) {
+    if (p.length === 0 || seen.has(p)) continue;
+    seen.add(p);
+    capped.push(p);
+    if (capped.length === PATH_STATUS_LIMIT) break;
+  }
+  const unique = capped.sort();
   const args: AppCommandTypes["path_status"]["input"] = { paths: unique };
   return useQuery({
     queryKey: queryKey.app("path_status", args),
     queryFn: () => callApp("path_status", args),
     enabled: unique.length > 0,
     staleTime: 10_000,
+    placeholderData: keepPreviousData,
   });
 }
 
