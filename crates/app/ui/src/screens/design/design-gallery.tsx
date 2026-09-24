@@ -5,7 +5,7 @@ import {
 import { toast } from "sonner";
 import { BridgeError } from "@/api/bridge";
 import type { Action, AttachState, RunStatus } from "@/api/tools.gen";
-import { ChangePreviewDialog } from "@/components/app/change-preview-dialog";
+import { ChangePreviewDialog, renderWords } from "@/components/app/change-preview-dialog";
 import { CountBadge } from "@/components/app/count-badge";
 import { EmptyState } from "@/components/app/empty-state";
 import { ErrorPanel } from "@/components/app/error-panel";
@@ -26,7 +26,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { describeActions, describeState } from "@/lib/actions";
+import { describeActions, describeState, type ChangeKind, type ChangeRow } from "@/lib/actions";
 import { appName, clock, dayKey, dayLabel, duration, plural, when } from "@/lib/format";
 import { NAV_ICONS, STATUS, runStatusKey, type StatusKey } from "@/lib/status";
 import { cn } from "@/lib/utils";
@@ -731,14 +731,27 @@ const ATTACH_MAC_ACTIONS: Action[] = [
   { action: "workspace_prefs", path: "~/Library/Application Support/OffShoot Helper/workspace.json", set: { FileCopyCompleted: "on_x.py" } },
 ];
 
+/** A ledger long enough to need the 45vh scroll. */
+const LONG_LEDGER_KINDS: ChangeKind[] = ["registry", "registry_delete", "workspace", "file", "delete", "attach", "detach"];
+const LONG_LEDGER: ChangeRow[] = Array.from({ length: 16 }, (_, i) => ({
+  kind: LONG_LEDGER_KINDS[i % LONG_LEDGER_KINDS.length],
+  target: `HKCU\\Software\\Bounce Software\\OffShoot\\Scripting\\Event${i + 1}`,
+  detail: { text: `entry ${i + 1} of 16` },
+}));
+
 const CHANGE_PREVIEW_BUTTONS = [
   { key: "planning", label: "Planning forever" },
   { key: "failed", label: "Plan failed" },
+  { key: "plan-busy", label: "Plan busy" },
   { key: "blocked", label: "Blocked" },
   { key: "nothing", label: "Nothing to do" },
   { key: "attach-win", label: "Attach, replaces a file" },
   { key: "attach-mac", label: "Attach, macOS staged" },
   { key: "delete", label: "Delete script" },
+  { key: "slow", label: "Slow apply (2 s)" },
+  { key: "apply-failed", label: "Apply fails" },
+  { key: "apply-busy", label: "Apply busy" },
+  { key: "long", label: "Long ledger (16 rows)" },
 ] as const;
 
 function ChangePreviewGallery() {
@@ -769,6 +782,14 @@ function ChangePreviewGallery() {
       />
 
       <ChangePreviewDialog
+        open={openKey === "plan-busy"} onOpenChange={close}
+        title="Sync attachments?" applyLabel="Sync"
+        plan={() => Promise.reject<{ actions: Action[] }>(new BridgeError("busy", "another HedgeBuddy is busy; try again"))}
+        describe={(p) => ({ summary: "HedgeBuddy will make these changes.", changes: describeActions(p.actions) })}
+        apply={() => Promise.resolve()}
+      />
+
+      <ChangePreviewDialog
         open={openKey === "blocked"} onOpenChange={close}
         title="Delete profile commercial-one-day?" applyLabel="Delete" destructive
         plan={() => Promise.resolve({ actions: [] as Action[] })}
@@ -791,7 +812,7 @@ function ChangePreviewGallery() {
         describe={(p) => ({
           summary: <>HedgeBuddy will attach <Mono className="text-foreground">on_copy_complete.py</Mono> to OffShoot's FileCopyCompleted event.</>,
           changes: describeActions(p.actions),
-          warnings: [<>Replaces {describeState(REPLACES_EXTERNAL)}</>],
+          warnings: [<>Replaces {renderWords(describeState(REPLACES_EXTERNAL))}</>],
         })}
         apply={() => Promise.resolve()}
         onApplied={confirmed("Attached on_copy_complete.py")}
@@ -804,7 +825,7 @@ function ChangePreviewGallery() {
         describe={(p) => ({
           summary: <>HedgeBuddy will stage <Mono className="text-foreground">on_x.py</Mono> for OffShoot Helper to attach next time it runs.</>,
           changes: describeActions(p.actions),
-          warnings: [<>Replaces {describeState(REPLACES_STAGED)}</>],
+          warnings: [<>Replaces {renderWords(describeState(REPLACES_STAGED))}</>],
         })}
         apply={() => Promise.resolve()}
         onApplied={confirmed("Staged on_x.py")}
@@ -816,11 +837,56 @@ function ChangePreviewGallery() {
         plan={() => Promise.resolve({ actions: [] as Action[] })}
         describe={() => ({
           summary: <>HedgeBuddy will delete <Mono className="text-foreground">on_copy_complete.py</Mono> from commercial-one-day.</>,
-          changes: [{ kind: "delete", target: "on_copy_complete.py", detail: "removed from commercial-one-day" }],
+          changes: [{ kind: "delete", target: "on_copy_complete.py", detail: { text: "removed from commercial-one-day" } }],
           warnings: [<>OffShoot · FileCopyCompleted will be left pointing at a file that no longer exists</>],
         })}
         apply={() => Promise.resolve()}
         onApplied={confirmed("Deleted on_copy_complete.py")}
+      />
+
+      <ChangePreviewDialog
+        open={openKey === "slow"} onOpenChange={close}
+        title="Attach on_copy_complete.py?" applyLabel="Attach"
+        plan={() => Promise.resolve({ actions: ATTACH_WIN_ACTIONS })}
+        describe={(p) => ({
+          summary: <>HedgeBuddy will attach <Mono className="text-foreground">on_copy_complete.py</Mono> to OffShoot's FileCopyCompleted event.</>,
+          changes: describeActions(p.actions),
+        })}
+        apply={() => new Promise<void>((resolve) => setTimeout(resolve, 2000))}
+        onApplied={confirmed("Attached on_copy_complete.py")}
+      />
+
+      <ChangePreviewDialog
+        open={openKey === "apply-failed"} onOpenChange={close}
+        title="Attach on_copy_complete.py?" applyLabel="Attach"
+        plan={() => Promise.resolve({ actions: ATTACH_WIN_ACTIONS })}
+        describe={(p) => ({
+          summary: <>HedgeBuddy will attach <Mono className="text-foreground">on_copy_complete.py</Mono> to OffShoot's FileCopyCompleted event.</>,
+          changes: describeActions(p.actions),
+        })}
+        apply={() => Promise.reject(new Error("OffShoot's registry key is read-only"))}
+      />
+
+      <ChangePreviewDialog
+        open={openKey === "apply-busy"} onOpenChange={close}
+        title="Attach on_copy_complete.py?" applyLabel="Attach"
+        plan={() => Promise.resolve({ actions: ATTACH_WIN_ACTIONS })}
+        describe={(p) => ({
+          summary: <>HedgeBuddy will attach <Mono className="text-foreground">on_copy_complete.py</Mono> to OffShoot's FileCopyCompleted event.</>,
+          changes: describeActions(p.actions),
+        })}
+        apply={() =>
+          new Promise<void>((_, reject) => setTimeout(() => reject(new BridgeError("busy", "another HedgeBuddy is busy; try again")), 350))
+        }
+      />
+
+      <ChangePreviewDialog
+        open={openKey === "long"} onOpenChange={close}
+        title="Sync 16 attachments?" applyLabel="Sync 16"
+        plan={() => Promise.resolve({ rows: LONG_LEDGER })}
+        describe={(p) => ({ summary: "HedgeBuddy will make these changes across every profile.", changes: p.rows })}
+        apply={() => Promise.resolve()}
+        onApplied={confirmed("Synced 16 attachments")}
       />
     </div>
   );
