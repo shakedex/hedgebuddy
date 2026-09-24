@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { FolderOpen, TriangleAlert } from "lucide-react";
 import { callApp } from "@/api/bridge";
 import { usePathStatus } from "@/api/queries";
@@ -35,10 +35,28 @@ export function PathEditor({ id, value, onChange, error }: {
   const [picking, setPicking] = useState(false);
   const pickingRef = useRef(false);
   const trimmed = value.trim();
-  // Settle the path before querying it, so a fast typist doesn't fire (and flicker) a check per keystroke.
+  // Settle the path before *querying* it, so a fast typist doesn't fire a check per keystroke.
   const debounced = useDebounced(trimmed, 300);
   const status = usePathStatus(debounced ? [debounced] : []);
-  const notMounted = !error && status.data?.paths.find((p) => p.path === debounced)?.mounted === false;
+
+  // The last status result that actually matched what's on screen, kept until a newer one matches too.
+  // `usePathStatus` already serves the previous query's data while a new one loads (`placeholderData`),
+  // but that data is keyed to the *previous* path — looking it up by the current text would miss for the
+  // 200–500 ms until the new query resolves, blinking the note off and back on. Matching against the live
+  // `trimmed` text (not just `debounced`) also means a result already covering the current text — e.g. one
+  // fetched for a still-pending debounce, or simply unchanged — applies immediately, no wait needed.
+  const [known, setKnown] = useState<{ path: string; mounted: boolean } | null>(null);
+  useEffect(() => {
+    if (!trimmed) {
+      setKnown(null);
+      return;
+    }
+    const entry = status.data?.paths.find((p) => p.path === trimmed);
+    if (entry) setKnown({ path: trimmed, mounted: entry.mounted });
+    // else: no fresh answer for what's on screen right now — keep showing the last one.
+  }, [trimmed, status.data]);
+
+  const notMounted = !error && trimmed !== "" && known?.mounted === false;
   const errorId = `${id}-error`;
   const warningId = `${id}-warning`;
 
@@ -91,7 +109,7 @@ export function PathEditor({ id, value, onChange, error }: {
       {notMounted && (
         <p id={warningId} className="flex items-center gap-1.5 text-xs text-warning">
           <TriangleAlert aria-hidden className="size-3.5 shrink-0" strokeWidth={1.75} />
-          {notMountedMessage(debounced)}
+          {notMountedMessage(known?.path ?? trimmed)}
         </p>
       )}
     </div>

@@ -22,12 +22,50 @@ export function ListEditor({ id, type, items, onChange, error }: {
   error?: string | null;
 }) {
   const isPath = type === "path[]";
-  // Settle the list before querying it, so retyping one row doesn't fire (and flicker) a check on every
-  // keystroke; usePathStatus itself caps to the first 64 distinct paths rather than throwing.
+  // Settle the list before *querying* it, so retyping one row doesn't fire a check on every keystroke;
+  // usePathStatus itself caps to the first 64 distinct paths rather than throwing.
   const debouncedItems = useDebounced(items, 300);
   const paths = isPath ? debouncedItems.filter((p) => p.trim() !== "").map((p) => p.trim()) : [];
   const status = usePathStatus(paths);
-  const mounted = (path: string) => status.data?.paths.find((p) => p.path === path)?.mounted !== false;
+
+  // Per row, the last status result that actually matched what's on screen, kept until a newer one matches
+  // too. `usePathStatus` serves the previous query's data while a new one loads, but keyed to the previous
+  // set of paths — looking a row's live text up in it would miss for the 200–500 ms until the new query
+  // resolves, blinking that row's note off and back on. Matching against the live (not debounced) text also
+  // means a result that already covers it — e.g. after reordering or removing a row, which doesn't change
+  // the distinct set of paths and so needs no new query at all — applies immediately.
+  const [known, setKnown] = useState<Record<number, { path: string; mounted: boolean }>>({});
+  useEffect(() => {
+    setKnown((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      items.forEach((item, i) => {
+        const trimmedItem = item.trim();
+        if (!isPath || !trimmedItem) {
+          if (next[i]) {
+            delete next[i];
+            changed = true;
+          }
+          return;
+        }
+        const entry = status.data?.paths.find((p) => p.path === trimmedItem);
+        if (entry && (next[i]?.path !== trimmedItem || next[i]?.mounted !== entry.mounted)) {
+          next[i] = { path: trimmedItem, mounted: entry.mounted };
+          changed = true;
+        }
+        // else: no fresh answer for this row's current text — keep showing its last one.
+      });
+      // A row that no longer exists (removed) drops its stale slot rather than leaking it onto whatever
+      // row-count comes next.
+      for (const key of Object.keys(next)) {
+        if (Number(key) >= items.length) {
+          delete next[Number(key)];
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [items, status.data, isPath]);
 
   // Only path[] has an empty-row rule (core: string[] items may be blank); the reason goes under the first
   // offending row, not every one of them, and never under Add.
@@ -110,7 +148,8 @@ export function ListEditor({ id, type, items, onChange, error }: {
           const trimmed = item.trim();
           const rowInvalid = isPath && trimmed === "";
           const showReason = rowInvalid && i === emptyIndex;
-          const notMounted = isPath && trimmed !== "" && !mounted(trimmed);
+          const rowKnown = trimmed !== "" ? known[i] : undefined;
+          const notMounted = isPath && trimmed !== "" && rowKnown?.mounted === false;
           const warningId = `${id}-warning-${i}`;
           const picking = pickingIndex === i;
           return (
@@ -191,7 +230,7 @@ export function ListEditor({ id, type, items, onChange, error }: {
               {notMounted && (
                 <p id={warningId} className="flex items-center gap-1.5 text-xs text-warning">
                   <TriangleAlert aria-hidden className="size-3.5 shrink-0" strokeWidth={1.75} />
-                  {notMountedMessage(trimmed)}
+                  {notMountedMessage(rowKnown?.path ?? trimmed)}
                 </p>
               )}
             </div>
