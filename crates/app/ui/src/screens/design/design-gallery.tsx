@@ -4,7 +4,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { BridgeError } from "@/api/bridge";
-import type { RunStatus } from "@/api/tools.gen";
+import type { Action, AttachState, RunStatus, VarType } from "@/api/tools.gen";
+import { ChangePreviewDialog, renderWords } from "@/components/app/change-preview-dialog";
 import { CountBadge } from "@/components/app/count-badge";
 import { EmptyState } from "@/components/app/empty-state";
 import { ErrorPanel } from "@/components/app/error-panel";
@@ -13,11 +14,10 @@ import { Mono } from "@/components/app/mono";
 import { Panel } from "@/components/app/panel";
 import { Stat } from "@/components/app/stat";
 import { StatusIcon } from "@/components/app/status-icon";
+import { VarEditor } from "@/components/editors/var-editor";
+import { EMPTY_SECRET, type SecretState } from "@/components/editors/secret-editor";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
-} from "@/components/ui/dialog";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioGroup,
   DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger,
@@ -28,9 +28,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { describeActions, describeState, type ChangeKind, type ChangeRow } from "@/lib/actions";
 import { appName, clock, dayKey, dayLabel, duration, plural, when } from "@/lib/format";
 import { NAV_ICONS, STATUS, runStatusKey, type StatusKey } from "@/lib/status";
 import { cn } from "@/lib/utils";
+import { VAR_TYPES, emptyEdit, toEdit, validateValue, type EditValue } from "@/lib/var-values";
 
 /*
  * The design system on one page (preview only, `#/_design`). Everything here is read from the live tokens
@@ -136,6 +138,12 @@ export function DesignGallery() {
           </Section>
           <Section index={10} title="List and detail" note="Two panes from 640 px of container width; below that the detail slides over the list with a back button.">
             <ListDetailDemo />
+          </Section>
+          <Section index={11} title="Change preview" note="Spec §7: any action outside the data folder, and any deletion, opens this dialog. It dry-runs the tool, then shows the plan in plain words; Apply runs it for real.">
+            <ChangePreviewGallery />
+          </Section>
+          <Section index={12} title="Editors" note="Spec §7: one field per variable type. Amber marks a path whose drive isn't mounted — that's a warning, not a validation error; an invalid value's reason sits under the field.">
+            <Editors />
           </Section>
         </div>
       </main>
@@ -585,10 +593,6 @@ function Controls() {
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-        <div className="flex items-center justify-between gap-3">
-          <span className="text-sm font-medium text-foreground">Change preview</span>
-          <DetachDialog />
-        </div>
         <div className="flex flex-wrap items-center gap-2 pt-1">
           <Badge>OffShoot · FileCopyCompleted</Badge>
           <Badge variant="outline">no manifest</Badge>
@@ -598,34 +602,6 @@ function Controls() {
         </div>
       </div>
     </div>
-  );
-}
-
-function DetachDialog() {
-  return (
-    <Dialog>
-      <DialogTrigger asChild>
-        <Button variant="outline" size="sm">Detach…</Button>
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Detach <Mono>on_copy_complete.py</Mono>?</DialogTitle>
-          <DialogDescription>HedgeBuddy will make these changes in OffShoot for the profile <Mono className="text-foreground">commercial-one-day</Mono>.</DialogDescription>
-        </DialogHeader>
-        <ul className="well flex flex-col gap-1 px-3 py-2 font-mono text-xs text-foreground">
-          <li>FileCopyCompleted: on_copy_complete.py → nothing attached</li>
-          <li className="text-muted-foreground">The script file stays in your scripts folder.</li>
-        </ul>
-        <DialogFooter>
-          <DialogClose asChild>
-            <Button variant="outline" size="sm">Cancel</Button>
-          </DialogClose>
-          <DialogClose asChild>
-            <Button size="sm">Detach</Button>
-          </DialogClose>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
   );
 }
 
@@ -737,6 +713,274 @@ function RunDetail({ run }: { run: FakeRun }) {
       <div className="mt-auto flex flex-wrap justify-end gap-2">
         <Button variant="outline" size="sm"><Copy aria-hidden /> Copy details</Button>
         <Button variant="outline" size="sm"><FileCode aria-hidden /> Open script</Button>
+      </div>
+    </div>
+  );
+}
+
+/* 11 Change preview --------------------------------------------------------------------------------- */
+
+/** What an attach on Windows would replace: the operator's own file, wired straight into OffShoot's registry. */
+const REPLACES_EXTERNAL: AttachState = { state: "external", path: "C:\\Tools\\notify_dit.py" };
+/** What an attach on macOS would replace: an entry already staged for OffShoot Helper to pick up. */
+const REPLACES_STAGED: AttachState = { state: "staged", path: "on_x.py", workspace: "doc-series" };
+
+const ATTACH_WIN_ACTIONS: Action[] = [
+  {
+    action: "registry_set",
+    key: "HKCU\\Software\\Bounce Software\\OffShoot\\Scripting",
+    value: "FileCopyCompleted",
+    data: { type: "string", data: "C:\\Users\\op\\HedgeBuddy\\commercial-one-day\\scripts\\on_copy_complete.py" },
+  },
+];
+const ATTACH_MAC_ACTIONS: Action[] = [
+  { action: "workspace_prefs", path: "~/Library/Application Support/OffShoot Helper/workspace.json", set: { FileCopyCompleted: "on_x.py" } },
+];
+
+/** A ledger long enough to need the 45vh scroll. */
+const LONG_LEDGER_KINDS: ChangeKind[] = ["registry", "registry_delete", "workspace", "file", "delete", "attach", "detach"];
+const LONG_LEDGER: ChangeRow[] = Array.from({ length: 16 }, (_, i) => ({
+  kind: LONG_LEDGER_KINDS[i % LONG_LEDGER_KINDS.length],
+  target: `HKCU\\Software\\Bounce Software\\OffShoot\\Scripting\\Event${i + 1}`,
+  detail: { text: `entry ${i + 1} of 16` },
+}));
+
+const CHANGE_PREVIEW_BUTTONS = [
+  { key: "planning", label: "Planning forever" },
+  { key: "failed", label: "Plan failed" },
+  { key: "plan-busy", label: "Plan busy" },
+  { key: "blocked", label: "Blocked" },
+  { key: "nothing", label: "Nothing to do" },
+  { key: "attach-win", label: "Attach, replaces a file" },
+  { key: "attach-mac", label: "Attach, macOS staged" },
+  { key: "delete", label: "Delete script" },
+  { key: "slow", label: "Slow apply (2 s)" },
+  { key: "apply-failed", label: "Apply fails" },
+  { key: "apply-busy", label: "Apply busy" },
+  { key: "long", label: "Long ledger (16 rows)" },
+] as const;
+
+function ChangePreviewGallery() {
+  const [openKey, setOpenKey] = useState<(typeof CHANGE_PREVIEW_BUTTONS)[number]["key"] | null>(null);
+  const close = () => setOpenKey(null);
+  const confirmed = (message: string) => () => toast(message);
+
+  return (
+    <div className="flex flex-wrap gap-2">
+      {CHANGE_PREVIEW_BUTTONS.map(({ key, label }) => (
+        <Button key={key} variant="outline" size="sm" onClick={() => setOpenKey(key)}>{label}</Button>
+      ))}
+
+      <ChangePreviewDialog
+        open={openKey === "planning"} onOpenChange={close}
+        title="Attach on_copy_complete.py?" applyLabel="Attach"
+        plan={() => new Promise<never>(() => undefined)}
+        describe={() => ({ summary: "", changes: [] })}
+        apply={() => Promise.resolve()}
+      />
+
+      <ChangePreviewDialog
+        open={openKey === "failed"} onOpenChange={close}
+        title="Attach on_copy_complete.py?" applyLabel="Attach"
+        plan={() => Promise.reject<{ actions: Action[] }>(new Error("cannot read OffShoot's registry key"))}
+        describe={(p) => ({ summary: "HedgeBuddy will make these changes.", changes: describeActions(p.actions) })}
+        apply={() => Promise.resolve()}
+      />
+
+      <ChangePreviewDialog
+        open={openKey === "plan-busy"} onOpenChange={close}
+        title="Sync attachments?" applyLabel="Sync"
+        plan={() => Promise.reject<{ actions: Action[] }>(new BridgeError("busy", "another HedgeBuddy is busy; try again"))}
+        describe={(p) => ({ summary: "HedgeBuddy will make these changes.", changes: describeActions(p.actions) })}
+        apply={() => Promise.resolve()}
+      />
+
+      <ChangePreviewDialog
+        open={openKey === "blocked"} onOpenChange={close}
+        title="Delete profile commercial-one-day?" applyLabel="Delete" destructive
+        plan={() => Promise.resolve({ actions: [] as Action[] })}
+        describe={() => ({ summary: "", changes: [], blocked: "OffShoot is running. Quit it before deleting this profile." })}
+        apply={() => Promise.resolve()}
+      />
+
+      <ChangePreviewDialog
+        open={openKey === "nothing"} onOpenChange={close}
+        title="Sync attachments?" applyLabel="Sync"
+        plan={() => Promise.resolve({ actions: [] as Action[] })}
+        describe={() => ({ summary: "", changes: [], nothingToDo: "Every script already matches its manifest. Nothing to change." })}
+        apply={() => Promise.resolve()}
+      />
+
+      <ChangePreviewDialog
+        open={openKey === "attach-win"} onOpenChange={close}
+        title="Attach on_copy_complete.py?" applyLabel="Attach"
+        plan={() => Promise.resolve({ actions: ATTACH_WIN_ACTIONS })}
+        describe={(p) => ({
+          summary: <>HedgeBuddy will attach <Mono className="text-foreground">on_copy_complete.py</Mono> to OffShoot's FileCopyCompleted event.</>,
+          changes: describeActions(p.actions),
+          warnings: [<>Replaces {renderWords(describeState(REPLACES_EXTERNAL))}</>],
+        })}
+        apply={() => Promise.resolve()}
+        onApplied={confirmed("Attached on_copy_complete.py")}
+      />
+
+      <ChangePreviewDialog
+        open={openKey === "attach-mac"} onOpenChange={close}
+        title="Attach on_x.py?" applyLabel="Attach"
+        plan={() => Promise.resolve({ actions: ATTACH_MAC_ACTIONS })}
+        describe={(p) => ({
+          summary: <>HedgeBuddy will stage <Mono className="text-foreground">on_x.py</Mono> for OffShoot Helper to attach next time it runs.</>,
+          changes: describeActions(p.actions),
+          warnings: [<>Replaces {renderWords(describeState(REPLACES_STAGED))}</>],
+        })}
+        apply={() => Promise.resolve()}
+        onApplied={confirmed("Staged on_x.py")}
+      />
+
+      <ChangePreviewDialog
+        open={openKey === "delete"} onOpenChange={close}
+        title="Delete on_copy_complete.py?" applyLabel="Delete" destructive
+        plan={() => Promise.resolve({ actions: [] as Action[] })}
+        describe={() => ({
+          summary: <>HedgeBuddy will delete <Mono className="text-foreground">on_copy_complete.py</Mono> from commercial-one-day.</>,
+          changes: [{ kind: "delete", target: "on_copy_complete.py", detail: { text: "removed from commercial-one-day" } }],
+          warnings: [<>OffShoot · FileCopyCompleted will be left pointing at a file that no longer exists</>],
+        })}
+        apply={() => Promise.resolve()}
+        onApplied={confirmed("Deleted on_copy_complete.py")}
+      />
+
+      <ChangePreviewDialog
+        open={openKey === "slow"} onOpenChange={close}
+        title="Attach on_copy_complete.py?" applyLabel="Attach"
+        plan={() => Promise.resolve({ actions: ATTACH_WIN_ACTIONS })}
+        describe={(p) => ({
+          summary: <>HedgeBuddy will attach <Mono className="text-foreground">on_copy_complete.py</Mono> to OffShoot's FileCopyCompleted event.</>,
+          changes: describeActions(p.actions),
+        })}
+        apply={() => new Promise<void>((resolve) => setTimeout(resolve, 2000))}
+        onApplied={confirmed("Attached on_copy_complete.py")}
+      />
+
+      <ChangePreviewDialog
+        open={openKey === "apply-failed"} onOpenChange={close}
+        title="Attach on_copy_complete.py?" applyLabel="Attach"
+        plan={() => Promise.resolve({ actions: ATTACH_WIN_ACTIONS })}
+        describe={(p) => ({
+          summary: <>HedgeBuddy will attach <Mono className="text-foreground">on_copy_complete.py</Mono> to OffShoot's FileCopyCompleted event.</>,
+          changes: describeActions(p.actions),
+        })}
+        apply={() => Promise.reject(new Error("OffShoot's registry key is read-only"))}
+      />
+
+      <ChangePreviewDialog
+        open={openKey === "apply-busy"} onOpenChange={close}
+        title="Attach on_copy_complete.py?" applyLabel="Attach"
+        plan={() => Promise.resolve({ actions: ATTACH_WIN_ACTIONS })}
+        describe={(p) => ({
+          summary: <>HedgeBuddy will attach <Mono className="text-foreground">on_copy_complete.py</Mono> to OffShoot's FileCopyCompleted event.</>,
+          changes: describeActions(p.actions),
+        })}
+        apply={() =>
+          new Promise<void>((_, reject) => setTimeout(() => reject(new BridgeError("busy", "another HedgeBuddy is busy; try again")), 350))
+        }
+      />
+
+      <ChangePreviewDialog
+        open={openKey === "long"} onOpenChange={close}
+        title="Sync 16 attachments?" applyLabel="Sync 16"
+        plan={() => Promise.resolve({ rows: LONG_LEDGER })}
+        describe={(p) => ({ summary: "HedgeBuddy will make these changes across every profile.", changes: p.rows })}
+        apply={() => Promise.resolve()}
+        onApplied={confirmed("Synced 16 attachments")}
+      />
+    </div>
+  );
+}
+
+/* 12 Editors ----------------------------------------------------------------------------------------- */
+
+/** A valid starting value per type; `path` and one `path[]` entry are deliberately on an unplugged drive. */
+const EDITOR_SEED: Record<Exclude<VarType, "secret">, unknown> = {
+  string: "ClientX Spot",
+  int: 3,
+  float: 0.5,
+  bool: true,
+  path: "X:/Reels/A003",
+  url: "https://hooks.slack.com/services/T0",
+  "string[]": ["dailies", "vfx", "sound"],
+  "path[]": ["D:/Offload/A003", "D:/Offload/A004", "/Volumes/Offline/dailies"],
+};
+
+/** One field that cannot be saved, per validated type, to show the reason under it. */
+const EDITOR_INVALID: { type: VarType; edit: EditValue }[] = [
+  { type: "int", edit: "12.5" },
+  { type: "float", edit: "abc" },
+  { type: "path", edit: "" },
+  { type: "url", edit: "ftp://example.com/hook" },
+  { type: "path[]", edit: ["D:/Offload/A003", ""] },
+];
+
+const FAKE_SECRET = "sk_live_9f2c3f1a2b";
+
+/** `[]` isn't welcome in an id (list types are "string[]"/"path[]"). */
+const fieldId = (prefix: string, type: VarType) => `${prefix}-${type.replace("[]", "-list")}`;
+
+function Editors() {
+  const [values, setValues] = useState<Record<VarType, EditValue>>(() => {
+    const entries = VAR_TYPES.map((t) => [t, t === "secret" ? emptyEdit(t) : toEdit(t, EDITOR_SEED[t])] as const);
+    return Object.fromEntries(entries) as Record<VarType, EditValue>;
+  });
+  const [secret, setSecret] = useState<SecretState>(EMPTY_SECRET);
+  const [invalid, setInvalid] = useState<EditValue[]>(() => EDITOR_INVALID.map((d) => d.edit));
+  const revealFake = () => new Promise<string>((resolve) => setTimeout(() => resolve(FAKE_SECRET), 300));
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="surface divide-y divide-border">
+        {VAR_TYPES.map((type) => {
+          const id = fieldId("demo", type);
+          return (
+            <div key={type} className="flex flex-col gap-1.5 p-3">
+              <label htmlFor={id} className="micro-label">
+                Value · {type}
+              </label>
+              {type === "secret" ? (
+                <VarEditor id={id} type={type} value="" onChange={() => undefined} error={null} secret={{ state: secret, onChange: setSecret, reveal: revealFake }} />
+              ) : (
+                <VarEditor
+                  id={id}
+                  type={type}
+                  value={values[type]}
+                  onChange={(v) => setValues((prev) => ({ ...prev, [type]: v }))}
+                  error={validateValue(type, values[type])}
+                />
+              )}
+            </div>
+          );
+        })}
+      </div>
+      <div className="flex flex-col gap-1">
+        <div className="micro-label px-1">Invalid, to check the message under the field</div>
+        <div className="surface divide-y divide-border">
+          {EDITOR_INVALID.map((demo, i) => {
+            const id = fieldId("demo-invalid", demo.type);
+            return (
+              <div key={demo.type} className="flex flex-col gap-1.5 p-3">
+                <label htmlFor={id} className="micro-label">
+                  Value · {demo.type}
+                </label>
+                <VarEditor
+                  id={id}
+                  type={demo.type}
+                  value={invalid[i]}
+                  onChange={(v) => setInvalid((prev) => prev.map((cur, idx) => (idx === i ? v : cur)))}
+                  error={validateValue(demo.type, invalid[i])}
+                />
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );

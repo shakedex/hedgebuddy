@@ -1,43 +1,27 @@
 /**
- * One in-memory data set per browser-preview scenario, built from the
- * generated types so a Rust result change the preview can no longer satisfy
- * fails `bun run typecheck`. Every timestamp is relative to `Date.now()`, so
- * "Today" and "since you last opened" always have content no matter when
- * the preview runs.
+ * What each browser-preview scenario starts with: the data folder (profiles, variables, secrets, scripts),
+ * the Hedge apps (registry or OffShoot Helper workspace, installed apps, the operator's own files), the
+ * Python the apps use, runs and Claude activity. `model.ts` runs every tool and command against it. Every
+ * timestamp is relative to `Date.now()`, so "Today" and "since you last opened" always have content no
+ * matter when the preview runs.
  */
-import { BridgeError } from "@/api/bridge";
-import type {
-  ActivityOutput,
-  ActivityRecord,
-  AttentionItem,
-  CreateProfileOutput,
-  HomeCounts,
-  HomeSummaryOutput,
-  ListProfilesOutput,
-  ListRunsInput,
-  ListRunsOutput,
-  PreferencesGetOutput,
-  Profile,
-  PythonStatus,
-  Run,
-  SetActiveProfileOutput,
-  SidebarBadges,
-} from "@/api/tools.gen";
+import type { ActivityRecord, Os, PreferencesGetOutput, RegValue, Run, Variable } from "@/api/tools.gen";
+import { DATA_DIR, type HedgeSeed } from "./hedge";
+import type { ProfileData, StoreSeed } from "./store";
 
-export type Scenario = "problems" | "healthy" | "empty" | "error" | "busy";
+export type Scenario = "problems" | "healthy" | "empty" | "error" | "busy" | "macos";
 
-const SCENARIOS: readonly Scenario[] = ["problems", "healthy", "empty", "error", "busy"];
+const SCENARIOS: readonly Scenario[] = ["problems", "healthy", "empty", "error", "busy", "macos"];
 
 /** Unknown `?scenario=` values fall back to the default, `problems`. */
 export function parseScenario(raw: string | null): Scenario {
   return (SCENARIOS as readonly string[]).includes(raw ?? "") ? (raw as Scenario) : "problems";
 }
 
-/** The version this preview's fixtures pretend HedgeBuddy needs (matches the workspace version). */
-const REQUIRED_VERSION = "0.11.0";
+/** The version this preview pretends HedgeBuddy needs (matches the workspace version). */
+export const REQUIRED_VERSION = "0.11.0";
 
 const OFFSHOOT = "offshoot";
-const OFFSHOOT_NAME = "OffShoot";
 const FOOLCAT = "foolcat";
 
 const URLLIB_TRACEBACK = [
@@ -360,191 +344,294 @@ function buildActivity(): ActivityRecord[] {
   ];
 }
 
-function isFailure(status: Run["status"]): boolean {
-  return status === "failed" || status === "error";
+// ---- scripts --------------------------------------------------------------------------------------
+
+/** Line 24 and line 41 are the lines the runs' tracebacks above point at. */
+const ON_COPY_COMPLETE = `"""
+{"hedgebuddy": 1, "app": "offshoot", "event": "FileCopyCompleted",
+ "requires": {
+   "SLACK_WEBHOOK": {"type": "secret", "description": "Incoming webhook URL"},
+   "PROJECT_NAME": {"type": "string"},
+   "CLIENT_EMAIL": {"type": "string", "description": "Who gets the delivery report"}
+ }}
+---
+Posts each finished card to Slack, then checks how the copy ended.
+"""
+import json
+import urllib.request
+
+import hedgebuddy as hb
+
+
+@hb.script
+def main(event, vars):
+    label = event.sourceInfo.get("label", "card")
+    hb.log(f"copy of {label} finished, posting to Slack")
+    text = f"{vars.PROJECT_NAME}: {label} copied to {event.destinationPath} ({event.state})"
+    body = json.dumps({"text": text}).encode()
+    request = urllib.request.Request(vars.SLACK_WEBHOOK, data=body)
+    urllib.request.urlopen(request, timeout=10)
+    hb.log(f"posted; the delivery report goes to {vars.CLIENT_EMAIL}")
+
+    state = event.state.lower()
+    if state == "success":
+        return 0
+    if state in ("failed", "canceled", "stopped"):
+        hb.log(f"copy ended as {state}")
+        return 1
+    if state == "warnings":
+        hb.log(f"copy finished with warnings; see {event.transferLogJSONPath}")
+        return 0
+
+    # Any other state means OffShoot sent the event before the copy
+    # settled. Fail loudly so the run shows up on Home instead of being
+    # counted as a success.
+    hb.log(f"state was {event.state!r}")
+    raise RuntimeError(f"unexpected state: {state}")
+`;
+
+const ON_DISK_ADDED = `"""
+{"hedgebuddy": 1, "app": "offshoot", "event": "DiskAdded",
+ "requires": {"NOTIFY": {"type": "bool", "description": "Log each card as it is mounted"}}}
+---
+Logs each card as OffShoot mounts it.
+"""
+import hedgebuddy as hb
+
+
+@hb.script
+def main(event, vars):
+    if vars.NOTIFY:
+        hb.log(f"{event.title} mounted at {event.rootFilePath} ({event.volumeKind})")
+    return 0
+`;
+
+const FOOLCAT_REPORT = `"""
+{"hedgebuddy": 1, "app": "foolcat", "event": "ReportCreated", "requires": {}}
+---
+Logs where each FoolCat report was written.
+"""
+import hedgebuddy as hb
+
+
+@hb.script
+def main(event, vars):
+    if event.status != "success":
+        hb.log(f"report failed: {event.error}")
+        return 1
+    hb.log(f"report ready: {event.pdfPath}")
+    return 0
+`;
+
+const HELPERS_NOTES = `# Notes for the crew, kept with the scripts. This file has no manifest, so
+# it is never attached to an app event.
+#
+# - Card labels are the camera letter plus a roll number: A001, B014.
+# - Offloads go to every folder in DEST_ROOTS.
+
+
+def card_label(camera, roll):
+    return f"{camera}{roll:03d}"
+`;
+
+const RENDER_PROXIES = `"""
+{"hedgebuddy": 1, "app": "offshoot", "event": "FileCopyCompleted",
+ "requires": {"PROXY_ROOT": {"type": "path", "description": "Where proxies are written"}}}
+---
+Queues proxies for each finished card.
+"""
+import hedgebuddy as hb
+
+
+@hb.script
+def main(event, vars):
+    hb.log(f"queueing proxies for {event.destinationPath} in {vars.PROXY_ROOT}")
+    return 0
+`;
+
+// ---- profiles -------------------------------------------------------------------------------------
+
+function vars(entries: [string, Variable][]): Map<string, Variable> {
+  return new Map(entries);
 }
 
-/** Runs since `sinceIso` (every run, newest first, when it is null) and, of those, the failed ones. */
-function sinceSplit(runs: Run[], sinceIso: string | null): { newRuns: Run[]; failed: Run[] } {
-  const newRuns = sinceIso === null ? runs : runs.filter((r) => r.started_at > sinceIso);
-  return { newRuns, failed: newRuns.filter((r) => isFailure(r.status)) };
+const SLACK_WEBHOOK = "https://hooks.slack.com/services/T000/B000/XXXX";
+
+/** The mockups' profile. `healthy` sets `CLIENT_EMAIL` and moves `REPORT_DIR` to a mounted drive. */
+export function commercialOneDay(healthy: boolean): ProfileData {
+  const variables = vars([
+    ["API_URL", { type: "url", value: "https://api.example.com/v1", description: "Delivery API" }],
+    ["CAMERAS", { type: "string[]", value: ["A", "B"], description: "Camera letters on this shoot" }],
+    ["DEST_ROOTS", { type: "path[]", value: ["D:/Offload", "F:/Offload"], description: "Offload destinations" }],
+    ["NOTIFY", { type: "bool", value: true, description: "Log each card as it is mounted" }],
+    ["PROJECT_NAME", { type: "string", value: "ClientX Spot", description: "Client and project name" }],
+    ["REPORT_DIR", { type: "path", value: healthy ? "D:/Reports" : "X:/Reports", description: "Where FoolCat reports are copied" }],
+    ["RETRIES", { type: "int", value: 3, description: "How often to retry a failed upload" }],
+    ["SLACK_WEBHOOK", { type: "secret", description: "Incoming webhook URL" }],
+    // No description, so the screens show that state too.
+    ["THRESHOLD", { type: "float", value: 0.5, description: "" }],
+  ]);
+  if (healthy) variables.set("CLIENT_EMAIL", { type: "string", value: "delivery@clientx.example", description: "Who gets the delivery report" });
+  return {
+    description: "One-day commercial for Client X",
+    variables,
+    secrets: new Map([["SLACK_WEBHOOK", SLACK_WEBHOOK]]),
+    scripts: new Map([
+      ["foolcat_report.py", FOOLCAT_REPORT],
+      ["helpers_notes.py", HELPERS_NOTES],
+      ["on_copy_complete.py", ON_COPY_COMPLETE],
+      ["on_disk_added.py", ON_DISK_ADDED],
+    ]),
+  };
 }
 
-const FAILED_RUNS_LISTED = 3;
+function docSeries(): ProfileData {
+  return {
+    description: "Documentary series, weekly offloads",
+    variables: vars([
+      ["PROXY_ROOT", { type: "path", value: "D:/Proxies", description: "Where proxies are written" }],
+      ["SERIES_NAME", { type: "string", value: "The Long Road", description: "Series title" }],
+    ]),
+    secrets: new Map(),
+    scripts: new Map([["render_proxies.py", RENDER_PROXIES]]),
+  };
+}
 
-/** `run_failed` for the newest failures, then one `more_failed_runs` for the rest. */
-function attentionFromFailures(failed: Run[]): AttentionItem[] {
-  const items: AttentionItem[] = failed.slice(0, FAILED_RUNS_LISTED).map((r) => ({
-    kind: "run_failed",
-    run_id: r.run_id,
-    script: r.script,
-    profile: r.profile,
-    started_at: r.started_at,
-  }));
-  if (failed.length > FAILED_RUNS_LISTED) {
-    items.push({ kind: "more_failed_runs", count: failed.length - FAILED_RUNS_LISTED });
+// ---- Hedge apps -----------------------------------------------------------------------------------
+
+const OFFSHOOT_KEY = "HKCU\\Software\\Hedge";
+const FOOLCAT_KEY = "HKCU\\Software\\FoolCat";
+
+/** The operator's own script (VerificationIssue), outside HedgeBuddy. */
+const OWN_SCRIPT = "C:\\Tools\\notify_dit.py";
+
+/** Scripts an old tool left attached and then deleted. */
+const STALE_DIR = "C:\\Users\\you\\Quills\\service";
+
+function scriptPath(os: Os, script: string): string {
+  const sep = os === "windows" ? "\\" : "/";
+  return [DATA_DIR[os], "profiles", "commercial-one-day", "scripts", script].join(sep);
+}
+
+const str = (data: string): RegValue => ({ type: "string", data });
+const dword = (data: number): RegValue => ({ type: "dword", data });
+
+/** Windows: OffShoot and FoolCat installed with scripting on, this profile's scripts attached. */
+function windowsApps(stale: boolean): HedgeSeed {
+  const offshoot: Record<string, RegValue> = {
+    BuildVersion: str("26.1 (1023)"),
+    EventScriptAllowScripting: dword(1),
+    EventScriptFileCopyCompleted: str(scriptPath("windows", "on_copy_complete.py")),
+    EventScriptDiskAdded: str(scriptPath("windows", "on_disk_added.py")),
+    EventScriptCheckpointIssue: str(OWN_SCRIPT),
+  };
+  if (stale) {
+    offshoot.EventScriptDiskIdle = str(`${STALE_DIR}\\on_disk_idle.py`);
+    offshoot.EventScriptAllDisksIdle = str(`${STALE_DIR}\\on_all_disks_idle.py`);
+    offshoot.EventScriptDiskBusy = str(`${STALE_DIR}\\on_disk_busy.py`);
   }
-  return items;
-}
-
-/** The scenario's fixed problems, beyond whatever the runs themselves produce: none when `healthy`. */
-function fixedAttention(healthy: boolean): AttentionItem[] {
-  if (healthy) return [];
-  return [
-    {
-      kind: "variable_issue",
-      name: "CLIENT_EMAIL",
-      type: "string",
-      problem: "missing",
-      actual: null,
-      scripts: ["on_copy_complete.py"],
-    },
-    { kind: "stale_entries", app: OFFSHOOT, app_name: OFFSHOOT_NAME, count: 3 },
-    { kind: "package_problem", python_found: true, installed: "0.10.0", required: REQUIRED_VERSION },
-    { kind: "app_newer", app: OFFSHOOT, app_name: OFFSHOOT_NAME, version: "26.2 (1)", tested_against: "26.1" },
-  ];
-}
-
-function pythonStatus(healthy: boolean): PythonStatus {
   return {
-    found: true,
-    executable: "C:\\Python313\\python.exe",
-    version: "3.13.5",
-    installed: healthy ? REQUIRED_VERSION : "0.10.0",
-    required: REQUIRED_VERSION,
-    // Worded exactly as `hedgebuddy-core`'s `package_problem` (crates/core/src/python_env.rs) words it.
-    problem: healthy
-      ? null
-      : `hedgebuddy 0.10.0 is installed for C:\\Python313\\python.exe, but this HedgeBuddy needs ${REQUIRED_VERSION}; run: py -3 -m pip install hedgebuddy==${REQUIRED_VERSION}`,
+    registry: {
+      [OFFSHOOT_KEY]: offshoot,
+      [FOOLCAT_KEY]: {
+        BuildVersion: str("26.1.1"),
+        EventScriptAllowScripting: dword(1),
+        EventScriptReportCreated: str(scriptPath("windows", "foolcat_report.py")),
+      },
+    },
+    workspace: null,
+    bundles: {},
+    files: [OWN_SCRIPT],
   };
 }
 
-/** Everything one scenario's mock handlers read and write. */
-export interface ScenarioData {
-  /** The scenario this data was built for (drives `handlers.ts`'s error/busy injection). */
+/** macOS: OffShoot, FoolCat and Canister installed; FileCopyCompleted staged in the Helper workspace. */
+function macosApps(): HedgeSeed {
+  return {
+    registry: {},
+    workspace: { scripting_opt_in: true, scripting_events_file_copy_completed: scriptPath("macos", "on_copy_complete.py") },
+    bundles: { "/Applications/OffShoot.app": "26.1 (1023)", "/Applications/FoolCat.app": "26.1.1", "/Applications/Canister.app": "26.1" },
+    files: [],
+  };
+}
+
+/** A first launch: the apps are installed, nothing is attached and scripting is not turned on yet. */
+function freshApps(): HedgeSeed {
+  return {
+    registry: { [OFFSHOOT_KEY]: { BuildVersion: str("26.1 (1023)") }, [FOOLCAT_KEY]: { BuildVersion: str("26.1.1") } },
+    workspace: null,
+    bundles: {},
+    files: [],
+  };
+}
+
+// ---- Python ---------------------------------------------------------------------------------------
+
+/** The interpreter the Hedge apps use (python_env.rs `PythonInfo`), or null when none is found. */
+export interface PythonSeed {
+  executable: string;
+  version: string;
+  /** How the apps start it, e.g. `py -3`. */
+  launcher: string[];
+  /** The `hedgebuddy` version installed there, if any. */
+  installed: string | null;
+}
+
+function python(os: Os, installed: string | null): PythonSeed {
+  return os === "windows"
+    ? { executable: "C:\\Python313\\python.exe", version: "3.13.5", launcher: ["py", "-3"], installed }
+    : { executable: "/Library/Frameworks/Python.framework/Versions/3.13/bin/python3", version: "3.13.5", launcher: ["python3"], installed };
+}
+
+// ---- scenarios ------------------------------------------------------------------------------------
+
+/** Everything one scenario starts with. */
+export interface ScenarioSeed {
   scenario: Scenario;
-  listProfiles(): ListProfilesOutput;
-  listRuns(args: ListRunsInput): ListRunsOutput;
-  getRun(runId: string): Run;
-  setActive(name: string): SetActiveProfileOutput;
-  createProfile(name: string, description: string): CreateProfileOutput;
-  homeSummary(): HomeSummaryOutput;
-  activity(limit: number): ActivityOutput;
-  preferences(): PreferencesGetOutput;
+  os: Os;
+  store: StoreSeed;
+  hedge: HedgeSeed;
+  python: PythonSeed | null;
+  runs: Run[];
+  activity: ActivityRecord[];
+  /** When the app was last opened before this session, or null on a first launch. */
+  since: string | null;
+  preferences: PreferencesGetOutput;
 }
 
-function filterRuns(all: Run[], args: ListRunsInput): Run[] {
-  let list = all;
-  if (args.profile) list = list.filter((r) => r.profile === args.profile);
-  if (args.script) list = list.filter((r) => r.script === args.script);
-  if (args.app) list = list.filter((r) => r.app === args.app);
-  return list.slice(0, args.limit ?? 20);
-}
-
-/** `problems`, `healthy`, `busy` and `error` all share this shape: reads behave identically for `busy` and `error` (their scenario's writes or every call, respectively, are rejected in `handlers.ts` before a handler ever runs). */
-function liveData(scenario: Scenario): ScenarioData {
-  const healthy = scenario === "healthy";
-  const since = ago(120);
-  const runs = buildRuns(healthy);
-  const activityLog = buildActivity();
-  const profiles: string[] = ["commercial-one-day", "doc-series"];
-  let active: string | null = "commercial-one-day";
-  const variableIssues = healthy ? 0 : 1;
-  const staleCount = healthy ? 0 : 3;
-
-  return {
-    scenario,
-    listProfiles: () => ({ active, profiles: [...profiles] }),
-    listRuns: (args) => ({ runs: filterRuns(runs, args) }),
-    getRun: (runId) => {
-      const found = runs.find((r) => r.run_id === runId);
-      if (!found) throw new BridgeError("error", `run '${runId}' not found`);
-      return found;
-    },
-    setActive: (name) => {
-      active = name;
-      return { active: name };
-    },
-    createProfile: (name, description) => {
-      if (profiles.includes(name)) throw new BridgeError("error", `profile '${name}' already exists`);
-      const becameActive = profiles.length === 0;
-      profiles.push(name);
-      if (becameActive) active = name;
-      const profile: Profile = { version: 1, name, description, variables: {} };
-      return { profile, active: becameActive };
-    },
-    homeSummary: () => {
-      const { newRuns, failed } = sinceSplit(runs, since);
-      const python = pythonStatus(healthy);
-      const counts: HomeCounts = {
-        runs_since: newRuns.length,
-        failed_since: failed.length,
-        scripts_attached: 2,
-        variables: healthy ? 1 : 0,
-      };
-      const badges: SidebarBadges = {
-        runs: failed.length,
-        variables: variableIssues,
-        apps: staleCount,
-        settings: python.problem !== null ? 1 : 0,
-      };
-      return {
-        since,
-        active_profile: active,
-        profiles: [...profiles],
-        counts,
-        badges,
-        attention: [...attentionFromFailures(failed), ...fixedAttention(healthy)],
-        recent_runs: runs.slice(0, 5),
-        recent_activity: activityLog.slice(0, 3),
-        python,
-      };
-    },
-    activity: (limit) => ({ records: activityLog.slice(0, limit) }),
-    preferences: () => ({ version: 1, last_opened: since, editor_command: null }),
-  };
-}
-
-/** First launch: no profiles, no runs, no activity, nothing to flag. */
-function emptyData(scenario: Scenario): ScenarioData {
-  const profiles: string[] = [];
-  let active: string | null = null;
-  return {
-    scenario,
-    listProfiles: () => ({ active, profiles: [...profiles] }),
-    listRuns: () => ({ runs: [] }),
-    getRun: (runId) => {
-      throw new BridgeError("error", `run '${runId}' not found`);
-    },
-    setActive: (name) => {
-      active = name;
-      return { active: name };
-    },
-    createProfile: (name, description) => {
-      if (profiles.includes(name)) throw new BridgeError("error", `profile '${name}' already exists`);
-      const becameActive = profiles.length === 0;
-      profiles.push(name);
-      if (becameActive) active = name;
-      return { profile: { version: 1, name, description, variables: {} }, active: becameActive };
-    },
-    homeSummary: () => ({
+/**
+ * `problems` matches the mockups; `healthy` has nothing to flag; `empty` is a first launch; `error` and
+ * `busy` read like `problems` (their failures are injected in `handlers.ts`); `macos` is `problems` on a Mac.
+ */
+export function scenarioSeed(scenario: Scenario): ScenarioSeed {
+  if (scenario === "empty") {
+    return {
+      scenario,
+      os: "windows",
+      store: { profiles: {}, active: null },
+      hedge: freshApps(),
+      python: python("windows", REQUIRED_VERSION),
+      runs: [],
+      activity: [],
       since: null,
-      active_profile: active,
-      profiles: [...profiles],
-      counts: { runs_since: 0, failed_since: 0, scripts_attached: 0, variables: 0 },
-      badges: { runs: 0, variables: 0, apps: 0, settings: 0 },
-      attention: [],
-      recent_runs: [],
-      recent_activity: [],
-      python: pythonStatus(true),
-    }),
-    activity: () => ({ records: [] }),
-    preferences: () => ({ version: 1, last_opened: null, editor_command: null }),
+      preferences: { version: 1, last_opened: null, editor_command: null },
+    };
+  }
+  const healthy = scenario === "healthy";
+  const os: Os = scenario === "macos" ? "macos" : "windows";
+  const since = ago(120);
+  return {
+    scenario,
+    os,
+    store: { profiles: { "commercial-one-day": commercialOneDay(healthy), "doc-series": docSeries() }, active: "commercial-one-day" },
+    hedge: os === "macos" ? macosApps() : windowsApps(!healthy),
+    python: python(os, healthy ? REQUIRED_VERSION : "0.10.0"),
+    runs: buildRuns(healthy),
+    activity: buildActivity(),
+    since,
+    preferences: { version: 1, last_opened: since, editor_command: null },
   };
 }
 
-/** Build the data set for `?scenario=`, defaulting to `problems`. */
-export function loadScenario(raw: string | null): ScenarioData {
-  const scenario = parseScenario(raw);
-  return scenario === "empty" ? emptyData(scenario) : liveData(scenario);
-}
+/** Where `pick_import_file` points: an export of `problems`' `commercial-one-day`, without secret values. */
+export const IMPORT_FILE = "C:/Users/you/Documents/commercial-one-day.hedgebuddy.json";

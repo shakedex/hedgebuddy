@@ -549,8 +549,8 @@ export type SetVarInput = {
   profile?: string | null;
   /** One of: string, secret, int, float, bool, path, url, string[], path[]. */
   type: string;
-  /** The value, as JSON matching the type (secret and url are strings; string[] and path[] are arrays of strings). */
-  value: unknown;
+  /** The value, as JSON matching the type (secret and url are strings; string[] and path[] are arrays of strings). Omit it to keep the current value of an existing variable of the same type, for example to change only the description. */
+  value?: unknown;
 };
 
 /** Result of `set_var`. Never includes the value. */
@@ -729,6 +729,39 @@ export type ActivityOutput = {
 };
 
 /** Parameters of tools that take none. */
+export type AppsOverviewInput = Record<string, never>;
+
+/** Result of `apps_overview`. */
+export type AppsOverviewOutput = {
+  /** Every catalog app, sorted by id. */
+  apps: Array<AppRow>;
+  /** The platform HedgeBuddy runs on. */
+  os: Os;
+};
+
+/** Arguments of `export_profile`. */
+export type ExportProfileInput = {
+  /** The absolute path of the file to write (replaced if it exists), outside the data folder. */
+  dest: string;
+  /** Whether to include secret values; the file is then created owner-only on Unix. */
+  include_secrets: boolean;
+  /** The profile to export. */
+  name: string;
+};
+
+/** Result of `export_profile`. */
+export type ExportProfileOutput = {
+  /** The file written. */
+  path: string;
+  /** How many scripts it holds. */
+  scripts: number;
+  /** Whether it holds any secret values. */
+  secrets_included: boolean;
+  /** How many variables it holds. */
+  variables: number;
+};
+
+/** Parameters of tools that take none. */
 export type HomeSummaryInput = Record<string, never>;
 
 /** Result of `home_summary`. */
@@ -751,6 +784,105 @@ export type HomeSummaryOutput = {
   recent_runs: Array<Run>;
   /** When the app was opened before this session (UTC, RFC 3339), or null on the first launch. Counts cover the runs since then, or every kept run (30 days) when null. */
   since: string | null;
+};
+
+/** Arguments of `import_profile`. */
+export type ImportProfileInput = {
+  /** The new profile's name. */
+  name: string;
+  /** The absolute path of the export file to read. */
+  path: string;
+};
+
+/** What an import created. */
+export type ImportProfileOutput = {
+  /** Whether it became the active profile (the first profile does). */
+  active: boolean;
+  /** The new profile's name. */
+  profile: string;
+  /** How many scripts it has. */
+  scripts: number;
+  /** How many secret values the file carried. */
+  secrets_imported: number;
+  /** Secret variables that arrived without a value; set them before use. */
+  secrets_missing: Array<string>;
+  /** How many variables it has. */
+  variables: number;
+};
+
+/** Arguments of `open_app_docs`. */
+export type OpenAppDocsInput = {
+  /** Catalog app id; its `https://` docs page opens in the browser. */
+  app: string;
+};
+
+/** What `open_in_editor`, `reveal_path` or `open_app_docs` opened. */
+export type OpenAppDocsOutput = {
+  /** The file, folder or URL that was opened. */
+  path: string;
+  /** What opened it: the editor command, or a phrase such as "the default app". */
+  with: string;
+};
+
+/** Arguments of `open_in_editor`. */
+export type OpenInEditorInput = {
+  /** Profile name; defaults to the active profile. */
+  profile?: string | null;
+  /** Script file name. */
+  script: string;
+};
+
+/** What `open_in_editor`, `reveal_path` or `open_app_docs` opened. */
+export type OpenInEditorOutput = {
+  /** The file, folder or URL that was opened. */
+  path: string;
+  /** What opened it: the editor command, or a phrase such as "the default app". */
+  with: string;
+};
+
+/** Arguments of `path_status`. */
+export type PathStatusInput = {
+  /** The paths to check, at most 64. */
+  paths: Array<string>;
+};
+
+/** Result of `path_status`. */
+export type PathStatusOutput = {
+  /** One entry per path asked about, in the same order. */
+  paths: Array<PathState>;
+};
+
+/** Arguments of `pick_export_path`. */
+export type PickExportPathInput = {
+  /** The file name the save dialog suggests. */
+  default_name: string;
+};
+
+/** Result of `pick_folder`, `pick_export_path` and `pick_import_file`. */
+export type PickExportPathOutput = {
+  /** The chosen path, or null when the dialog was cancelled. */
+  path: string | null;
+};
+
+/** Arguments of `pick_folder`. */
+export type PickFolderInput = {
+  /** The dialog's title. */
+  title?: string | null;
+};
+
+/** Result of `pick_folder`, `pick_export_path` and `pick_import_file`. */
+export type PickFolderOutput = {
+  /** The chosen path, or null when the dialog was cancelled. */
+  path: string | null;
+};
+
+/** Parameters of tools that take none. */
+export type PickImportFileInput = Record<string, never>;
+
+/** Result of `pick_folder`, `pick_export_path` and `pick_import_file`. */
+export type PickImportFileOutput = {
+  /** The chosen path, or null when the dialog was cancelled. */
+  path: string | null;
 };
 
 /** Parameters of tools that take none. */
@@ -784,20 +916,108 @@ export type PreferencesSetOutput = {
   version: number;
 };
 
+/** Arguments of `reveal_path`. */
+export type RevealPathInput = {
+  /** The path to show in the file manager: inside the data folder, or a Hedge app file. */
+  path: string;
+};
+
+/** What `open_in_editor`, `reveal_path` or `open_app_docs` opened. */
+export type RevealPathOutput = {
+  /** The file, folder or URL that was opened. */
+  path: string;
+  /** What opened it: the editor command, or a phrase such as "the default app". */
+  with: string;
+};
+
+/** Arguments of `script_template`. */
+export type ScriptTemplateInput = {
+  /** Catalog app id. */
+  app: string;
+  /** The app's event id. */
+  event: string;
+  /** The profile the script is for; defaults to the active profile. */
+  profile?: string | null;
+};
+
+/** Result of `script_template`: a starting point for a new script. Nothing is written. */
+export type ScriptTemplateOutput = {
+  /** A suggested file name no script of the profile uses yet, such as `on_file_copy_completed.py`. */
+  name: string;
+  /** The script's Python source. */
+  source: string;
+};
+
+/** Arguments of the overviews that read one profile. */
+export type ScriptsOverviewInput = {
+  /** Profile name; defaults to the active profile. */
+  profile?: string | null;
+};
+
+/** Result of `scripts_overview`. */
+export type ScriptsOverviewOutput = {
+  /** Profile name. */
+  profile: string;
+  /** Its scripts, sorted by name. */
+  scripts: Array<ScriptRow>;
+};
+
+/** Arguments of the overviews that read one profile. */
+export type VariablesOverviewInput = {
+  /** Profile name; defaults to the active profile. */
+  profile?: string | null;
+};
+
+/** Result of `variables_overview`. */
+export type VariablesOverviewOutput = {
+  /** Profile name. */
+  profile: string;
+  /** Every variable its scripts require, sorted by name. */
+  requirements: Array<RequirementRow>;
+  /** Its variables, sorted by name; secret values are masked. */
+  variables: Array<VarView>;
+};
+
 export interface AppCommandTypes {
   activity: { input: ActivityInput; output: ActivityOutput };
+  apps_overview: { input: AppsOverviewInput; output: AppsOverviewOutput };
+  export_profile: { input: ExportProfileInput; output: ExportProfileOutput };
   home_summary: { input: HomeSummaryInput; output: HomeSummaryOutput };
+  import_profile: { input: ImportProfileInput; output: ImportProfileOutput };
+  open_app_docs: { input: OpenAppDocsInput; output: OpenAppDocsOutput };
+  open_in_editor: { input: OpenInEditorInput; output: OpenInEditorOutput };
+  path_status: { input: PathStatusInput; output: PathStatusOutput };
+  pick_export_path: { input: PickExportPathInput; output: PickExportPathOutput };
+  pick_folder: { input: PickFolderInput; output: PickFolderOutput };
+  pick_import_file: { input: PickImportFileInput; output: PickImportFileOutput };
   preferences_get: { input: PreferencesGetInput; output: PreferencesGetOutput };
   preferences_set: { input: PreferencesSetInput; output: PreferencesSetOutput };
+  reveal_path: { input: RevealPathInput; output: RevealPathOutput };
+  script_template: { input: ScriptTemplateInput; output: ScriptTemplateOutput };
+  scripts_overview: { input: ScriptsOverviewInput; output: ScriptsOverviewOutput };
+  variables_overview: { input: VariablesOverviewInput; output: VariablesOverviewOutput };
 }
 
 export type AppCommandName = keyof AppCommandTypes;
 
 export const app = {
   activity: (args: ActivityInput = {}) => callApp("activity", args),
+  appsOverview: (args: AppsOverviewInput = {}) => callApp("apps_overview", args),
+  exportProfile: (args: ExportProfileInput) => callApp("export_profile", args),
   homeSummary: (args: HomeSummaryInput = {}) => callApp("home_summary", args),
+  importProfile: (args: ImportProfileInput) => callApp("import_profile", args),
+  openAppDocs: (args: OpenAppDocsInput) => callApp("open_app_docs", args),
+  openInEditor: (args: OpenInEditorInput) => callApp("open_in_editor", args),
+  pathStatus: (args: PathStatusInput) => callApp("path_status", args),
+  pickExportPath: (args: PickExportPathInput) => callApp("pick_export_path", args),
+  pickFolder: (args: PickFolderInput = {}) => callApp("pick_folder", args),
+  pickImportFile: (args: PickImportFileInput = {}) => callApp("pick_import_file", args),
   preferencesGet: (args: PreferencesGetInput = {}) => callApp("preferences_get", args),
   preferencesSet: (args: PreferencesSetInput = {}) => callApp("preferences_set", args),
+  revealPath: (args: RevealPathInput) => callApp("reveal_path", args),
+  scriptTemplate: (args: ScriptTemplateInput) => callApp("script_template", args),
+  scriptsOverview: (args: ScriptsOverviewInput = {}) => callApp("scripts_overview", args),
+  variablesOverview: (args: VariablesOverviewInput = {}) => callApp("variables_overview", args),
 } as const;
 
 /** One change HedgeBuddy would make outside its data directory. Plans return lists of these; nothing happens until [`Hedge::apply`] runs them, so every plan doubles as a dry run. Actions serialize (to show a dry run) but deliberately do not deserialize. Plans are produced by core; front ends must re-plan from the original arguments rather than accepting actions from a client. */
@@ -845,6 +1065,14 @@ export type AppEvent = {
   event: string;
 };
 
+/** One scripting event of an app. */
+export type AppEventInfo = {
+  /** What the event is, from the catalog. */
+  description: string;
+  /** Event id. */
+  id: string;
+};
+
 /** `[app]`: identity of a Hedge app. */
 export type AppInfo = {
   docs: string;
@@ -865,6 +1093,22 @@ export type AppManifest = {
   presets: PerOsPresetsSpec;
   scripting: PerOsScripting;
   tested_against: string;
+};
+
+/** One Hedge app. */
+export type AppRow = {
+  /** Events that run a file: attached, staged or external (0 when its attachments cannot be read). */
+  attached: number;
+  /** Whether the catalog knows how to find it on this platform. */
+  available_here: boolean;
+  /** Its documentation page. */
+  docs: string;
+  /** Its scripting events, in catalog order. */
+  events: Array<AppEventInfo>;
+  /** Events that point at a file that no longer exists (0 when its attachments cannot be read). */
+  stale: number;
+  /** Whether it is installed, its version and its scripting support. */
+  status: AppStatus;
 };
 
 /** What HedgeBuddy knows about one Hedge app on this machine. */
@@ -1122,6 +1366,16 @@ export type Manifest = {
 /** The two supported desktop platforms. */
 export type Os = "windows" | "macos";
 
+/** Whether a path exists, and whether the drive it lives on is there. */
+export type PathState = {
+  /** Whether the path exists (false for a Windows device path such as `\\.\pipe\x`, which is never looked at). */
+  exists: boolean;
+  /** Whether its drive, network share or `/Volumes` volume is present (true for a relative, empty or device path, which has no drive to be missing). */
+  mounted: boolean;
+  /** The path as given. */
+  path: string;
+};
+
 /** A value that may differ between Windows and macOS. */
 export type PerOsDetect = {
   macos?: Detect | null;
@@ -1242,6 +1496,27 @@ export type RequirementIssue = {
   name: string;
 };
 
+/** One variable the profile's scripts require. */
+export type RequirementRow = {
+  /** The type the profile declares, for a type mismatch. */
+  actual: VarType | null;
+  /** The first non-empty description a script gives it. */
+  description: string;
+  /** Whether any script requiring it gives a default. */
+  has_default: boolean;
+  /** Variable name. */
+  name: string;
+  /** The scripts that require it, sorted by script name. */
+  required_by: Array<ScriptTarget>;
+  /** Whether the profile meets it. */
+  state: RequirementState;
+  /** The type the first script requiring it asks for. */
+  type: VarType;
+};
+
+/** Whether the profile meets a requirement, across every script that has it. */
+export type RequirementState = "set" | "missing" | "type_mismatch" | "defaulted";
+
 /** An app's file locations with `%VAR%` and `~` expanded for this machine. */
 export type ResolvedFiles = {
   callback_log: string | null;
@@ -1306,6 +1581,38 @@ export type ScriptRef = {
   profile: string;
 };
 
+/** One script, and what its target event runs now. */
+export type ScriptRow = {
+  /** Every app event attached to (or staged for) this script, across all apps. */
+  attached_to: Array<AppEvent>;
+  /** What the target event runs now. */
+  attachment: TargetAttachment;
+  /** Why the manifest's app or event is not in the catalog, if so. */
+  catalog_error: string | null;
+  /** The parsed manifest, or null when the script has none or it does not parse. */
+  manifest: Manifest | null;
+  /** Why the manifest block does not parse, if so. */
+  manifest_error: string | null;
+  /** Script file name. */
+  name: string;
+  /** The script's absolute path. */
+  path: string;
+  /** The app event the manifest targets, when it names a catalog app and event. */
+  target: TargetEvent | null;
+  /** Requirements the profile does not meet. */
+  unmet: Array<RequirementIssue>;
+};
+
+/** A script and the app event its manifest names. */
+export type ScriptTarget = {
+  /** The manifest's app id, if any. */
+  app: string | null;
+  /** The manifest's event id, if any. */
+  event: string | null;
+  /** Script file name. */
+  script: string;
+};
+
 /** `[scripting.<os>]`: where script attachments live on that platform. */
 export type Scripting = {
   enable_value: string;
@@ -1358,6 +1665,51 @@ export type SyncItem = {
 export type SyncSkip = {
   reason: string;
   script: string;
+};
+
+/** What a script's target event runs now. */
+export type TargetAttachment = {
+  state: "no_target";
+} | {
+  state: "attached";
+} | {
+  state: "staged";
+} | {
+  /** That script's profile. */
+  profile: string;
+  /** That script's file name. */
+  script: string;
+  state: "other_script";
+} | {
+  /** The file. */
+  path: string;
+  state: "external";
+} | {
+  /** The missing file. */
+  path: string;
+  state: "stale";
+} | {
+  state: "free";
+} | {
+  /** What to do there, from the catalog. */
+  note: string;
+  state: "manual";
+} | {
+  state: "unsupported";
+} | {
+  /** Why. */
+  error: string;
+  state: "unknown";
+};
+
+/** The catalog app event a script's manifest targets. */
+export type TargetEvent = {
+  /** Catalog app id. */
+  app: string;
+  /** The app's display name. */
+  app_name: string;
+  /** Event id. */
+  event: string;
 };
 
 /** What `delete_var` would delete. */

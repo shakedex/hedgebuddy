@@ -15,12 +15,31 @@ use serde_json::{json, Value};
 
 use crate::{output_schema_of, schema_of, Context, NoParams, ToolError};
 
+mod files;
 mod home;
+mod overview;
 
+pub use files::{
+    app_docs_url, editor_argv, export_profile, find_in_path, import_profile, path_status,
+    reveal_target, script_file, script_template, text_editor_argv, ExportArgs, ExportResult,
+    ImportArgs, OpenAppDocsArgs, OpenInEditorArgs, Opened, PathState, PathStatusArgs,
+    PathStatusList, PickExportArgs, PickFolderArgs, PickedPath, RevealArgs, ScriptTemplate,
+    ScriptTemplateArgs, PATH_STATUS_MAX,
+};
 pub use home::{
     home_summary, AttentionItem, HomeCounts, HomeSummary, PythonStatus, SidebarBadges,
     VariableProblem,
 };
+pub use overview::{
+    apps_overview, scripts_overview, variables_overview, AppEventInfo, AppRow, AppsOverview,
+    ProfileArgs, RequirementRow, RequirementState, ScriptRow, ScriptTarget, ScriptsOverview,
+    TargetAttachment, TargetEvent, VariablesOverview,
+};
+
+pub use hedgebuddy_core::ImportSummary;
+
+pub use crate::scripts::AppEvent;
+pub use crate::variables::VarView;
 
 /// One app-only command's name and schemas (for the generated TypeScript).
 pub struct AppCommandDef {
@@ -49,6 +68,19 @@ pub fn commands() -> Vec<AppCommandDef> {
         app_command!("activity", ActivityArgs, ActivityList),
         app_command!("preferences_get", NoParams, Preferences),
         app_command!("preferences_set", PreferencesPatch, Preferences),
+        app_command!("variables_overview", ProfileArgs, VariablesOverview),
+        app_command!("scripts_overview", ProfileArgs, ScriptsOverview),
+        app_command!("apps_overview", NoParams, AppsOverview),
+        app_command!("path_status", PathStatusArgs, PathStatusList),
+        app_command!("script_template", ScriptTemplateArgs, ScriptTemplate),
+        app_command!("export_profile", ExportArgs, ExportResult),
+        app_command!("import_profile", ImportArgs, ImportSummary),
+        app_command!("open_in_editor", OpenInEditorArgs, Opened),
+        app_command!("reveal_path", RevealArgs, Opened),
+        app_command!("open_app_docs", OpenAppDocsArgs, Opened),
+        app_command!("pick_folder", PickFolderArgs, PickedPath),
+        app_command!("pick_export_path", PickExportArgs, PickedPath),
+        app_command!("pick_import_file", NoParams, PickedPath),
     ]
 }
 

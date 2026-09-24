@@ -101,4 +101,4 @@ def test_invalid_fixture_fails_its_schema(stem: str, file: Path):
 
 
 def test_there_are_invalid_fixtures():
-    assert len(invalid_files()) >= 11
+    assert len(invalid_files()) >= 13

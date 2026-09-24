@@ -59,8 +59,9 @@ pub struct Context {
     /// updates don't lose each other's changes, and two `run_app_command`
     /// calls don't drive a Hedge app at the same time. [`Context::write_guard`]
     /// takes it together with the data folder's cross-process lock, which
-    /// does the same across HedgeBuddy processes.
-    pub(crate) write_lock: Mutex<()>,
+    /// does the same across HedgeBuddy processes. Shared with a context
+    /// rebuilt from this one (see [`Context::with_write_lock_of`]).
+    pub(crate) write_lock: Arc<Mutex<()>>,
     /// How long a write waits for another HedgeBuddy process to release the
     /// data folder's lock.
     pub(crate) lock_timeout: Duration,
@@ -81,7 +82,7 @@ impl Context {
             store,
             hedge: Hedge::new(host, catalog),
             catalog_error,
-            write_lock: Mutex::new(()),
+            write_lock: Arc::new(Mutex::new(())),
             lock_timeout: LOCK_TIMEOUT,
         }
     }
@@ -90,6 +91,16 @@ impl Context {
     /// (tests use a short one).
     pub fn with_lock_timeout(mut self, timeout: Duration) -> Context {
         self.lock_timeout = timeout;
+        self
+    }
+
+    /// The same context, sharing `other`'s in-process write lock: when a
+    /// context is rebuilt (the app reloads the catalog), a write on the old
+    /// one and a write on the new one then wait for each other in turn,
+    /// instead of the second finding the data folder's lock taken and
+    /// reporting busy.
+    pub fn with_write_lock_of(mut self, other: &Context) -> Context {
+        self.write_lock = Arc::clone(&other.write_lock);
         self
     }
 
@@ -345,6 +356,25 @@ mod tests {
     use hedgebuddy_core::{FakeHost, Os};
 
     use super::*;
+
+    #[test]
+    fn a_rebuilt_context_queues_behind_the_old_one_instead_of_reporting_busy() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("HedgeBuddy");
+        let host = Arc::new(FakeHost::new(Os::Windows));
+        let old = Context::new(Store::open(root.clone()), host.clone());
+        let fresh = Context::new(Store::open(root), host)
+            .with_write_lock_of(&old)
+            .with_lock_timeout(Duration::from_millis(50));
+        let held = old.write_guard().unwrap();
+        std::thread::scope(|s| {
+            let waiter = s.spawn(|| fresh.write_guard().map(drop));
+            std::thread::sleep(Duration::from_millis(200));
+            drop(held);
+            let waited = waiter.join().unwrap();
+            assert!(waited.is_ok(), "{waited:?}");
+        });
+    }
 
     #[test]
     fn tool_names_are_unique_described_and_schemas_are_objects() {
