@@ -12,7 +12,8 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     <QueryClientProvider client={queryClient}>
       <TooltipProvider delayDuration={300}>
         <App />
-        <Toaster theme="dark" position="bottom-right" />
+        {/* Top-right: a bottom toast would sit over a detail pane's sticky Save for the 4-8 s it's up. */}
+        <Toaster theme="dark" position="top-right" />
       </TooltipProvider>
     </QueryClientProvider>
   </React.StrictMode>,

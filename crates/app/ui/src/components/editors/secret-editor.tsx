@@ -20,16 +20,22 @@ export const EMPTY_SECRET: SecretState = { changed: false, value: "", revealed: 
  * typed a replacement, Reveal just un-masks what they typed (there's nothing stored left to look at). A
  * fetch in flight loses to anything typed in the meantime — the typed value always wins.
  */
-export function SecretEditor({ id, state, onChange, reveal, error }: {
+export function SecretEditor({ id, state, onChange, reveal, error, canRevealStored = true }: {
   id: string;
   state: SecretState;
   onChange: (state: SecretState) => void;
   /** Fetches the current stored secret (`get_var` with `reveal: true`), supplied by the screen. */
   reveal: () => Promise<string>;
   error?: string | null;
+  /** Whether there is a stored value worth fetching once (i.e. before anything is typed). False for a brand
+   *  new secret, or one just retyped from another type: with nothing stored, Reveal would otherwise hit the
+   *  server for a value that was never there. Once the operator types, Reveal always shows that instead — no
+   *  fetch needed — so the button reappears regardless of this flag. */
+  canRevealStored?: boolean;
 }) {
   const [revealing, setRevealing] = useState(false);
   const revealed = state.revealed !== null;
+  const showToggle = revealed || state.changed || canRevealStored;
   const errorId = `${id}-error`;
 
   // toggle() awaits reveal() before applying its result; if the operator typed in the meantime, `state` (a
@@ -93,13 +99,15 @@ export function SecretEditor({ id, state, onChange, reveal, error }: {
           aria-invalid={!!error}
           aria-describedby={error ? errorId : undefined}
         />
-        <Button
-          type="button" variant="ghost" size="sm"
-          className="min-w-[88px] justify-center aria-disabled:pointer-events-none aria-disabled:opacity-45"
-          onClick={toggle} aria-disabled={revealing} aria-busy={revealing}
-        >
-          {revealing ? "Revealing…" : revealed ? "Hide" : "Reveal"}
-        </Button>
+        {showToggle && (
+          <Button
+            type="button" variant="ghost" size="sm"
+            className="min-w-[88px] justify-center aria-disabled:pointer-events-none aria-disabled:opacity-45"
+            onClick={toggle} aria-disabled={revealing} aria-busy={revealing}
+          >
+            {revealing ? "Revealing…" : revealed ? "Hide" : "Reveal"}
+          </Button>
+        )}
       </div>
       {error && (
         <p id={errorId} className="text-xs text-destructive">

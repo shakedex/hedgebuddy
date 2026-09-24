@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { UseQueryResult } from "@tanstack/react-query";
 import { TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
@@ -60,27 +60,31 @@ function editEquals(type: VarType, a: EditValue, b: EditValue): boolean {
 /**
  * The editable form for one variable (spec §6.3, §7): an existing variable, or a new one — created blank
  * from `/variables/new`, or prefilled from a same-named requirement so Home's "needed" link lands ready to
- * fill in. `data` is `variables_overview`'s last successful result; the caller only mounts this once it has one.
+ * fill in. `data` is `variables_overview`'s last successful result; the caller only mounts this once it has
+ * one, keyed on `profile` and `name` together so a profile switch (or a different variable) always starts a
+ * fresh instance rather than risking a write landing in the wrong profile.
  */
-function VariableForm({ name, data }: { name: string; data: VariablesOverviewOutput }) {
+function VariableForm({ name, profile, data }: { name: string; profile: string; data: VariablesOverviewOutput }) {
   const [, navigate] = useLocation();
   const isBlankNew = name === "new";
   const requirementRow = data.requirements.find((r) => r.name === name) ?? null;
+  const existingVar = data.variables.find((v) => v.name === name) ?? null;
+  // Reactive, not frozen: once a save lands, the overview refetch this awaits (see `doSave`) makes this flip
+  // to `false` in place, even when the URL was already this variable's own (opened from a requirement link,
+  // so there's no route change — hence no remount — to re-derive it another way).
+  const creating = existingVar === null;
 
-  // Classifies this mount once, from what the overview knew when it opened. A save that creates the variable
-  // updates `baseline` in place instead of re-deriving this — `creating` never flips mid-edit.
+  // The initial field values are still captured once, at mount, so a later overview refetch (this save's own,
+  // or an unrelated one) never clobbers what the operator is mid-typing.
   const [init] = useState(() => {
-    const existingVar = data.variables.find((v) => v.name === name) ?? null;
     const type = (existingVar?.type ?? requirementRow?.type ?? "string") as VarType;
     return {
-      creating: existingVar === null,
       name: isBlankNew ? "" : name,
       type,
       description: existingVar?.description ?? requirementRow?.description ?? "",
       value: existingVar && existingVar.type !== "secret" ? toEdit(existingVar.type, existingVar.value) : emptyEdit(type),
     };
   });
-  const { creating } = init;
 
   const [baseline, setBaseline] = useState({ name: init.name, type: init.type, description: init.description, value: init.value, secretChanged: false });
   const [nameField, setNameField] = useState(init.name);
@@ -90,13 +94,44 @@ function VariableForm({ name, data }: { name: string; data: VariablesOverviewOut
   const [secretState, setSecretState] = useState<SecretState>(EMPTY_SECRET);
   const [saving, setSaving] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  // Set once a create-save succeeds; a separate effect (below) waits for `dirty` to actually render `false`
+  // before navigating, rather than racing that render with an immediate `navigate()` call.
+  const [pendingRedirect, setPendingRedirect] = useState<string | null>(null);
+
+  const nameInputRef = useRef<HTMLInputElement>(null);
+  const nameCaretRef = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    if (nameCaretRef.current !== null) nameInputRef.current?.setSelectionRange(nameCaretRef.current, nameCaretRef.current);
+  }, [nameField]);
+
+  // Strict Mode double-invokes this in dev (mount, simulated unmount, remount) specifically to catch effects
+  // that aren't idempotent; only setting the ref on cleanup, never resetting it on setup, is exactly that bug
+  // — it would leave `current` permanently `false` after the simulated round, even though the component is
+  // genuinely still mounted.
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   const dirty =
-    nameField !== baseline.name ||
+    // The NAME field only exists (and only matters) while creating; ignoring it once `creating` flips false
+    // also sidesteps a saved name's trimming ever reading as "still different" from what's on screen.
+    (creating && nameField !== baseline.name) ||
     type !== baseline.type ||
     description !== baseline.description ||
     (type === "secret" ? secretState.changed !== baseline.secretChanged : !editEquals(type, value, baseline.value));
   useUnsaved(`variable:${name}`, dirty);
+
+  // Once the save above has rendered as clean, the guarded `navigate` below will find nothing unsaved and go
+  // straight through — no separate "force it clean" step needed (see `lib/unsaved.ts`).
+  useEffect(() => {
+    if (pendingRedirect === null || dirty) return;
+    navigate(`/variables/${encodeURIComponent(pendingRedirect)}`, { replace: true });
+    setPendingRedirect(null);
+  }, [pendingRedirect, dirty, navigate]);
 
   const handleTypeChange = (t: VarType) => {
     setType(t);
@@ -111,47 +146,61 @@ function VariableForm({ name, data }: { name: string; data: VariablesOverviewOut
     : trimmedName === ""
       ? "Name the variable."
       : (validateName(trimmedName) ?? (nameCollision ? "A variable with this name already exists." : null));
-  const valueErr = type === "secret" ? (creating && !secretState.changed ? "Enter a value." : null) : validateValue(type, value);
-  const canSave = dirty && nameErr === null && valueErr === null;
+  // A secret needs typing when there is nothing stored to keep instead: creating one from scratch, or one
+  // just retyped from another type (the profile's stored value, if any, is of the *old* type).
+  const secretNeedsValue = !secretState.changed && (creating || baseline.type !== "secret");
+  const valueErr = type === "secret" ? (secretNeedsValue ? "Enter a value." : null) : validateValue(type, value);
+  // While creating, a prefilled-but-untouched form (a bool requirement that's fine left Off, say) must still
+  // be saveable — `dirty` alone would block it. Leaving with nothing entered still asks nothing, since the
+  // guard below stays keyed on plain `dirty`.
+  const canSave = (dirty || creating) && nameErr === null && valueErr === null;
 
-  const mismatchRow = !creating && requirementRow?.state === "type_mismatch" ? requirementRow : null;
+  const mismatchRow =
+    !creating && requirementRow?.state === "type_mismatch" && type !== requirementRow.type ? requirementRow : null;
   const requiredBy = requirementRow?.required_by ?? [];
 
   const revealSecret = () =>
-    callTool("get_var", { name, reveal: true }).then((r) => {
+    callTool("get_var", { name, reveal: true, profile }).then((r) => {
       if (typeof r.value !== "string") throw new Error(`${name} has no secret value to reveal`);
       return r.value;
     });
 
+  // Read at call time, not closed over: a toast's "Try again" can invoke a `doSave` bound to an earlier
+  // render, and without this it would silently re-save whatever the fields held back then, not what's on
+  // screen now (and could resurrect a save the fields no longer even support, e.g. if they'd since gone
+  // invalid).
+  const latestRef = useRef({ nameField, trimmedName, type, description, value, secretState, creating, canSave, saving });
+  latestRef.current = { nameField, trimmedName, type, description, value, secretState, creating, canSave, saving };
+
   const doSave = () => {
-    if (!canSave || saving) return;
+    const cur = latestRef.current;
+    if (!cur.canSave || cur.saving) return;
     setSaving(true);
-    const finalName = creating ? trimmedName : name;
-    const payload: SetVarInput = { name: finalName, type, description };
-    if (type === "secret") {
-      if (secretState.changed) payload.value = secretState.value;
+    const finalName = cur.creating ? cur.trimmedName : name;
+    const payload: SetVarInput = { name: finalName, type: cur.type, description: cur.description, profile };
+    if (cur.type === "secret") {
+      if (cur.secretState.changed) payload.value = cur.secretState.value;
       // else: omit — keep the stored secret (spec §4.3: `set_var` keeps the current value when omitted).
     } else {
-      payload.value = fromEdit(type, value);
+      payload.value = fromEdit(cur.type, cur.value);
     }
     callTool("set_var", payload).then(
-      // Awaited: a new variable is about to navigate to its own URL, which mounts a fresh form that classifies
-      // itself (existing vs. still-creating) by looking this same variable up in the overview cache — that
-      // has to already show the just-created row, or the fresh mount would wrongly conclude it doesn't exist
-      // yet (defaulting its type back to string and losing the value just saved).
+      // Awaited: a new variable is about to (eventually) navigate to its own URL, which reads this same
+      // variable back out of the overview cache to classify itself — that has to already show the just-
+      // created row, or it would wrongly conclude the variable doesn't exist yet.
       async (result) => {
-        await invalidateFor([`profile:${data.profile}`]);
-        setSaving(false);
+        await invalidateFor([`profile:${profile}`]);
         toast(`Saved ${result.name}`);
-        setBaseline({ name: result.name, type: result.type, description: result.description, value, secretChanged: false });
-        // The state update above won't be committed (and `useUnsaved`'s effect won't have run) before the
-        // navigate below; without this, `confirmLeave` would still see this form as dirty and ask to discard
-        // the edits that were just saved.
-        markSaved(`variable:${name}`);
-        if (creating) navigate(`/variables/${encodeURIComponent(result.name)}`, { replace: true });
+        // Told, regardless of whether this form is still mounted; but if the operator has already left (or
+        // is about to, having discarded this in the meantime), don't touch its state or redirect them back.
+        if (!mountedRef.current) return;
+        setSaving(false);
+        setBaseline({ name: result.name, type: result.type, description: result.description, value: cur.value, secretChanged: false });
+        setSecretState(EMPTY_SECRET);
+        if (cur.creating) setPendingRedirect(result.name);
       },
       (e: unknown) => {
-        setSaving(false);
+        if (mountedRef.current) setSaving(false);
         showError(e, doSave);
       },
     );
@@ -178,11 +227,15 @@ function VariableForm({ name, data }: { name: string; data: VariablesOverviewOut
             <Field label="Name" htmlFor="var-name">
               <Input
                 id="var-name"
+                ref={nameInputRef}
                 autoFocus={isBlankNew}
                 className="font-mono"
                 spellCheck={false}
                 value={nameField}
-                onChange={(e) => setNameField(e.target.value.toUpperCase())}
+                onChange={(e) => {
+                  nameCaretRef.current = e.target.selectionStart;
+                  setNameField(e.target.value.toUpperCase());
+                }}
                 aria-invalid={dirty && nameErr !== null}
                 aria-describedby={dirty && nameErr ? "var-name-error" : undefined}
               />
@@ -201,7 +254,11 @@ function VariableForm({ name, data }: { name: string; data: VariablesOverviewOut
               value={value}
               onChange={setValue}
               error={dirty ? valueErr : null}
-              secret={type === "secret" ? { state: secretState, onChange: setSecretState, reveal: revealSecret } : undefined}
+              secret={
+                type === "secret"
+                  ? { state: secretState, onChange: setSecretState, reveal: revealSecret, canRevealStored: !creating && baseline.type === "secret" }
+                  : undefined
+              }
             />
           </Field>
 
@@ -248,7 +305,7 @@ function VariableForm({ name, data }: { name: string; data: VariablesOverviewOut
             ) : (
               <div className="flex flex-col gap-1">
                 {requiredBy.map((r) => (
-                  <Link key={r.script} href={`/scripts/${encodeURIComponent(r.script)}`} className="w-fit text-sm text-foreground hover:underline">
+                  <Link key={r.script} href={`/scripts/${encodeURIComponent(r.script)}`} className="w-fit text-sm text-link hover:underline">
                     <Mono>{r.script}</Mono> <span className="text-muted-foreground">· {appName(r.app)} · {r.event ?? "—"}</span>
                   </Link>
                 ))}
@@ -258,7 +315,7 @@ function VariableForm({ name, data }: { name: string; data: VariablesOverviewOut
         </div>
       </div>
 
-      <div className="flex h-11 shrink-0 items-center justify-between gap-2 border-t border-border px-3">
+      <div className="flex h-11 shrink-0 items-center justify-between gap-2 border-t border-border px-4 @max-[640px]:px-3">
         <div>
           {!creating && (
             <Button variant="destructive" size="sm" onClick={() => setDeleteOpen(true)}>
@@ -281,29 +338,30 @@ function VariableForm({ name, data }: { name: string; data: VariablesOverviewOut
           title={`Delete ${name}?`}
           applyLabel="Delete"
           destructive
-          plan={() => callTool("delete_var", { name, dry_run: true })}
+          plan={() => callTool("delete_var", { name, dry_run: true, profile })}
           describe={(p) => {
             if (!("would_delete" in p)) throw new Error("delete_var: unexpected dry-run result");
-            const { profile, name: deletedName } = p.would_delete;
+            const { profile: deletedFrom, name: deletedName } = p.would_delete;
             return {
               summary: (
                 <>
-                  Delete <Mono className="text-foreground">{deletedName}</Mono> from {profile}.
+                  Delete <Mono className="text-foreground">{deletedName}</Mono> from <Mono className="text-foreground">{deletedFrom}</Mono>.
                 </>
               ),
-              changes: [{ kind: "delete", target: `${profile} › ${deletedName}`, detail: { text: "removed" } }],
+              changes: [{ kind: "delete", target: `${deletedFrom} › ${deletedName}`, detail: { text: "removed" } }],
               warnings:
                 requiredBy.length > 0
                   ? requiredBy.map((r) => `${r.script} needs it and will stop with an error until it is set again.`)
                   : undefined,
             };
           }}
-          apply={() => callTool("delete_var", { name })}
+          apply={() => callTool("delete_var", { name, profile })}
           onApplied={async () => {
-            await invalidateFor([`profile:${data.profile}`]);
+            await invalidateFor([`profile:${profile}`]);
             toast(`Deleted ${name}`);
-            // Deleting discards whatever was unsaved here too — nothing left to ask about (see `doSave`'s
-            // own use of `markSaved` for why this can't wait for a render).
+            // Deleting discards whatever was unsaved here too — nothing left to ask about. Unlike a save,
+            // there's no later render to naturally settle `dirty` to false (the variable is simply gone), so
+            // this clears the guard's set directly rather than waiting on one.
             markSaved(`variable:${name}`);
             navigate("/variables", { replace: true });
           }}
@@ -315,9 +373,13 @@ function VariableForm({ name, data }: { name: string; data: VariablesOverviewOut
 
 /**
  * Loads `variables_overview` (shared with the list — no extra fetch) and renders the form once it has data.
- * `name` is the route param: `"new"`, an existing variable, or a name that only a requirement knows.
+ * `name` is the route param: `"new"`, an existing variable, or a name that only a requirement knows. `profile`
+ * is the active profile as of when this mounted (the caller keys on it, so a switch remounts rather than
+ * silently retargeting an open edit at a different profile).
  */
-export function VariableDetail({ name, overview }: { name: string; overview: UseQueryResult<VariablesOverviewOutput> }) {
+export function VariableDetail({ name, profile, overview }: {
+  name: string; profile: string; overview: UseQueryResult<VariablesOverviewOutput>;
+}) {
   if (overview.isPending) return <DetailSkeleton />;
   if (overview.isError && !overview.isSuccess) {
     return (
@@ -327,5 +389,5 @@ export function VariableDetail({ name, overview }: { name: string; overview: Use
     );
   }
   if (!overview.data) return <DetailSkeleton />;
-  return <VariableForm name={name} data={overview.data} />;
+  return <VariableForm name={name} profile={profile} data={overview.data} />;
 }

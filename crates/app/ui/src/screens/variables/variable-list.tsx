@@ -1,9 +1,10 @@
-import { useMemo, useRef } from "react";
+import { useMemo, useRef, useState } from "react";
 import type { UseQueryResult } from "@tanstack/react-query";
 import { Braces, Plus, Search, SearchX, TriangleAlert } from "lucide-react";
 import { Link } from "wouter";
 import { usePathStatus } from "@/api/queries";
 import type { RequirementRow, VariablesOverviewOutput, VarView } from "@/api/tools.gen";
+import { CreateProfileDialog } from "@/components/app/create-profile-dialog";
 import { EmptyState } from "@/components/app/empty-state";
 import { ErrorPanel } from "@/components/app/error-panel";
 import { Mono } from "@/components/app/mono";
@@ -24,6 +25,20 @@ const varRowId = (name: string) => `var-${name}`;
 /** Case-insensitive match against name, type and description (the toolbar filter's promise). */
 function matches(q: string, name: string, type: string, description: string): boolean {
   return name.toLowerCase().includes(q) || type.toLowerCase().includes(q) || description.toLowerCase().includes(q);
+}
+
+/**
+ * The rows this screen actually shows for `data`, narrowed by `filterText` — shared with `VariablesScreen`
+ * so its "nothing selected" filler agrees with what the list displays instead of counting every requirement
+ * (including ones already `set` or `defaulted`, which never get their own row) and ignoring the filter.
+ */
+export function filterOverview(data: VariablesOverviewOutput | undefined, filterText: string) {
+  const variables = data?.variables ?? [];
+  const needs = (data?.requirements ?? []).filter((r) => r.state === "missing" || r.state === "type_mismatch");
+  const q = filterText.trim().toLowerCase();
+  const filteredNeeds = q === "" ? needs : needs.filter((r) => matches(q, r.name, r.type, r.description));
+  const filteredVars = q === "" ? variables : variables.filter((v) => matches(q, v.name, v.type, v.description));
+  return { variables, needs, filteredNeeds, filteredVars };
 }
 
 /** "`<type>` · needed by `<first script>`", plus "and N more" once a second script also needs it. */
@@ -122,18 +137,16 @@ export function VariableList({ overview, selectedName, filterText, onFilterTextC
   if (overview.isError) lastError.current = overview.error;
   else if (overview.isSuccess) lastError.current = null;
 
+  const [createOpen, setCreateOpen] = useState(false);
+  const newProfileRef = useRef<HTMLButtonElement>(null);
+
   const data = overview.data;
-  const variables = data?.variables ?? [];
-  const needs = (data?.requirements ?? []).filter((r) => r.state === "missing" || r.state === "type_mismatch");
+  const { variables, needs, filteredNeeds, filteredVars } = filterOverview(data, filterText);
 
   const allPaths = useMemo(() => variables.flatMap(pathValuesOf), [variables]);
   const pathStatus = usePathStatus(allPaths);
   const notMountedOf = (v: VarView) =>
     pathValuesOf(v).some((p) => pathStatus.data?.paths.find((s) => s.path === p)?.mounted === false);
-
-  const q = filterText.trim().toLowerCase();
-  const filteredNeeds = q === "" ? needs : needs.filter((r) => matches(q, r.name, r.type, r.description));
-  const filteredVars = q === "" ? variables : variables.filter((v) => matches(q, v.name, v.type, v.description));
 
   const rowIds = [...filteredNeeds.map((r) => needRowId(r.name)), ...filteredVars.map((v) => varRowId(v.name))];
   const selectedRowId =
@@ -150,9 +163,24 @@ export function VariableList({ overview, selectedName, filterText, onFilterTextC
   if (noProfile) {
     return (
       <div className="flex h-full flex-col">
-        <EmptyState icon={Braces} title="No profile yet" className="px-3 py-6">
-          Create a profile from the profile menu at the top right.
+        <EmptyState
+          icon={Braces}
+          title="No profile yet"
+          className="px-3 py-6"
+          action={
+            <Button ref={newProfileRef} size="sm" onClick={() => setCreateOpen(true)}>
+              New profile
+            </Button>
+          }
+        >
+          Variables belong to a profile — create one to start adding them.
         </EmptyState>
+        <CreateProfileDialog
+          open={createOpen}
+          onOpenChange={setCreateOpen}
+          activate
+          onCloseFocus={() => newProfileRef.current?.focus()}
+        />
       </div>
     );
   }

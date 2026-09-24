@@ -5,7 +5,7 @@ import { useProfiles, useVariablesOverview } from "@/api/queries";
 import { EmptyState } from "@/components/app/empty-state";
 import { ListDetail } from "@/components/app/list-detail";
 import { VariableDetail } from "./variable-detail";
-import { VariableList } from "./variable-list";
+import { filterOverview, VariableList } from "./variable-list";
 
 /**
  * The Variables screen (spec §6.3, option B "list and detail" from `variables.html`). `name` is the route
@@ -20,9 +20,14 @@ export function VariablesScreen({ name }: { name?: string }) {
   const [, navigate] = useLocation();
 
   // `list_profiles` (not `variables_overview`, which only ever errors with no active profile) is what tells
-  // the list to show "No profile yet" instead of a load failure.
-  const noProfile = profiles.isSuccess && profiles.data.active === null;
-  const hasRows = (overview.data?.requirements.length ?? 0) + (overview.data?.variables.length ?? 0) > 0;
+  // the list to show "No profile yet" instead of a load failure, and is also the source of the profile name
+  // the detail pane pins itself to (see `VariableDetail`'s own doc comment).
+  const activeProfile = profiles.data?.active ?? null;
+  const noProfile = profiles.isSuccess && activeProfile === null;
+  // What the list actually renders, filter included — not every requirement (an already-`set` or `defaulted`
+  // one never gets its own row), so the "nothing selected" filler doesn't appear when the list has nothing.
+  const { filteredNeeds, filteredVars } = filterOverview(overview.data, filterText);
+  const hasRows = filteredNeeds.length + filteredVars.length > 0;
 
   return (
     <ListDetail
@@ -41,10 +46,14 @@ export function VariablesScreen({ name }: { name?: string }) {
         />
       }
       detail={
-        name ? (
-          // Keyed on the route name: a fresh mount per variable keeps one form's edits from leaking into the
-          // next (by the time a *different* name arrives, the unsaved guard has already asked).
-          <VariableDetail key={name} name={name} overview={overview} />
+        // With no active profile (or it isn't known yet), the detail pane shows nothing rather than the raw
+        // "no active profile" error `variables_overview` would otherwise surface — the list's own empty state
+        // already says what to do.
+        name && activeProfile ? (
+          // Keyed on profile *and* name: switching profiles remounts the form even when the name in the URL
+          // happens to still exist there, so an in-flight edit never ends up writing into a different
+          // profile's variable of the same name (the profile switcher itself asks first via `confirmLeave`).
+          <VariableDetail key={`${activeProfile}:${name}`} name={name} profile={activeProfile} overview={overview} />
         ) : hasRows ? (
           <EmptyState icon={Braces} title="Pick a variable" className="m-auto">
             Choose a variable on the left to see and edit it.

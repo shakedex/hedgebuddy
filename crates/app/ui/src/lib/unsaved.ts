@@ -6,7 +6,13 @@ const listeners = new Set<() => void>();
 let pending: { decide: (leave: boolean) => void } | null = null;
 const notify = () => listeners.forEach((l) => l());
 
-/** Mark an editor dirty while `isDirty` is true; cleared on unmount. */
+/**
+ * Mark an editor dirty while `isDirty` is true; cleared on unmount. Deliberately has no dependency array: it
+ * re-syncs the shared set on *every* render, not only when `isDirty`'s value changes. Without that, a form
+ * that stays dirty (same `true` value across renders) while something else forcibly clears its key —
+ * `markSaved`, below — would never get re-added, since an effect keyed on `[key, isDirty]` only re-runs on a
+ * genuine change. Re-syncing every render makes the shared set self-correcting instead.
+ */
 export function useUnsaved(key: string, isDirty: boolean) {
   useEffect(() => {
     if (isDirty) dirty.add(key);
@@ -14,17 +20,17 @@ export function useUnsaved(key: string, isDirty: boolean) {
     return () => {
       dirty.delete(key);
     };
-  }, [key, isDirty]);
+  });
 }
 
 export const hasUnsaved = () => dirty.size > 0;
 
 /**
- * Clears `key` immediately, without waiting for its `useUnsaved` effect to notice the form just went clean.
- * A save handler that then navigates itself (a new variable moving from `/variables/new` to its own URL, say)
- * needs this: `useUnsaved`'s effect only runs on the next render, which is too late for a `navigate()` called
- * from the same success handler — `confirmLeave()` would otherwise still see the just-saved form as dirty
- * and ask to discard edits that were, in fact, just saved.
+ * Clears `key` unconditionally, for when the thing it names is gone for good (a delete) and there is nothing
+ * left to ask about, dirty or not. Not for "this just saved, so it must be clean now" — a save's own success
+ * handler should instead update the state that `isDirty` is computed from and let the resulting re-render
+ * (and `useUnsaved`'s effect above) put the set in step, since the operator may have kept typing after the
+ * save started; forcing the key out while a *newer* edit is still unsaved would silently drop it.
  */
 export function markSaved(key: string) {
   dirty.delete(key);

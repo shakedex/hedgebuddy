@@ -19,7 +19,13 @@ export function VarEditor({ id, type, value, onChange, error, secret }: {
   onChange: (value: EditValue) => void;
   error: string | null;
   /** Only for `type === "secret"`: its edit state, setter and the screen's `reveal()` (Step 2). */
-  secret?: { state: SecretState; onChange: (state: SecretState) => void; reveal: () => Promise<string> };
+  secret?: {
+    state: SecretState;
+    onChange: (state: SecretState) => void;
+    reveal: () => Promise<string>;
+    /** Forwarded to `SecretEditor`: whether there's a stored value worth Reveal fetching. */
+    canRevealStored?: boolean;
+  };
 }) {
   const errorId = `${id}-error`;
 
@@ -30,7 +36,16 @@ export function VarEditor({ id, type, value, onChange, error, secret }: {
       }
       return null;
     }
-    return <SecretEditor id={id} state={secret.state} onChange={secret.onChange} reveal={secret.reveal} error={error} />;
+    return (
+      <SecretEditor
+        id={id}
+        state={secret.state}
+        onChange={secret.onChange}
+        reveal={secret.reveal}
+        error={error}
+        canRevealStored={secret.canRevealStored}
+      />
+    );
   }
 
   if (type === "path") {

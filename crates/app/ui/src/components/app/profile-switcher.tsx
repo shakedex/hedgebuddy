@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import { showError } from "@/lib/toast";
+import { confirmLeave } from "@/lib/unsaved";
 
 /**
  * Spec §6.1: sits in the toolbar. With no active profile, Home shows its first-run steps instead (renders
@@ -29,10 +30,15 @@ export function ProfileSwitcher() {
   if (!active) return null;
   const profiles = profilesQuery.data?.profiles ?? [];
 
+  // Switching profiles changes the selection under an open editor without navigating anywhere (Task 6's
+  // rule for that), so it asks first, same as a guarded navigate would.
   const switchTo = (name: string) => {
     if (name === active || activate.isPending) return;
-    const retry = () => activate.mutate(name, { onError: (e) => showError(e, retry) });
-    retry();
+    void confirmLeave().then((ok) => {
+      if (!ok) return;
+      const retry = () => activate.mutate(name, { onError: (e) => showError(e, retry) });
+      retry();
+    });
   };
 
   return (
