@@ -6,15 +6,14 @@ import { Mono } from "@/components/app/mono";
 import { appName } from "@/lib/format";
 import { NAV_ICONS } from "@/lib/status";
 
-/** The screens 5A has not built yet. */
-type Screen = "variables" | "scripts" | "apps" | "connect" | "settings";
+/** The screens not yet built. */
+type Screen = "scripts" | "apps" | "connect" | "settings";
 
 /**
  * What each screen will do (the toolbar already names the screen, so this never repeats it) and what to do
  * until then.
  */
 const COPY: Record<Screen, { title: string; next: string }> = {
-  variables: { title: "Editing variables arrives in the next update", next: "Until then, ask Claude to set them." },
   scripts: { title: "Managing scripts arrives in the next update", next: "Until then, ask Claude to write and attach them." },
   apps: { title: "Checking each Hedge app arrives in the next update", next: "Home already flags stale entries and version warnings." },
   connect: { title: "Setting up Claude Desktop here arrives in a later update", next: "Until then, follow the README's “Use it from Claude” steps." },

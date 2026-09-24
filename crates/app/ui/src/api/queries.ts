@@ -54,10 +54,15 @@ function namesFor(category: string): Name[] {
   return RELOAD[category] ?? [];
 }
 
-/** Reload the queries that read what changed. */
-export function invalidateFor(categories: string[]) {
+/**
+ * Reload the queries that read what changed. Returns the refetch's promise (most callers ignore it, fire-
+ * and-forget) for the rare caller that needs to know the reload has actually landed before it does something
+ * that depends on the new data — e.g. redirecting to a just-created row's own page, where a fresh mount there
+ * would otherwise read the still-stale cache and conclude the row doesn't exist yet.
+ */
+export function invalidateFor(categories: string[]): Promise<void> {
   const names = new Set<string>(categories.flatMap(namesFor));
-  void queryClient.invalidateQueries({ predicate: (q) => names.has(String(q.queryKey[1])) });
+  return queryClient.invalidateQueries({ predicate: (q) => names.has(String(q.queryKey[1])) });
 }
 
 /** Reload everything that reads Hedge app settings (spec §6.4-6.5): call on every successful attach,
