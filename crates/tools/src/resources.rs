@@ -95,8 +95,13 @@ pub fn read(ctx: &Context, uri: &str) -> Option<(&'static str, String)> {
     (uri == "hedgebuddy://docs/hedge-llms").then(|| ("text/plain", HEDGE_LLMS.to_owned()))
 }
 
-/// A starting point for a script handling `app`'s `event`.
-pub fn author_script(ctx: &Context, app: &str, event: &str) -> Result<String, ToolError> {
+/// The Python source of a new script for `app`'s `event`: the manifest
+/// docstring, and a `main` listing the payload fields.
+pub(crate) fn script_template_source(
+    ctx: &Context,
+    app: &str,
+    event: &str,
+) -> Result<String, ToolError> {
     let m = ctx.hedge.catalog().app(app)?;
     let e = m.event(event)?;
     let prefix = format!("{}_", e.id);
@@ -114,15 +119,27 @@ pub fn author_script(ctx: &Context, app: &str, event: &str) -> Result<String, To
         fields.push_str("#   (this event has no payload)\n");
     }
     Ok(format!(
+        "\"\"\"\n{{\"hedgebuddy\": 1, \"app\": \"{app}\", \"event\": \"{event}\", \"requires\": {{}}}}\n---\n\
+Describe what this script does.\n\"\"\"\nimport hedgebuddy as hb\n\n\n@hb.script\ndef main(event, vars):\n\
+    # Payload fields for {name} {event}:\n{fields}\
+    # Variables declared in \"requires\" are available as vars.NAME, typed.\n\
+    hb.log(\"started\")\n    return 0\n",
+        name = m.app.name,
+    ))
+}
+
+/// A starting point for a script handling `app`'s `event`.
+pub fn author_script(ctx: &Context, app: &str, event: &str) -> Result<String, ToolError> {
+    let m = ctx.hedge.catalog().app(app)?;
+    let e = m.event(event)?;
+    let source = script_template_source(ctx, app, event)?;
+    let fence = "`".repeat(3);
+    Ok(format!(
         "Write a HedgeBuddy script for {name} event {event}: {description}\n\n\
 Save it with write_script, set any required variables with set_var, check it with check_script, \
 then attach it with attach_script (dry_run first). The hedgebuddy package must be installed for \
 the Python the Hedge apps use; check_script reports it. Template:\n\n\
-```python\n\"\"\"\n{{\"hedgebuddy\": 1, \"app\": \"{app}\", \"event\": \"{event}\", \"requires\": {{}}}}\n---\n\
-Describe what this script does.\n\"\"\"\nimport hedgebuddy as hb\n\n\n@hb.script\ndef main(event, vars):\n\
-    # Payload fields for {name} {event}:\n{fields}\
-    # Variables declared in \"requires\" are available as vars.NAME, typed.\n\
-    hb.log(\"started\")\n    return 0\n```\n\n\
+{fence}python\n{source}{fence}\n\n\
 List every variable the script reads in \"requires\" as {{\"NAME\": {{\"type\": \"string\"}}}} \
 (types: string, secret, int, float, bool, path, url, string[], path[]; add \"default\" to make one optional).\n",
         name = m.app.name,
@@ -159,6 +176,20 @@ mod tests {
         for r in &all {
             assert!(read(&ctx, &r.uri).is_some(), "{} does not read", r.uri);
         }
+    }
+
+    #[test]
+    fn the_template_source_is_a_valid_script_for_its_event() {
+        let (_d, _f, ctx) = test_ctx(FakeHost::new(Os::Windows));
+        let source = script_template_source(&ctx, "offshoot", "FileCopyCompleted").unwrap();
+        let manifest = hedgebuddy_core::parse_manifest(&source).unwrap().unwrap();
+        assert_eq!(manifest.app.as_deref(), Some("offshoot"));
+        assert_eq!(manifest.event.as_deref(), Some("FileCopyCompleted"));
+        assert!(source.contains("@hb.script"));
+        assert!(author_script(&ctx, "offshoot", "FileCopyCompleted")
+            .unwrap()
+            .contains(&source));
+        assert!(script_template_source(&ctx, "offshoot", "Nope").is_err());
     }
 
     #[test]

@@ -48,8 +48,9 @@ pub struct SetVar {
     /// One of: string, secret, int, float, bool, path, url, string[], path[].
     #[serde(rename = "type")]
     pub ty: String,
-    /// The value, as JSON matching the type (secret and url are strings; string[] and path[] are arrays of strings).
-    pub value: Value,
+    /// The value, as JSON matching the type (secret and url are strings; string[] and path[] are arrays of strings). Omit it to keep the current value of an existing variable of the same type, for example to change only the description.
+    #[serde(default)]
+    pub value: Option<Value>,
     /// What the variable is for. Omit it to keep the existing variable's description.
     #[serde(default)]
     pub description: Option<String>,
@@ -188,7 +189,7 @@ pub fn tools() -> Vec<ToolDef> {
         ),
         tool!(
             "set_var",
-            "Create or replace a variable. type is string, secret, int, float, bool, path, url, string[] or path[]; value must match it. Secret values are stored separately and never returned by this tool.",
+            "Create or replace a variable. type is string, secret, int, float, bool, path, url, string[] or path[]; value must match it; omit value to keep the current one (for example to change only the description). Secret values are stored separately and never returned by this tool.",
             WRITE,
             SetVar,
             SetVarResult,
@@ -255,12 +256,32 @@ fn set_var(ctx: &Context, p: SetVar) -> Result<SetVarResult, ToolError> {
             .map(|v| v.description.clone())
             .unwrap_or_default(),
     };
+    let value = match p.value {
+        Some(v) => v,
+        None => {
+            let keep = || {
+                ToolError::new(format!(
+                    "variable '{}' has no {} value to keep; pass a value",
+                    p.name,
+                    ty.as_str()
+                ))
+            };
+            let existing = ctx
+                .store
+                .get_variable(&profile, &p.name)
+                .map_err(|_| keep())?;
+            if existing.ty != ty {
+                return Err(keep());
+            }
+            existing.value.ok_or_else(keep)?
+        }
+    };
     ctx.store.set_variable(
         &profile,
         &p.name,
         VariableInput {
             ty,
-            value: Some(p.value),
+            value: Some(value),
             description: description.clone(),
         },
     )?;
@@ -418,6 +439,42 @@ mod tests {
         .unwrap();
         assert_eq!(new["description"], "");
         assert_eq!(desc(&ctx, "B"), "");
+    }
+
+    #[test]
+    fn omitting_the_value_keeps_it_and_only_changes_the_description() {
+        let (_d, ctx) = ctx_with_profile();
+        call(
+            &ctx,
+            "set_var",
+            json!({"name": "HOOK", "type": "secret", "value": "https://hook"}),
+        )
+        .unwrap();
+        let out = call(
+            &ctx,
+            "set_var",
+            json!({"name": "HOOK", "type": "secret", "description": "Webhook"}),
+        )
+        .unwrap();
+        assert_eq!(out["description"], "Webhook");
+        let v = call(&ctx, "get_var", json!({"name": "HOOK", "reveal": true})).unwrap();
+        assert_eq!(v["value"], "https://hook");
+        assert_eq!(v["description"], "Webhook");
+    }
+
+    #[test]
+    fn omitting_the_value_needs_an_existing_variable_of_the_same_type() {
+        let (_d, ctx) = ctx_with_profile();
+        let missing = call(&ctx, "set_var", json!({"name": "NEW", "type": "string"})).unwrap_err();
+        assert!(missing.0.contains("pass a value"), "{missing}");
+        call(
+            &ctx,
+            "set_var",
+            json!({"name": "N", "type": "int", "value": 3}),
+        )
+        .unwrap();
+        let retyped = call(&ctx, "set_var", json!({"name": "N", "type": "string"})).unwrap_err();
+        assert!(retyped.0.contains("pass a value"), "{retyped}");
     }
 
     #[test]
