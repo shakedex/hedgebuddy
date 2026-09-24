@@ -16,11 +16,20 @@ use serde_json::{json, Value};
 use crate::{output_schema_of, schema_of, Context, NoParams, ToolError};
 
 mod home;
+mod overview;
 
 pub use home::{
     home_summary, AttentionItem, HomeCounts, HomeSummary, PythonStatus, SidebarBadges,
     VariableProblem,
 };
+pub use overview::{
+    apps_overview, scripts_overview, variables_overview, AppEventInfo, AppRow, AppsOverview,
+    ProfileArgs, RequirementRow, RequirementState, ScriptRow, ScriptTarget, ScriptsOverview,
+    TargetAttachment, TargetEvent, VariablesOverview,
+};
+
+pub use crate::scripts::AppEvent;
+pub use crate::variables::VarView;
 
 /// One app-only command's name and schemas (for the generated TypeScript).
 pub struct AppCommandDef {
@@ -49,6 +58,9 @@ pub fn commands() -> Vec<AppCommandDef> {
         app_command!("activity", ActivityArgs, ActivityList),
         app_command!("preferences_get", NoParams, Preferences),
         app_command!("preferences_set", PreferencesPatch, Preferences),
+        app_command!("variables_overview", ProfileArgs, VariablesOverview),
+        app_command!("scripts_overview", ProfileArgs, ScriptsOverview),
+        app_command!("apps_overview", NoParams, AppsOverview),
     ]
 }
 
