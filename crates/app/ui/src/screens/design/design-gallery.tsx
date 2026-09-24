@@ -4,7 +4,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { BridgeError } from "@/api/bridge";
-import type { Action, AttachState, RunStatus } from "@/api/tools.gen";
+import type { Action, AttachState, RunStatus, VarType } from "@/api/tools.gen";
 import { ChangePreviewDialog, renderWords } from "@/components/app/change-preview-dialog";
 import { CountBadge } from "@/components/app/count-badge";
 import { EmptyState } from "@/components/app/empty-state";
@@ -14,6 +14,8 @@ import { Mono } from "@/components/app/mono";
 import { Panel } from "@/components/app/panel";
 import { Stat } from "@/components/app/stat";
 import { StatusIcon } from "@/components/app/status-icon";
+import { VarEditor } from "@/components/editors/var-editor";
+import { EMPTY_SECRET, type SecretState } from "@/components/editors/secret-editor";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -30,6 +32,7 @@ import { describeActions, describeState, type ChangeKind, type ChangeRow } from 
 import { appName, clock, dayKey, dayLabel, duration, plural, when } from "@/lib/format";
 import { NAV_ICONS, STATUS, runStatusKey, type StatusKey } from "@/lib/status";
 import { cn } from "@/lib/utils";
+import { VAR_TYPES, emptyEdit, toEdit, validateValue, type EditValue } from "@/lib/var-values";
 
 /*
  * The design system on one page (preview only, `#/_design`). Everything here is read from the live tokens
@@ -138,6 +141,9 @@ export function DesignGallery() {
           </Section>
           <Section index={11} title="Change preview" note="Spec §7: any action outside the data folder, and any deletion, opens this dialog. It dry-runs the tool, then shows the plan in plain words; Apply runs it for real.">
             <ChangePreviewGallery />
+          </Section>
+          <Section index={12} title="Editors" note="Spec §7: one field per variable type. Amber marks a path whose drive isn't mounted — that's a warning, not a validation error; an invalid value's reason sits under the field.">
+            <Editors />
           </Section>
         </div>
       </main>
@@ -888,6 +894,81 @@ function ChangePreviewGallery() {
         apply={() => Promise.resolve()}
         onApplied={confirmed("Synced 16 attachments")}
       />
+    </div>
+  );
+}
+
+/* 12 Editors ----------------------------------------------------------------------------------------- */
+
+/** A valid starting value per type; `path` and one `path[]` entry are deliberately on an unplugged drive. */
+const EDITOR_SEED: Record<Exclude<VarType, "secret">, unknown> = {
+  string: "ClientX Spot",
+  int: 3,
+  float: 0.5,
+  bool: true,
+  path: "X:/Reels/A003",
+  url: "https://hooks.slack.com/services/T0",
+  "string[]": ["dailies", "vfx", "sound"],
+  "path[]": ["D:/Offload/A003", "D:/Offload/A004", "/Volumes/Offline/dailies"],
+};
+
+/** One field that cannot be saved, per validated type, to show the reason under it. */
+const EDITOR_INVALID: { type: VarType; edit: EditValue }[] = [
+  { type: "int", edit: "12.5" },
+  { type: "float", edit: "abc" },
+  { type: "path", edit: "" },
+  { type: "url", edit: "ftp://example.com/hook" },
+  { type: "path[]", edit: ["D:/Offload/A003", ""] },
+];
+
+const FAKE_SECRET = "sk_live_9f2c3f1a2b";
+
+function Editors() {
+  const [values, setValues] = useState<Record<VarType, EditValue>>(() => {
+    const entries = VAR_TYPES.map((t) => [t, t === "secret" ? emptyEdit(t) : toEdit(t, EDITOR_SEED[t])] as const);
+    return Object.fromEntries(entries) as Record<VarType, EditValue>;
+  });
+  const [secret, setSecret] = useState<SecretState>(EMPTY_SECRET);
+  const [invalid, setInvalid] = useState<EditValue[]>(() => EDITOR_INVALID.map((d) => d.edit));
+  const revealFake = () => new Promise<string>((resolve) => setTimeout(() => resolve(FAKE_SECRET), 300));
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="surface divide-y divide-border">
+        {VAR_TYPES.map((type) => (
+          <div key={type} className="flex flex-col gap-1.5 p-3">
+            <div className="micro-label">Value · {type}</div>
+            {type === "secret" ? (
+              <VarEditor id="demo-secret" type={type} value="" onChange={() => undefined} error={null} secret={secret} onSecretChange={setSecret} reveal={revealFake} />
+            ) : (
+              <VarEditor
+                id={`demo-${type}`}
+                type={type}
+                value={values[type]}
+                onChange={(v) => setValues((prev) => ({ ...prev, [type]: v }))}
+                error={validateValue(type, values[type])}
+              />
+            )}
+          </div>
+        ))}
+      </div>
+      <div className="flex flex-col gap-1">
+        <div className="micro-label px-1">Invalid, to check the message under the field</div>
+        <div className="surface divide-y divide-border">
+          {EDITOR_INVALID.map((demo, i) => (
+            <div key={demo.type} className="flex flex-col gap-1.5 p-3">
+              <div className="micro-label">Value · {demo.type}</div>
+              <VarEditor
+                id={`demo-invalid-${demo.type}`}
+                type={demo.type}
+                value={invalid[i]}
+                onChange={(v) => setInvalid((prev) => prev.map((cur, idx) => (idx === i ? v : cur)))}
+                error={validateValue(demo.type, invalid[i])}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
