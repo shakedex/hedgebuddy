@@ -11,7 +11,7 @@ use std::fs;
 use std::path::{Component, Path, PathBuf, Prefix};
 
 use hedgebuddy_core::{
-    read_profile_export, validate_script_name, write_profile_export, CoreError, ImportSummary,
+    read_profile_export, validate_script_name, write_profile_export, CoreError, ImportSummary, Os,
     EXPORT_MAX_BYTES,
 };
 use schemars::JsonSchema;
@@ -80,13 +80,7 @@ pub fn path_status(_ctx: &Context, args: PathStatusArgs) -> Result<PathStatusLis
 /// [`path_status`]'s answers, with `exists` the only way it looks at the
 /// file system.
 fn path_states(paths: Vec<String>, exists: &mut dyn FnMut(&Path) -> bool) -> Vec<PathState> {
-    // Whether each volume root is present, by its lowercase text.
-    let mut roots: HashMap<String, bool> = HashMap::new();
-    let mut root_present = |root: &Path, exists: &mut dyn FnMut(&Path) -> bool| {
-        *roots
-            .entry(root.to_string_lossy().to_lowercase())
-            .or_insert_with(|| exists(root))
-    };
+    let mut roots = Roots::default();
     let mut states = Vec::with_capacity(paths.len());
     for path in paths {
         let p = Path::new(&path);
@@ -95,8 +89,10 @@ fn path_states(paths: Vec<String>, exists: &mut dyn FnMut(&Path) -> bool) -> Vec
         } else {
             match volume_of(p) {
                 None => (exists(p), true),
+                // A root already found missing: none of its paths is looked at.
+                Some(v) if roots.known_missing(&v.root) => (false, false),
                 Some(v) if v.root_first => {
-                    if root_present(&v.root, exists) {
+                    if roots.present(&v.root, exists) {
                         (exists(p), true)
                     } else {
                         (false, false)
@@ -108,7 +104,7 @@ fn path_states(paths: Vec<String>, exists: &mut dyn FnMut(&Path) -> bool) -> Vec
                     if exists(p) {
                         (true, true)
                     } else {
-                        (false, root_present(&v.root, exists))
+                        (false, roots.present(&v.root, exists))
                     }
                 }
             }
@@ -120,6 +116,30 @@ fn path_states(paths: Vec<String>, exists: &mut dyn FnMut(&Path) -> bool) -> Vec
         });
     }
     states
+}
+
+/// Whether each volume root seen in one `path_status` call is present, by
+/// its lowercase text, so each is looked at once.
+#[derive(Default)]
+struct Roots(HashMap<String, bool>);
+
+impl Roots {
+    /// Whether `root` was already looked at and found missing.
+    fn known_missing(&self, root: &Path) -> bool {
+        self.0.get(&Self::key(root)) == Some(&false)
+    }
+
+    /// Whether `root` is present, looking at it only the first time.
+    fn present(&mut self, root: &Path, exists: &mut dyn FnMut(&Path) -> bool) -> bool {
+        *self
+            .0
+            .entry(Self::key(root))
+            .or_insert_with(|| exists(root))
+    }
+
+    fn key(root: &Path) -> String {
+        root.to_string_lossy().to_lowercase()
+    }
 }
 
 /// The drive a path lives on, when it has one that can be missing.
@@ -143,7 +163,7 @@ fn volume_of(path: &Path) -> Option<Volume> {
             root.push("\\");
             Some(Volume {
                 root: PathBuf::from(root),
-                root_first: matches!(prefix.kind(), Prefix::UNC(..) | Prefix::VerbatimUNC(..)),
+                root_first: is_network_path(path),
             })
         }
         #[cfg(target_os = "macos")]
@@ -164,8 +184,10 @@ fn volume_of(path: &Path) -> Option<Volume> {
 
 /// Whether `path` is a Windows device path rather than a file's: `\\.\…`,
 /// `\\?\…` other than a drive or `UNC` path (`\\?\GLOBALROOT…`,
-/// `\\?\Volume{…}`), `//?/…`, or `\??\…`. These reach raw devices and
-/// named pipes, so they are never opened or looked at.
+/// `\\?\Volume{…}`), `//?/…`, `\??\…`, or this machine's named pipes and
+/// mailslots reached as a share (`\\localhost\pipe\…`,
+/// `\\127.0.0.1\pipe\…`, `\\?\UNC\localhost\pipe\…`). These reach raw
+/// devices, pipes and mailslots, so they are never opened or looked at.
 fn is_device_path(path: &Path) -> bool {
     let mut components = path.components();
     match components.next() {
@@ -174,14 +196,38 @@ fn is_device_path(path: &Path) -> bool {
             // `//?/x` is not verbatim (its separators are not `\`), so it
             // parses as share `x` of a server named `?`; Windows reads it as
             // a device path.
-            Prefix::UNC(server, _) => server == "?" || server == ".",
-            Prefix::Disk(_) | Prefix::VerbatimDisk(_) | Prefix::VerbatimUNC(..) => false,
+            Prefix::UNC(server, share) | Prefix::VerbatimUNC(server, share) => {
+                server == "?"
+                    || server == "."
+                    || (is_this_machine(server)
+                        && (share.eq_ignore_ascii_case("pipe")
+                            || share.eq_ignore_ascii_case("mailslot")))
+            }
+            Prefix::Disk(_) | Prefix::VerbatimDisk(_) => false,
         },
         Some(Component::RootDir) => {
             cfg!(windows) && matches!(components.next(), Some(Component::Normal(s)) if s == "??")
         }
         _ => false,
     }
+}
+
+/// Whether a UNC server name is this machine: `localhost`, a loopback
+/// address (`127.x.x.x`, `::1` with or without brackets, or its
+/// `0--1.ipv6-literal.net` form), or on Windows the computer's own name.
+fn is_this_machine(server: &std::ffi::OsStr) -> bool {
+    let Some(name) = server.to_str() else {
+        return false;
+    };
+    let name = name.to_ascii_lowercase();
+    let bare = name.trim_start_matches('[').trim_end_matches(']');
+    name == "localhost"
+        || name == "0--1.ipv6-literal.net"
+        || bare
+            .parse::<std::net::IpAddr>()
+            .is_ok_and(|ip| ip.is_loopback())
+        || (cfg!(windows)
+            && std::env::var("COMPUTERNAME").is_ok_and(|me| me.eq_ignore_ascii_case(&name)))
 }
 
 /// `path` as lowercase parts, with `.` and `..` resolved by their text
@@ -228,11 +274,13 @@ fn lexical(path: &Path) -> Vec<String> {
 /// manager (spec §4.3): it exists and is inside the data folder, or it is a
 /// catalog app's resolved callback log or event log, or it is inside an
 /// app's presets folder. A relative path, a device path, and every path
-/// not inside one of those places by its text (`..` resolved, case ignored)
-/// is refused before the file system is touched, so a refused network path
-/// is never contacted. Then both sides are canonicalized (resolving `..` and
-/// links) and compared component by component, so `C:\data2` is not inside
-/// `C:\data` and a link out of the data folder leads nowhere.
+/// not inside one of those places by its text (`..` resolved, case ignored;
+/// a local place's canonical text counts too, so long and 8.3 short names
+/// both match) is refused before the path itself is looked at, so a refused
+/// network path is never contacted. Then both sides are canonicalized
+/// (resolving `..` and links) and compared component by component, so
+/// `C:\data2` is not inside `C:\data` and a link out of the data folder
+/// leads nowhere.
 pub fn reveal_target(ctx: &Context, path: &str) -> Result<PathBuf, ToolError> {
     let given = Path::new(path);
     if !given.is_absolute() || is_device_path(given) {
@@ -263,52 +311,102 @@ fn canonical(path: &Path) -> Option<PathBuf> {
 /// and single files. Only absolute, non-device paths are kept: an app path
 /// that is relative (a registry override can hold one) would resolve
 /// against the app's current folder.
-struct RevealAllowed {
-    folders: Vec<PathBuf>,
-    files: Vec<PathBuf>,
+struct RevealAllowed(Vec<Allowed>);
+
+/// One place `reveal_target` shows.
+struct Allowed {
+    /// The path as HedgeBuddy knows it.
+    path: PathBuf,
+    /// Whether everything inside it is shown too (a folder), or only it.
+    folder: bool,
+    /// Whether it is on this machine rather than a network share.
+    local: bool,
+    /// Its canonical form, worked out up front when it is local.
+    canonical: Option<PathBuf>,
 }
 
 impl RevealAllowed {
     /// The data folder, and each catalog app's resolved callback log, event
     /// log and presets folder. Apps that cannot be described are skipped.
+    /// The local ones are canonicalized here: they are HedgeBuddy's own and
+    /// the operator's paths, so looking at them contacts nothing the caller
+    /// chose, and their canonical text (long names, where the configured
+    /// text may use 8.3 short names such as `RUNNER~1`) is admitted too.
     fn of(ctx: &Context) -> RevealAllowed {
-        let mut folders = vec![ctx.store.root().to_path_buf()];
-        let mut files = Vec::new();
+        let mut places = vec![(ctx.store.root().to_path_buf(), true)];
         for m in ctx.hedge.catalog().apps() {
             let Ok(app) = ctx.hedge.describe_app(&m.app.id) else {
                 continue;
             };
-            files.extend(app.files.callback_log);
-            files.extend(app.files.event_log);
-            folders.extend(app.files.presets_dir);
+            let files = app.files;
+            places.extend(files.callback_log.map(|p| (p, false)));
+            places.extend(files.event_log.map(|p| (p, false)));
+            places.extend(files.presets_dir.map(|p| (p, true)));
         }
-        let usable = |p: &PathBuf| p.is_absolute() && !is_device_path(p);
-        folders.retain(usable);
-        files.retain(usable);
-        RevealAllowed { folders, files }
+        RevealAllowed(
+            places
+                .into_iter()
+                .filter(|(path, _)| path.is_absolute() && !is_device_path(path))
+                .map(|(path, folder)| {
+                    let local = !is_network_path(&path);
+                    let canonical = if local { canonical(&path) } else { None };
+                    Allowed {
+                        path,
+                        folder,
+                        local,
+                        canonical,
+                    }
+                })
+                .collect(),
+        )
     }
 
     /// Whether `path` is one of the files or inside one of the folders, by
-    /// its text alone.
+    /// its text alone: against each place's own text and, for a local
+    /// place, its canonical text.
     fn admits_text(&self, path: &Path) -> bool {
         let given = lexical(path);
-        self.folders.iter().any(|f| given.starts_with(&lexical(f)))
-            || self.files.iter().any(|f| given == lexical(f))
+        self.0.iter().any(|place| {
+            std::iter::once(place.path.as_path())
+                .chain(place.canonical.as_deref())
+                .any(|p| {
+                    let p = lexical(p);
+                    if place.folder {
+                        given.starts_with(&p)
+                    } else {
+                        given == p
+                    }
+                })
+        })
     }
 
     /// Whether canonical `target` is one of the files or inside one of the
-    /// folders, canonicalized (those that do not exist are skipped).
+    /// folders, canonicalized (those that do not exist are skipped). A
+    /// network place is looked at only now, after the text check passed.
     fn admits(&self, target: &Path) -> bool {
-        self.folders
-            .iter()
-            .filter_map(|f| canonical(f))
-            .any(|f| target.starts_with(f))
-            || self
-                .files
-                .iter()
-                .filter_map(|f| canonical(f))
-                .any(|f| f == target)
+        self.0.iter().any(|place| {
+            let canonical = if place.local {
+                place.canonical.clone()
+            } else {
+                canonical(&place.path)
+            };
+            canonical.is_some_and(|c| {
+                if place.folder {
+                    target.starts_with(c)
+                } else {
+                    target == c
+                }
+            })
+        })
     }
+}
+
+/// Whether `path` is on a network share (`\\server\share\…`).
+fn is_network_path(path: &Path) -> bool {
+    matches!(
+        path.components().next(),
+        Some(Component::Prefix(p)) if matches!(p.kind(), Prefix::UNC(..) | Prefix::VerbatimUNC(..))
+    )
 }
 
 /// The argv that opens `file` with the operator's editor `command`. The
@@ -347,6 +445,24 @@ pub fn editor_argv(command: &str, file: &Path) -> Result<Vec<String>, ToolError>
         words.push(path.to_owned());
     }
     Ok(words)
+}
+
+/// The argv that opens `file` in a text editor when the operator has set no
+/// editor command, and what to call that editor: Notepad on Windows, the
+/// default text editor on macOS (`open -t`). Not the default app for `.py`
+/// files, which is often Python itself and would run the script.
+pub fn text_editor_argv(os: Os, file: &Path) -> Result<(Vec<String>, &'static str), ToolError> {
+    let path = file
+        .to_str()
+        .ok_or_else(|| ToolError::new(format!("{} is not valid Unicode", file.display())))?
+        .to_owned();
+    Ok(match os {
+        Os::Windows => (vec!["notepad.exe".to_owned(), path], "Notepad"),
+        Os::Macos => (
+            vec!["/usr/bin/open".to_owned(), "-t".to_owned(), path],
+            "the default text editor",
+        ),
+    })
 }
 
 /// Split `command` into words; see [`editor_argv`].
@@ -1251,13 +1367,23 @@ mod tests {
                 .0,
             REVEAL_REFUSED
         );
-        // A different case of the data folder's own path is still inside it.
+        // Other spellings of the data folder's own path are inside it: a
+        // different case, the `\\?\` form of its text, and its canonical form
+        // (long names even when the data folder's text has 8.3 short names,
+        // as a `TEMP` of `C:\Users\RUNNER~1\…` gives it in CI).
         #[cfg(windows)]
         {
-            let upper = ctx.store.root().display().to_string().to_uppercase();
+            let root = ctx.store.root().display().to_string();
+            let upper = root.to_uppercase();
             assert!(reveal_target(&ctx, &upper).is_ok(), "{upper}");
-            let verbatim = std::fs::canonicalize(ctx.store.root()).unwrap();
-            assert!(reveal_target(&ctx, &verbatim.display().to_string()).is_ok());
+            let verbatim_text = format!(r"\\?\{root}");
+            assert!(
+                reveal_target(&ctx, &verbatim_text).is_ok(),
+                "{verbatim_text}"
+            );
+            let canonical = std::fs::canonicalize(ctx.store.root()).unwrap();
+            let profiles = canonical.join("profiles").display().to_string();
+            assert!(reveal_target(&ctx, &profiles).is_ok(), "{profiles}");
         }
     }
 
@@ -1356,14 +1482,14 @@ mod tests {
             ]
         );
         // A missing share is looked at once and its paths never; a drive's
-        // path comes first and its root once.
+        // path comes first and its root once, and once the root is known to
+        // be missing the drive's other paths are not looked at.
         assert_eq!(
             seen,
             [
                 r"\\nas\media\",
                 r"Q:\one",
                 r"Q:\",
-                r"q:\two",
                 r"\\live\share\",
                 r"\\live\share\x",
                 r"C:\there",
@@ -1381,6 +1507,14 @@ mod tests {
             r"//?/GLOBALROOT/Device/Null",
             r"\\?\Volume{00000000-0000-0000-0000-000000000000}\x",
             r"\??\C:\x",
+            // Named pipes and mailslots of this machine, through a share.
+            r"\\localhost\pipe\x",
+            r"\\LOCALHOST\PIPE\x",
+            r"\\?\UNC\localhost\pipe\x",
+            r"\\127.0.0.1\pipe\x",
+            r"\\127.1.2.3\pipe\x",
+            r"\\0--1.ipv6-literal.net\pipe\x",
+            r"\\localhost\mailslot\x",
         ];
         let (states, seen) = probed(&devices, &[]);
         assert!(seen.is_empty(), "{seen:?}");
@@ -1473,6 +1607,57 @@ mod tests {
             let err = import_profile(&ctx, import).unwrap_err();
             assert!(err.0.contains("file path"), "{p}: {err}");
         }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn only_this_machines_pipe_and_mailslot_shares_are_devices() {
+        for p in [
+            r"\\localhost\pipe\x",
+            r"\\?\UNC\LocalHost\Pipe\x",
+            r"\\127.0.0.1\pipe",
+            r"\\[::1]\pipe\x",
+            r"\\::1\pipe\x",
+            r"\\localhost\mailslot\x",
+        ] {
+            assert!(is_device_path(Path::new(p)), "{p}");
+        }
+        if let Ok(me) = std::env::var("COMPUTERNAME") {
+            let p = format!(r"\\{me}\pipe\x");
+            assert!(is_device_path(Path::new(&p)), "{p}");
+        }
+        for p in [
+            r"\\localhost\share\x",
+            r"\\127.0.0.1\c$\x",
+            r"\\nas\media\pipe",
+            r"\\localhost\pipes\x",
+            r"C:\pipe\x",
+        ] {
+            assert!(!is_device_path(Path::new(p)), "{p}");
+        }
+    }
+
+    #[test]
+    fn without_an_editor_command_a_text_editor_opens_the_script() {
+        let f = Path::new("/d/a b.py");
+        assert_eq!(
+            text_editor_argv(Os::Windows, f).unwrap(),
+            (
+                vec!["notepad.exe".to_owned(), "/d/a b.py".to_owned()],
+                "Notepad"
+            )
+        );
+        assert_eq!(
+            text_editor_argv(Os::Macos, f).unwrap(),
+            (
+                vec![
+                    "/usr/bin/open".to_owned(),
+                    "-t".to_owned(),
+                    "/d/a b.py".to_owned()
+                ],
+                "the default text editor"
+            )
+        );
     }
 
     #[test]

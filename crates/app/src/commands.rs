@@ -5,7 +5,7 @@
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-use hedgebuddy_core::{Preferences, PreferencesPatch};
+use hedgebuddy_core::{Os, Preferences, PreferencesPatch};
 use hedgebuddy_tools::app::{
     self, ActivityArgs, ActivityList, AppsOverview, ExportArgs, ExportResult, HomeSummary,
     ImportArgs, ImportSummary, OpenAppDocsArgs, OpenInEditorArgs, Opened, PathStatusArgs,
@@ -186,40 +186,31 @@ pub async fn import_profile(
     blocking(move || app::import_profile(&ctx, args)).await
 }
 
-/// Open a profile script with the editor command from preferences, or the
-/// system's default app for .py files.
+/// Open a profile script with the editor command from preferences, or else
+/// in a text editor (Notepad, or macOS's default text editor): never with
+/// the default app for .py files, which often runs the script.
 #[tauri::command]
 pub async fn open_in_editor(
-    app: AppHandle,
     state: State<'_, AppState>,
     args: OpenInEditorArgs,
 ) -> Result<Opened, CommandError> {
     let ctx = state.ctx();
     blocking(move || {
         let file = app::script_file(&ctx, args.profile.as_deref(), &args.script)?;
-        match ctx.store.preferences()?.editor_command {
-            Some(command) => {
-                let argv = app::editor_argv(&command, &file)?;
-                let program = program_path(&argv[0])?;
-                spawn_detached(&program, &argv[1..])
-                    .map_err(|e| ToolError::new(format!("could not start {}: {e}", argv[0])))?;
-                Ok(Opened {
-                    path: file.display().to_string(),
-                    with: command,
-                })
-            }
+        let (argv, with) = match ctx.store.preferences()?.editor_command {
+            Some(command) => (app::editor_argv(&command, &file)?, command),
             None => {
-                app.opener()
-                    .open_path(file.display().to_string(), None::<&str>)
-                    .map_err(|e| {
-                        ToolError::new(format!("could not open {}: {e}", file.display()))
-                    })?;
-                Ok(Opened {
-                    path: file.display().to_string(),
-                    with: "the default app".into(),
-                })
+                let (argv, with) = app::text_editor_argv(Os::current(), &file)?;
+                (argv, with.to_owned())
             }
-        }
+        };
+        let program = program_path(&argv[0])?;
+        spawn_detached(&program, &argv[1..])
+            .map_err(|e| ToolError::new(format!("could not start {}: {e}", argv[0])))?;
+        Ok(Opened {
+            path: file.display().to_string(),
+            with,
+        })
     })
     .await
 }

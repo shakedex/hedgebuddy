@@ -42,11 +42,15 @@ impl AppState {
     }
 
     /// Rebuild the context so catalog overrides in `<data>/catalog/` apply.
-    /// A command still running on the old context finishes on it; writes
-    /// stay serialised by the data folder's lock.
+    /// A command still running on the old context finishes on it; the new
+    /// context shares the old one's in-process write lock, so a write on
+    /// each queues rather than one reporting busy.
     pub fn reload_catalog(&self) {
         match Context::real() {
-            Ok(fresh) => *self.ctx.write().unwrap_or_else(|e| e.into_inner()) = Arc::new(fresh),
+            Ok(fresh) => {
+                let fresh = Arc::new(fresh.with_write_lock_of(&self.ctx()));
+                *self.ctx.write().unwrap_or_else(|e| e.into_inner()) = fresh;
+            }
             Err(e) => eprintln!("hedgebuddy: could not reload the catalog: {}", e.0),
         }
     }
