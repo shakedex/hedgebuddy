@@ -5,9 +5,10 @@
 //! editor, the opener, the file dialogs); the argument and result types of
 //! those commands live here too, so the generated TypeScript covers them.
 
+use std::collections::HashMap;
 use std::ffi::OsString;
 use std::fs;
-use std::path::{Component, Path, PathBuf};
+use std::path::{Component, Path, PathBuf, Prefix};
 
 use hedgebuddy_core::{
     read_profile_export, validate_script_name, write_profile_export, CoreError, ImportSummary,
@@ -22,7 +23,7 @@ use crate::{Context, ToolError};
 /// The most paths one `path_status` call checks.
 pub const PATH_STATUS_MAX: usize = 64;
 
-/// Why `reveal_target` refuses a path that exists.
+/// Why `reveal_target` refuses a path.
 const REVEAL_REFUSED: &str = "HedgeBuddy only reveals its data folder and Hedge app files";
 
 /// The editor command word replaced by the script's path.
@@ -48,16 +49,23 @@ pub struct PathStatusList {
 pub struct PathState {
     /// The path as given.
     pub path: String,
-    /// Whether the path exists.
+    /// Whether the path exists (false for a Windows device path such as
+    /// `\\.\pipe\x`, which is never looked at).
     pub exists: bool,
     /// Whether its drive, network share or `/Volumes` volume is present
-    /// (true for a relative or empty path, which has no drive to be missing).
+    /// (true for a relative, empty or device path, which has no drive to be
+    /// missing).
     pub mounted: bool,
 }
 
 /// Whether each path exists and whether its drive is mounted, so a path
 /// variable can say "not mounted" rather than "missing" for an offload
-/// drive that is unplugged. Reads the file system only.
+/// drive that is unplugged. Reads the file system only, and looks at each
+/// drive's root at most once per call. A network share or `/Volumes` volume
+/// is looked at before its paths: when it is missing, its paths read
+/// `exists: false, mounted: false` without a look (each would otherwise wait
+/// out the network on its own). Windows device paths (`\\.\…`,
+/// `\\?\GLOBALROOT…`) are never looked at.
 pub fn path_status(_ctx: &Context, args: PathStatusArgs) -> Result<PathStatusList, ToolError> {
     if args.paths.len() > PATH_STATUS_MAX {
         return Err(ToolError::new(format!(
@@ -65,41 +73,88 @@ pub fn path_status(_ctx: &Context, args: PathStatusArgs) -> Result<PathStatusLis
         )));
     }
     Ok(PathStatusList {
-        paths: args.paths.into_iter().map(path_state).collect(),
+        paths: path_states(args.paths, &mut |p: &Path| p.exists()),
     })
 }
 
-fn path_state(path: String) -> PathState {
-    let p = Path::new(&path);
-    let exists = !path.is_empty() && p.exists();
-    // A path that exists is on a mounted drive; checking only the others
-    // saves a second look at a slow network share.
-    let mounted = exists || volume_root(p).is_none_or(|root| root.exists());
-    PathState {
-        path,
-        exists,
-        mounted,
+/// [`path_status`]'s answers, with `exists` the only way it looks at the
+/// file system.
+fn path_states(paths: Vec<String>, exists: &mut dyn FnMut(&Path) -> bool) -> Vec<PathState> {
+    // Whether each volume root is present, by its lowercase text.
+    let mut roots: HashMap<String, bool> = HashMap::new();
+    let mut root_present = |root: &Path, exists: &mut dyn FnMut(&Path) -> bool| {
+        *roots
+            .entry(root.to_string_lossy().to_lowercase())
+            .or_insert_with(|| exists(root))
+    };
+    let mut states = Vec::with_capacity(paths.len());
+    for path in paths {
+        let p = Path::new(&path);
+        let (found, mounted) = if path.is_empty() || is_device_path(p) {
+            (false, true)
+        } else {
+            match volume_of(p) {
+                None => (exists(p), true),
+                Some(v) if v.root_first => {
+                    if root_present(&v.root, exists) {
+                        (exists(p), true)
+                    } else {
+                        (false, false)
+                    }
+                }
+                // A path that exists is on a mounted drive; only a missing
+                // one needs its root looked at.
+                Some(v) => {
+                    if exists(p) {
+                        (true, true)
+                    } else {
+                        (false, root_present(&v.root, exists))
+                    }
+                }
+            }
+        };
+        states.push(PathState {
+            path,
+            exists: found,
+            mounted,
+        });
     }
+    states
 }
 
-/// The root of the drive `path` lives on, when it has one that can be
-/// missing: `C:\` for `C:\x`, `\\server\share\` for a UNC path, and on macOS
-/// `/Volumes/<name>` for a path under it. `None` for relative paths and
-/// every other absolute path.
-fn volume_root(path: &Path) -> Option<PathBuf> {
+/// The drive a path lives on, when it has one that can be missing.
+struct Volume {
+    /// `C:\` for `C:\x`, `\\server\share\` for a UNC path, and on macOS
+    /// `/Volumes/<name>` for a path under it.
+    root: PathBuf,
+    /// Whether to look at the root before the path: true for a network
+    /// share and a `/Volumes` volume, where a missing root makes every look
+    /// at a path on it slow.
+    root_first: bool,
+}
+
+/// The volume `path` lives on; `None` for relative paths and every other
+/// absolute path.
+fn volume_of(path: &Path) -> Option<Volume> {
     let mut components = path.components();
     match components.next()? {
         Component::Prefix(prefix) => {
             let mut root = OsString::from(prefix.as_os_str());
             root.push("\\");
-            Some(PathBuf::from(root))
+            Some(Volume {
+                root: PathBuf::from(root),
+                root_first: matches!(prefix.kind(), Prefix::UNC(..) | Prefix::VerbatimUNC(..)),
+            })
         }
         #[cfg(target_os = "macos")]
         Component::RootDir => match (components.next(), components.next()) {
             (Some(Component::Normal(volumes)), Some(Component::Normal(name)))
                 if volumes == "Volumes" =>
             {
-                Some(Path::new("/Volumes").join(name))
+                Some(Volume {
+                    root: Path::new("/Volumes").join(name),
+                    root_first: true,
+                })
             }
             _ => None,
         },
@@ -107,20 +162,89 @@ fn volume_root(path: &Path) -> Option<PathBuf> {
     }
 }
 
+/// Whether `path` is a Windows device path rather than a file's: `\\.\…`,
+/// `\\?\…` other than a drive or `UNC` path (`\\?\GLOBALROOT…`,
+/// `\\?\Volume{…}`), `//?/…`, or `\??\…`. These reach raw devices and
+/// named pipes, so they are never opened or looked at.
+fn is_device_path(path: &Path) -> bool {
+    let mut components = path.components();
+    match components.next() {
+        Some(Component::Prefix(prefix)) => match prefix.kind() {
+            Prefix::DeviceNS(_) | Prefix::Verbatim(_) => true,
+            // `//?/x` is not verbatim (its separators are not `\`), so it
+            // parses as share `x` of a server named `?`; Windows reads it as
+            // a device path.
+            Prefix::UNC(server, _) => server == "?" || server == ".",
+            Prefix::Disk(_) | Prefix::VerbatimDisk(_) | Prefix::VerbatimUNC(..) => false,
+        },
+        Some(Component::RootDir) => {
+            cfg!(windows) && matches!(components.next(), Some(Component::Normal(s)) if s == "??")
+        }
+        _ => false,
+    }
+}
+
+/// `path` as lowercase parts, with `.` and `..` resolved by their text
+/// alone (`..` at the root stays there, as the OS does), for comparing
+/// paths without touching the file system. A drive or share reads the same
+/// with or without `\\?\`. Lowercase makes the comparison looser than a
+/// case-sensitive file system, never stricter than Windows or macOS.
+fn lexical(path: &Path) -> Vec<String> {
+    let mut parts: Vec<String> = Vec::new();
+    // How many parts (a prefix, the root) `..` cannot remove.
+    let mut floor = 0;
+    for component in path.components() {
+        match component {
+            Component::Prefix(prefix) => {
+                let text = match prefix.kind() {
+                    Prefix::Disk(d) | Prefix::VerbatimDisk(d) => format!("{}:", d as char),
+                    Prefix::UNC(server, share) | Prefix::VerbatimUNC(server, share) => format!(
+                        r"\\{}\{}",
+                        server.to_string_lossy(),
+                        share.to_string_lossy()
+                    ),
+                    _ => prefix.as_os_str().to_string_lossy().into_owned(),
+                };
+                parts.push(text.to_lowercase());
+                floor = parts.len();
+            }
+            Component::RootDir => {
+                parts.push(String::from("/"));
+                floor = parts.len();
+            }
+            Component::CurDir => {}
+            Component::ParentDir => {
+                if parts.len() > floor {
+                    parts.pop();
+                }
+            }
+            Component::Normal(name) => parts.push(name.to_string_lossy().to_lowercase()),
+        }
+    }
+    parts
+}
+
 /// The canonical form of `path` when the app may show it in the file
 /// manager (spec §4.3): it exists and is inside the data folder, or it is a
 /// catalog app's resolved callback log or event log, or it is inside an
-/// app's presets folder. Both sides are canonicalized (resolving `..` and
+/// app's presets folder. A relative path, a device path, and every path
+/// not inside one of those places by its text (`..` resolved, case ignored)
+/// is refused before the file system is touched, so a refused network path
+/// is never contacted. Then both sides are canonicalized (resolving `..` and
 /// links) and compared component by component, so `C:\data2` is not inside
-/// `C:\data` and `<data>\..\x` is not inside the data folder.
+/// `C:\data` and a link out of the data folder leads nowhere.
 pub fn reveal_target(ctx: &Context, path: &str) -> Result<PathBuf, ToolError> {
     let given = Path::new(path);
-    if !given.is_absolute() {
+    if !given.is_absolute() || is_device_path(given) {
+        return Err(ToolError::new(REVEAL_REFUSED));
+    }
+    let allowed = RevealAllowed::of(ctx);
+    if !allowed.admits_text(given) {
         return Err(ToolError::new(REVEAL_REFUSED));
     }
     let target =
         canonical(given).ok_or_else(|| ToolError::new(format!("{path} does not exist")))?;
-    if inside(&target, ctx.store.root()) || is_app_file(ctx, &target) {
+    if allowed.admits(&target) {
         Ok(target)
     } else {
         Err(ToolError::new(REVEAL_REFUSED))
@@ -135,28 +259,56 @@ fn canonical(path: &Path) -> Option<PathBuf> {
     fs::canonicalize(path).ok()
 }
 
-/// Whether canonical `target` is `base` or inside it (false when `base`
-/// does not exist).
-fn inside(target: &Path, base: &Path) -> bool {
-    canonical(base).is_some_and(|base| target.starts_with(base))
+/// The places `reveal_target` shows: folders (with everything inside them)
+/// and single files. Only absolute, non-device paths are kept: an app path
+/// that is relative (a registry override can hold one) would resolve
+/// against the app's current folder.
+struct RevealAllowed {
+    folders: Vec<PathBuf>,
+    files: Vec<PathBuf>,
 }
 
-/// Whether canonical `target` is a catalog app's callback or event log, or
-/// inside its presets folder. Apps whose files do not resolve are skipped.
-fn is_app_file(ctx: &Context, target: &Path) -> bool {
-    ctx.hedge.catalog().apps().any(|m| {
-        let Ok(app) = ctx.hedge.describe_app(&m.app.id) else {
-            return false;
-        };
-        let files = app.files;
-        let is_target = |p: Option<&Path>| p.and_then(canonical).is_some_and(|p| p == target);
-        is_target(files.callback_log.as_deref())
-            || is_target(files.event_log.as_deref())
-            || files
-                .presets_dir
-                .as_deref()
-                .is_some_and(|dir| inside(target, dir))
-    })
+impl RevealAllowed {
+    /// The data folder, and each catalog app's resolved callback log, event
+    /// log and presets folder. Apps that cannot be described are skipped.
+    fn of(ctx: &Context) -> RevealAllowed {
+        let mut folders = vec![ctx.store.root().to_path_buf()];
+        let mut files = Vec::new();
+        for m in ctx.hedge.catalog().apps() {
+            let Ok(app) = ctx.hedge.describe_app(&m.app.id) else {
+                continue;
+            };
+            files.extend(app.files.callback_log);
+            files.extend(app.files.event_log);
+            folders.extend(app.files.presets_dir);
+        }
+        let usable = |p: &PathBuf| p.is_absolute() && !is_device_path(p);
+        folders.retain(usable);
+        files.retain(usable);
+        RevealAllowed { folders, files }
+    }
+
+    /// Whether `path` is one of the files or inside one of the folders, by
+    /// its text alone.
+    fn admits_text(&self, path: &Path) -> bool {
+        let given = lexical(path);
+        self.folders.iter().any(|f| given.starts_with(&lexical(f)))
+            || self.files.iter().any(|f| given == lexical(f))
+    }
+
+    /// Whether canonical `target` is one of the files or inside one of the
+    /// folders, canonicalized (those that do not exist are skipped).
+    fn admits(&self, target: &Path) -> bool {
+        self.folders
+            .iter()
+            .filter_map(|f| canonical(f))
+            .any(|f| target.starts_with(f))
+            || self
+                .files
+                .iter()
+                .filter_map(|f| canonical(f))
+                .any(|f| f == target)
+    }
 }
 
 /// The argv that opens `file` with the operator's editor `command`. The
@@ -164,8 +316,9 @@ fn is_app_file(ctx: &Context, target: &Path) -> bool {
 /// runs it: whitespace separates words; `"…"` and `'…'` group, `\"` is a
 /// quote inside double quotes, and nothing is escaped inside single quotes.
 /// A word `{file}` is replaced by the path; with none, the path is appended.
-/// An empty command, an unterminated quote, or a command that starts with
-/// `{file}` (which would run the script rather than open it) is an error.
+/// An empty command, an unterminated quote, or a command whose first word
+/// is empty or `{file}` (which would run the script rather than open it) is
+/// an error.
 pub fn editor_argv(command: &str, file: &Path) -> Result<Vec<String>, ToolError> {
     let mut words = split_words(command)?;
     match words.first().map(String::as_str) {
@@ -173,6 +326,11 @@ pub fn editor_argv(command: &str, file: &Path) -> Result<Vec<String>, ToolError>
         Some(FILE_PLACEHOLDER) => {
             return Err(ToolError::new(
                 "the editor command must start with a program, not {file}",
+            ))
+        }
+        Some(program) if program.trim().is_empty() => {
+            return Err(ToolError::new(
+                "the editor command must start with a program, not an empty word",
             ))
         }
         Some(_) => {}
@@ -242,24 +400,34 @@ fn split_words(command: &str) -> Result<Vec<String>, ToolError> {
     Ok(words)
 }
 
-/// Where `program` is, found the way Windows finds a command. A program
-/// with a directory part (a separator, a drive, or an absolute path) is
-/// returned as is when it is a file. Otherwise each absolute directory of
-/// `path_var` (split with [`std::env::split_paths`]) is tried with
-/// `program` plus each `pathext` extension (`;`-separated, any case), then
-/// `program` itself. The current directory, and empty or relative `PATH`
-/// entries (which mean it), are never searched, so a file planted there
-/// cannot stand in for the editor.
-pub fn find_in_path(program: &str, path_var: &str, pathext: &str) -> Option<PathBuf> {
+/// Where `program` is, found the way Windows finds a command. An absolute
+/// `program` is returned as is when it is a file. A bare name is looked for
+/// in each absolute directory of `path_var` (split with
+/// [`std::env::split_paths`]) with each `pathext` extension (`;`-separated,
+/// any case) and then as is. The current directory, and empty or relative
+/// `PATH` entries (which mean it), are never searched, so a file planted
+/// there cannot stand in for the editor; for the same reason a program with
+/// a folder part that is not absolute (`.\code.cmd`, `bin/ed`, `C:ed.exe`)
+/// is refused. `Ok(None)` when nothing is found.
+pub fn find_in_path(
+    program: &str,
+    path_var: &str,
+    pathext: &str,
+) -> Result<Option<PathBuf>, ToolError> {
     if program.is_empty() {
-        return None;
+        return Ok(None);
     }
     let p = Path::new(program);
+    if p.is_absolute() {
+        return Ok(p.is_file().then(|| p.to_path_buf()));
+    }
     let has_dir = program.contains(['/', '\\'])
-        || p.is_absolute()
         || matches!(p.components().next(), Some(Component::Prefix(_)));
     if has_dir {
-        return p.is_file().then(|| p.to_path_buf());
+        return Err(ToolError::new(format!(
+            "the editor program {program} is inside a relative folder; \
+             use an absolute path or a bare program name"
+        )));
     }
     let exts: Vec<String> = pathext
         .split(';')
@@ -267,14 +435,14 @@ pub fn find_in_path(program: &str, path_var: &str, pathext: &str) -> Option<Path
         .filter(|e| !e.is_empty())
         .map(str::to_ascii_lowercase)
         .collect();
-    std::env::split_paths(path_var)
+    Ok(std::env::split_paths(path_var)
         .filter(|dir| dir.is_absolute())
         .find_map(|dir| {
             exts.iter()
                 .map(|ext| dir.join(format!("{program}{ext}")))
                 .chain(std::iter::once(dir.join(program)))
                 .find(|candidate| candidate.is_file())
-        })
+        }))
 }
 
 /// The path of an existing script of an existing profile (the active
@@ -377,7 +545,8 @@ pub struct ExportArgs {
     /// Whether to include secret values; the file is then created
     /// owner-only on Unix.
     pub include_secrets: bool,
-    /// The absolute path of the file to write (replaced if it exists).
+    /// The absolute path of the file to write (replaced if it exists),
+    /// outside the data folder.
     pub dest: String,
 }
 
@@ -395,10 +564,17 @@ pub struct ExportResult {
 }
 
 /// Write profile `name` (its variables, its scripts and, only with
-/// `include_secrets`, its secret values) to `dest`. A read of the data
-/// folder, so it takes no lock.
+/// `include_secrets`, its secret values) to `dest`, which must be outside
+/// the data folder: an export written there could replace a profile's own
+/// files. A read of the data folder, so it takes no lock.
 pub fn export_profile(ctx: &Context, args: ExportArgs) -> Result<ExportResult, ToolError> {
     let dest = absolute(&args.dest, "export destination")?;
+    if lands_in_data_folder(ctx, dest) {
+        return Err(ToolError::new(format!(
+            "{} is inside the data folder; export to a place outside it",
+            args.dest
+        )));
+    }
     let export = ctx.store.export_profile(&args.name, args.include_secrets)?;
     write_profile_export(dest, &export)?;
     Ok(ExportResult {
@@ -419,20 +595,45 @@ pub struct ImportArgs {
     pub name: String,
 }
 
-/// Create profile `name` from the export file at `path`, under the write
-/// lock. The whole file is checked before anything is written.
+/// Create profile `name` from the export file at `path`. The whole file is
+/// read and checked first, and only then is the write lock taken, so a slow
+/// or broken file never holds up other writes.
 pub fn import_profile(ctx: &Context, args: ImportArgs) -> Result<ImportSummary, ToolError> {
     let path = absolute(&args.path, "export file")?;
-    let _guard = ctx.write_guard()?;
     let export = read_profile_export(path, EXPORT_MAX_BYTES)?;
+    let _guard = ctx.write_guard()?;
     Ok(ctx.store.import_profile(&export, &args.name)?)
 }
 
+/// Whether writing absolute `dest` would land inside the data folder: by
+/// its text (`..` resolved, case ignored), or through a link on the way to
+/// its nearest folder that exists. The export creates missing folders and
+/// replaces `dest` itself rather than writing through it, so the file's own
+/// target does not matter.
+fn lands_in_data_folder(ctx: &Context, dest: &Path) -> bool {
+    let root = ctx.store.root();
+    if lexical(dest).starts_with(&lexical(root)) {
+        return true;
+    }
+    let Some(root) = canonical(root) else {
+        return false;
+    };
+    dest.ancestors()
+        .skip(1)
+        .find_map(canonical)
+        .is_some_and(|folder| folder.starts_with(root))
+}
+
 /// `path` when it is absolute: a relative one would resolve against the
-/// app's working directory, which the operator never chose.
+/// app's working directory, which the operator never chose. A Windows
+/// device path is not a file path and is refused too.
 fn absolute<'a>(path: &'a str, what: &str) -> Result<&'a Path, ToolError> {
     let p = Path::new(path);
-    if p.is_absolute() {
+    if is_device_path(p) {
+        Err(ToolError::new(format!(
+            "the {what} must be a file path, not '{path}'"
+        )))
+    } else if p.is_absolute() {
         Ok(p)
     } else {
         Err(ToolError::new(format!(
@@ -468,6 +669,20 @@ pub struct RevealArgs {
     /// The path to show in the file manager: inside the data folder, or a
     /// Hedge app file.
     pub path: String,
+}
+
+/// The docs page of catalog app `app`, when it is an `https://` address:
+/// the browser opens nothing else (a catalog override could name a local
+/// program or a `file:` URL).
+pub fn app_docs_url(ctx: &Context, app: &str) -> Result<String, ToolError> {
+    let docs = &ctx.hedge.catalog().app(app)?.app.docs;
+    if docs.starts_with("https://") {
+        Ok(docs.clone())
+    } else {
+        Err(ToolError::new(format!(
+            "the docs link of {app} is not an https:// address: {docs}"
+        )))
+    }
 }
 
 /// Arguments of `open_app_docs`.
@@ -645,10 +860,10 @@ mod tests {
             .into_string()
             .unwrap();
         assert_eq!(
-            find_in_path("code", &path_var, ".EXE;.CMD"),
+            find_in_path("code", &path_var, ".EXE;.CMD").unwrap(),
             Some(dir.path().join("code.cmd"))
         );
-        assert_eq!(find_in_path("nope", &path_var, ".EXE;.CMD"), None);
+        assert_eq!(find_in_path("nope", &path_var, ".EXE;.CMD").unwrap(), None);
     }
 
     #[test]
@@ -812,35 +1027,35 @@ mod tests {
         // An extension beats the bare name in the same folder, and the
         // first folder wins.
         assert_eq!(
-            find_in_path("code", &both, ".EXE;.CMD"),
+            find_in_path("code", &both, ".EXE;.CMD").unwrap(),
             Some(first.path().join("code.cmd"))
         );
         assert_eq!(
-            find_in_path("code", &both, ""),
+            find_in_path("code", &both, "").unwrap(),
             Some(first.path().join("code"))
         );
         assert_eq!(
-            find_in_path("code.exe", &both, ".EXE"),
+            find_in_path("code.exe", &both, ".EXE").unwrap(),
             Some(second.path().join("code.exe"))
         );
         // A folder is not a program.
-        assert_eq!(find_in_path("tool", &both, ".EXE"), None);
+        assert_eq!(find_in_path("tool", &both, ".EXE").unwrap(), None);
         // A path is used as is, and only when it is a file.
         let full = first.path().join("code").display().to_string();
         assert_eq!(
-            find_in_path(&full, "", ".EXE"),
+            find_in_path(&full, "", ".EXE").unwrap(),
             Some(first.path().join("code"))
         );
         let gone = first.path().join("gone").display().to_string();
-        assert_eq!(find_in_path(&gone, &both, ".EXE"), None);
-        assert_eq!(find_in_path("", &both, ".EXE"), None);
+        assert_eq!(find_in_path(&gone, &both, ".EXE").unwrap(), None);
+        assert_eq!(find_in_path("", &both, ".EXE").unwrap(), None);
         // Relative and empty PATH entries mean the current folder, which is
         // never searched: tests run in the crate folder, next to Cargo.toml.
         assert!(Path::new("Cargo.toml").is_file());
-        assert_eq!(find_in_path("Cargo", ".", ".TOML"), None);
-        assert_eq!(find_in_path("Cargo.toml", ".", ""), None);
+        assert_eq!(find_in_path("Cargo", ".", ".TOML").unwrap(), None);
+        assert_eq!(find_in_path("Cargo.toml", ".", "").unwrap(), None);
         let empty_entry = format!("{}{}", if cfg!(windows) { ";" } else { ":" }, both);
-        assert_eq!(find_in_path("Cargo.toml", &empty_entry, ""), None);
+        assert_eq!(find_in_path("Cargo.toml", &empty_entry, "").unwrap(), None);
     }
 
     #[test]
@@ -968,6 +1183,379 @@ mod tests {
         )
         .unwrap_err();
         assert!(err.0.contains("already exists"), "{err}");
+    }
+
+    /// A context whose data folder holds a catalog override `relapp` with
+    /// `files` as its `[files.<os>]` table.
+    fn ctx_with_app_files(files: &str) -> (tempfile::TempDir, Context) {
+        let dir = tempfile::tempdir().unwrap();
+        let store = hedgebuddy_core::Store::open(dir.path().join("HedgeBuddy"));
+        std::fs::create_dir_all(store.catalog_dir()).unwrap();
+        let manifest = format!(
+            "catalog_version = 1\ntested_against = \"1.0\"\n[app]\nid = \"relapp\"\n\
+             name = \"Rel App\"\ndocs = \"https://example.com\"\n\
+             [files.windows]\n{files}\n[files.macos]\n{files}\n"
+        );
+        std::fs::write(store.catalog_dir().join("relapp.toml"), manifest).unwrap();
+        let ctx = Context::new(store, std::sync::Arc::new(FakeHost::new(Os::Windows)));
+        assert_eq!(ctx.catalog_error, None);
+        (dir, ctx)
+    }
+
+    #[test]
+    fn reveal_skips_app_paths_that_are_not_absolute() {
+        // Tests run in the crate folder: a relative app path would resolve
+        // against it and let any file there be revealed.
+        let cargo_toml = std::fs::canonicalize("Cargo.toml").unwrap();
+        let lib_rs = std::fs::canonicalize("src/lib.rs").unwrap();
+        let (_d, ctx) =
+            ctx_with_app_files("callback_log = \"Cargo.toml\"\nevent_log = \"Cargo.toml\"");
+        let err = reveal_target(&ctx, &cargo_toml.display().to_string()).unwrap_err();
+        assert_eq!(err.0, REVEAL_REFUSED);
+        // A relative presets folder, as a registry override could hold.
+        let host = FakeHost::new(Os::Windows).with_registry_value(
+            r"HKCU\Software\Hedge",
+            "PresetsLocation",
+            hedgebuddy_core::host::RegValue::String("src".into()),
+        );
+        let (_d, _f, ctx) = test_ctx(host);
+        let err = reveal_target(&ctx, &lib_rs.display().to_string()).unwrap_err();
+        assert_eq!(err.0, REVEAL_REFUSED);
+        // The same files, named absolutely, are allowed.
+        let (_d, ctx) = ctx_with_app_files(&format!("callback_log = '{}'", cargo_toml.display()));
+        assert_eq!(
+            reveal_target(&ctx, &cargo_toml.display().to_string()).unwrap(),
+            cargo_toml
+        );
+    }
+
+    #[test]
+    fn reveal_refuses_before_looking_at_the_file_system() {
+        let (dir, _f, ctx) = test_ctx(FakeHost::new(Os::Windows));
+        call(&ctx, "create_profile", json!({"name": "p"})).unwrap();
+        // A missing path outside the allowed places is refused as such, not
+        // reported missing: nothing looked for it.
+        let outside = dir.path().join("gone.txt").display().to_string();
+        assert_eq!(reveal_target(&ctx, &outside).unwrap_err().0, REVEAL_REFUSED);
+        // Inside the data folder, a missing path is reported missing.
+        let missing = ctx.store.root().join("gone.txt").display().to_string();
+        assert!(reveal_target(&ctx, &missing)
+            .unwrap_err()
+            .0
+            .contains("does not exist"));
+        // `..` is resolved by its text first; `<data>/../gone.txt` is outside.
+        let up = ctx.store.root().join("..").join("gone.txt");
+        assert_eq!(
+            reveal_target(&ctx, &up.display().to_string())
+                .unwrap_err()
+                .0,
+            REVEAL_REFUSED
+        );
+        // A different case of the data folder's own path is still inside it.
+        #[cfg(windows)]
+        {
+            let upper = ctx.store.root().display().to_string().to_uppercase();
+            assert!(reveal_target(&ctx, &upper).is_ok(), "{upper}");
+            let verbatim = std::fs::canonicalize(ctx.store.root()).unwrap();
+            assert!(reveal_target(&ctx, &verbatim.display().to_string()).is_ok());
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn reveal_never_contacts_shares_or_devices() {
+        let (_d, _f, ctx) = test_ctx(FakeHost::new(Os::Windows));
+        for p in [
+            r"\\hb-no-such-host.invalid\share\x.txt",
+            r"\\.\pipe\hb-no-such-pipe",
+            r"\\.\C:\Windows",
+            r"//./C:/Windows",
+            r"\\?\GLOBALROOT\Device\Null",
+            r"//?/GLOBALROOT/Device/Null",
+            r"\\?\Volume{00000000-0000-0000-0000-000000000000}\x",
+            r"\??\C:\Windows",
+        ] {
+            let started = std::time::Instant::now();
+            assert_eq!(reveal_target(&ctx, p).unwrap_err().0, REVEAL_REFUSED, "{p}");
+            assert!(started.elapsed() < std::time::Duration::from_secs(1), "{p}");
+        }
+    }
+
+    #[test]
+    fn a_program_with_a_relative_folder_is_refused() {
+        // Such a program would resolve against the app's current folder.
+        let mut relative = vec![r".\code.cmd", "./code", "bin/ed", r"bin\ed.exe"];
+        if cfg!(windows) {
+            relative.extend([r"C:ed.exe", r"\Tools\ed.exe"]);
+        }
+        for program in relative {
+            let err = find_in_path(program, "", ".EXE").unwrap_err();
+            assert!(
+                err.0
+                    .contains("use an absolute path or a bare program name"),
+                "{program}: {err}"
+            );
+        }
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("ed.exe"), "").unwrap();
+        let full = dir.path().join("ed.exe");
+        assert_eq!(
+            find_in_path(&full.display().to_string(), "", "").unwrap(),
+            Some(full)
+        );
+        assert_eq!(find_in_path("ed", "", ".EXE").unwrap(), None);
+    }
+
+    /// `path_states` with a file system in which only `present` exist,
+    /// and the paths it looked at, in order.
+    #[cfg(any(windows, target_os = "macos"))]
+    fn probed(paths: &[&str], present: &[&str]) -> (Vec<PathState>, Vec<String>) {
+        let mut seen = Vec::new();
+        let states = path_states(
+            paths.iter().map(|p| p.to_string()).collect(),
+            &mut |p: &Path| {
+                let p = p.display().to_string();
+                let found = present.contains(&p.as_str());
+                seen.push(p);
+                found
+            },
+        );
+        (states, seen)
+    }
+
+    #[cfg(any(windows, target_os = "macos"))]
+    fn state(path: &str, exists: bool, mounted: bool) -> PathState {
+        PathState {
+            path: path.into(),
+            exists,
+            mounted,
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn path_status_looks_at_each_volume_once_and_shares_before_their_paths() {
+        let paths = [
+            r"\\nas\media\a",
+            r"\\NAS\Media\b",
+            r"Q:\one",
+            r"q:\two",
+            r"\\live\share\x",
+            r"C:\there",
+        ];
+        let (states, seen) = probed(&paths, &[r"\\live\share\", r"C:\there"]);
+        assert_eq!(
+            states,
+            [
+                state(r"\\nas\media\a", false, false),
+                state(r"\\NAS\Media\b", false, false),
+                state(r"Q:\one", false, false),
+                state(r"q:\two", false, false),
+                state(r"\\live\share\x", false, true),
+                state(r"C:\there", true, true),
+            ]
+        );
+        // A missing share is looked at once and its paths never; a drive's
+        // path comes first and its root once.
+        assert_eq!(
+            seen,
+            [
+                r"\\nas\media\",
+                r"Q:\one",
+                r"Q:\",
+                r"q:\two",
+                r"\\live\share\",
+                r"\\live\share\x",
+                r"C:\there",
+            ]
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn path_status_never_looks_at_devices() {
+        let devices = [
+            r"\\.\pipe\x",
+            r"//./C:/x",
+            r"\\?\GLOBALROOT\Device\Null",
+            r"//?/GLOBALROOT/Device/Null",
+            r"\\?\Volume{00000000-0000-0000-0000-000000000000}\x",
+            r"\??\C:\x",
+        ];
+        let (states, seen) = probed(&devices, &[]);
+        assert!(seen.is_empty(), "{seen:?}");
+        assert!(states.iter().all(|s| !s.exists), "{states:?}");
+        // Verbatim drive and share paths are ordinary paths.
+        let (states, _) = probed(&[r"\\?\C:\x"], &[r"\\?\C:\x"]);
+        assert_eq!(states, [state(r"\\?\C:\x", true, true)]);
+        let (states, seen) = probed(&[r"\\?\UNC\nas\media\x"], &[]);
+        assert_eq!(states, [state(r"\\?\UNC\nas\media\x", false, false)]);
+        assert_eq!(seen, [r"\\?\UNC\nas\media\"]);
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn path_status_looks_at_each_volume_once_and_before_its_paths() {
+        let paths = [
+            "/Volumes/Gone/a",
+            "/Volumes/Gone/b",
+            "/Volumes/Here/x",
+            "/tmp/y",
+        ];
+        let (states, seen) = probed(&paths, &["/Volumes/Here"]);
+        assert_eq!(
+            states,
+            [
+                state("/Volumes/Gone/a", false, false),
+                state("/Volumes/Gone/b", false, false),
+                state("/Volumes/Here/x", false, true),
+                state("/tmp/y", false, true),
+            ]
+        );
+        assert_eq!(
+            seen,
+            [
+                "/Volumes/Gone",
+                "/Volumes/Here",
+                "/Volumes/Here/x",
+                "/tmp/y"
+            ]
+        );
+    }
+
+    #[test]
+    fn docs_open_only_over_https() {
+        let (_d, _f, ctx) = test_ctx(FakeHost::new(Os::Windows));
+        assert_eq!(
+            app_docs_url(&ctx, "offshoot").unwrap(),
+            "https://docs.hedge.video/offshoot/features/automation"
+        );
+        assert!(app_docs_url(&ctx, "nope").is_err());
+        for docs in [
+            "http://example.com",
+            "file:///C:/Windows/System32/calc.exe",
+            "HTTPS://example.com",
+            " https://example.com",
+            "C:\\docs.html",
+        ] {
+            let dir = tempfile::tempdir().unwrap();
+            let store = hedgebuddy_core::Store::open(dir.path().join("HedgeBuddy"));
+            std::fs::create_dir_all(store.catalog_dir()).unwrap();
+            let manifest = format!(
+                "catalog_version = 1\ntested_against = \"1.0\"\n[app]\nid = \"relapp\"\n\
+                 name = \"Rel App\"\ndocs = '{docs}'\n"
+            );
+            std::fs::write(store.catalog_dir().join("relapp.toml"), manifest).unwrap();
+            let ctx = Context::new(store, std::sync::Arc::new(FakeHost::new(Os::Windows)));
+            assert_eq!(ctx.catalog_error, None, "{docs}");
+            let err = app_docs_url(&ctx, "relapp").unwrap_err();
+            assert!(err.0.contains("https://"), "{docs}: {err}");
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn export_and_import_refuse_device_paths() {
+        let (_d, _f, ctx) = test_ctx(FakeHost::new(Os::Windows));
+        call(&ctx, "create_profile", json!({"name": "p"})).unwrap();
+        for p in [r"\\.\pipe\hb-no-such-pipe", r"\\?\GLOBALROOT\Device\Null"] {
+            let export = ExportArgs {
+                name: "p".into(),
+                include_secrets: false,
+                dest: p.into(),
+            };
+            let err = export_profile(&ctx, export).unwrap_err();
+            assert!(err.0.contains("file path"), "{p}: {err}");
+            let import = ImportArgs {
+                path: p.into(),
+                name: "q".into(),
+            };
+            let err = import_profile(&ctx, import).unwrap_err();
+            assert!(err.0.contains("file path"), "{p}: {err}");
+        }
+    }
+
+    #[test]
+    fn an_editor_command_needs_a_program() {
+        let f = Path::new("/d/a.py");
+        assert!(editor_argv("'' --x", f)
+            .unwrap_err()
+            .0
+            .contains("must start with a program"));
+        assert!(editor_argv("\"\"", f).is_err());
+    }
+
+    #[test]
+    fn import_reads_the_file_before_waiting_for_the_lock() {
+        let (dir, _f, ctx) = test_ctx(FakeHost::new(Os::Windows));
+        let ctx = ctx.with_lock_timeout(std::time::Duration::from_millis(100));
+        call(&ctx, "create_profile", json!({"name": "p"})).unwrap();
+        let bad = dir.path().join("bad.json");
+        std::fs::write(&bad, "not json").unwrap();
+        let _held = hedgebuddy_core::Store::open(ctx.store.root())
+            .lock()
+            .unwrap();
+        for path in [bad, dir.path().join("gone.json")] {
+            let err = import_profile(
+                &ctx,
+                ImportArgs {
+                    path: path.display().to_string(),
+                    name: "q".into(),
+                },
+            )
+            .unwrap_err();
+            assert!(!err.is_busy(), "{err}");
+            assert!(err.0.contains(&path.display().to_string()), "{err}");
+        }
+    }
+
+    #[test]
+    fn export_refuses_a_destination_in_the_data_folder() {
+        let (dir, _f, ctx) = test_ctx(FakeHost::new(Os::Windows));
+        call(&ctx, "create_profile", json!({"name": "p"})).unwrap();
+        let profile_json = ctx
+            .store
+            .root()
+            .join("profiles")
+            .join("p")
+            .join("profile.json");
+        let before = std::fs::read(&profile_json).unwrap();
+        let root = ctx.store.root().to_path_buf();
+        for dest in [
+            profile_json.clone(),
+            root.join("p.json"),
+            root.join("new").join("p.json"),
+            dir.path()
+                .join("elsewhere")
+                .join("..")
+                .join("HedgeBuddy")
+                .join("p.json"),
+        ] {
+            let err = export_profile(
+                &ctx,
+                ExportArgs {
+                    name: "p".into(),
+                    include_secrets: false,
+                    dest: dest.display().to_string(),
+                },
+            )
+            .unwrap_err();
+            assert!(err.0.contains("data folder"), "{err}");
+        }
+        assert_eq!(std::fs::read(&profile_json).unwrap(), before);
+        assert!(!root.join("p.json").exists());
+        assert!(!root.join("new").exists());
+        #[cfg(windows)]
+        {
+            let upper = root.join("p.json").display().to_string().to_uppercase();
+            let args = ExportArgs {
+                name: "p".into(),
+                include_secrets: false,
+                dest: upper,
+            };
+            assert!(export_profile(&ctx, args).is_err());
+            assert!(!root.join("p.json").exists());
+        }
     }
 
     #[test]

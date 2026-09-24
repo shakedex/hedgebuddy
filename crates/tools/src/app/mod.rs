@@ -20,10 +20,11 @@ mod home;
 mod overview;
 
 pub use files::{
-    editor_argv, export_profile, find_in_path, import_profile, path_status, reveal_target,
-    script_file, script_template, ExportArgs, ExportResult, ImportArgs, OpenAppDocsArgs,
-    OpenInEditorArgs, Opened, PathState, PathStatusArgs, PathStatusList, PickExportArgs,
-    PickFolderArgs, PickedPath, RevealArgs, ScriptTemplate, ScriptTemplateArgs, PATH_STATUS_MAX,
+    app_docs_url, editor_argv, export_profile, find_in_path, import_profile, path_status,
+    reveal_target, script_file, script_template, ExportArgs, ExportResult, ImportArgs,
+    OpenAppDocsArgs, OpenInEditorArgs, Opened, PathState, PathStatusArgs, PathStatusList,
+    PickExportArgs, PickFolderArgs, PickedPath, RevealArgs, ScriptTemplate, ScriptTemplateArgs,
+    PATH_STATUS_MAX,
 };
 pub use home::{
     home_summary, AttentionItem, HomeCounts, HomeSummary, PythonStatus, SidebarBadges,
