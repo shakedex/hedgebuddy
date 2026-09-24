@@ -1,8 +1,8 @@
 import { Redirect, Route, Router, Switch } from "wouter";
-import { useHashLocation } from "wouter/use-hash-location";
 import { isPreview } from "@/api/bridge";
 import { useDataChanged } from "@/api/events";
 import { AppShell } from "@/components/app/app-shell";
+import { useGuardedHashLocation } from "@/lib/guarded-location";
 import { DesignGallery } from "@/screens/design/design-gallery";
 import { HomeScreen } from "@/screens/home/home-screen";
 import { Placeholder } from "@/screens/placeholder";
@@ -11,7 +11,7 @@ import { RunsScreen } from "@/screens/runs/runs-screen";
 export default function App() {
   useDataChanged();
   return (
-    <Router hook={useHashLocation}>
+    <Router hook={useGuardedHashLocation}>
       <AppShell>
         <Switch>
           <Route path="/"><HomeScreen /></Route>
