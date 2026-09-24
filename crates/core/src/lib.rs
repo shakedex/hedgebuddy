@@ -19,6 +19,7 @@ pub mod activity;
 pub mod catalog;
 pub mod clock;
 pub mod error;
+pub mod export;
 pub(crate) mod fs_util;
 pub mod hedge;
 pub mod host;
@@ -42,6 +43,9 @@ pub use activity::{
 pub use catalog::Catalog;
 pub use clock::now_rfc3339;
 pub use error::{CoreError, Result};
+pub use export::{
+    read_profile_export, write_profile_export, ImportSummary, ProfileExport, EXPORT_MAX_BYTES,
+};
 pub use hedge::Hedge;
 pub use host::{FakeHost, Host, Os, RealHost};
 pub use lock::{DataLock, BUSY_MESSAGE, LOCK_TIMEOUT};

@@ -169,8 +169,8 @@ fn every_invalid_fixture_fails_its_schema() {
         }
     }
     assert!(
-        checked >= 11,
-        "expected at least 11 invalid fixtures, checked {checked}"
+        checked >= 13,
+        "expected at least 13 invalid fixtures, checked {checked}"
     );
 }
 
@@ -192,6 +192,32 @@ fn activity_records_core_writes_conform() {
     {
         assert_valid(&v, &serde_json::from_str(line).unwrap(), "activity line");
     }
+}
+
+#[test]
+fn profile_exports_core_writes_conform() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = hedgebuddy_core::Store::open(dir.path());
+    store.create_profile("a", "Client A").unwrap();
+    store
+        .set_variable(
+            "a",
+            "HOOK",
+            hedgebuddy_core::VariableInput {
+                ty: hedgebuddy_core::VarType::Secret,
+                value: Some(serde_json::json!("https://h")),
+                description: String::new(),
+            },
+        )
+        .unwrap();
+    store.write_script("a", "s.py", "print('hi')\n").unwrap();
+    let export = store.export_profile("a", true).unwrap();
+
+    let export_v = validator("profile-export");
+    let profile_v = validator("profile");
+    let value = serde_json::to_value(&export).unwrap();
+    assert_valid(&export_v, &value, "profile export");
+    assert_valid(&profile_v, &value["profile"], "profile export/profile");
 }
 
 #[test]

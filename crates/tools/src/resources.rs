@@ -3,7 +3,7 @@
 
 use crate::{Context, ToolError};
 
-const SCHEMAS: [(&str, &str); 7] = [
+const SCHEMAS: [(&str, &str); 8] = [
     (
         "hedgebuddy",
         include_str!("../../../schema/hedgebuddy.schema.json"),
@@ -15,6 +15,10 @@ const SCHEMAS: [(&str, &str); 7] = [
     (
         "secrets",
         include_str!("../../../schema/secrets.schema.json"),
+    ),
+    (
+        "profile-export",
+        include_str!("../../../schema/profile-export.schema.json"),
     ),
     (
         "run-record",
@@ -137,7 +141,7 @@ mod tests {
     fn resources_cover_catalog_schemas_and_docs() {
         let (_d, _f, ctx) = test_ctx(FakeHost::new(Os::Windows));
         let all = list(&ctx);
-        assert_eq!(all.len(), 12);
+        assert_eq!(all.len(), 13);
         let (mime, text) = read(&ctx, "hedgebuddy://catalog/offshoot").unwrap();
         assert_eq!(mime, "application/json");
         let v: serde_json::Value = serde_json::from_str(&text).unwrap();

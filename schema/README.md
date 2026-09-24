@@ -7,6 +7,7 @@ The JSON Schemas here (draft 2020-12) are the contract between the Rust core and
 | `hedgebuddy.schema.json` | `<data>/hedgebuddy.json` |
 | `profile.schema.json` | `<data>/profiles/<name>/profile.json` |
 | `secrets.schema.json` | `<data>/profiles/<name>/secrets.json` |
+| `profile-export.schema.json` | a profile export file written by the desktop app's Export |
 | `run-record.schema.json` | one line of `<data>/runs/*.jsonl` |
 | `script-manifest.schema.json` | the JSON block at the top of a script's module docstring |
 | `activity-record.schema.json` | one line of `<data>/activity.jsonl` |
