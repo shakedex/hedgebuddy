@@ -1,0 +1,107 @@
+<style>
+  .hb { background:#0f151d; color:#c9d4e0; font-family:system-ui,-apple-system,'Segoe UI',sans-serif; font-size:11.5px; border-radius:8px; padding:12px; }
+  .hb .row { display:flex; align-items:center; gap:7px; padding:4px 6px; }
+  .hb .row .grow { flex:1; }
+  .hb .muted { color:#7d8da2; }
+  .hb .bad { color:#ff6b81; }
+  .hb .warn { color:#f5b73b; }
+  .hb .mono { font-family:ui-monospace,Consolas,monospace; font-size:10.5px; }
+  .hb .panel { background:#141c26; border:1px solid #1f2a38; border-radius:8px; padding:6px 6px; margin-bottom:10px; }
+  .hb .title { color:#fff; padding:2px 6px 5px; }
+  .hb .nav .row { border-radius:6px; }
+  .hb .nav .on { background:#1a2432; color:#fff; }
+  .hb .badge { font-size:10px; border-radius:999px; padding:0 6px; line-height:15px; }
+  .hb .badge.bad { background:#3a1820; color:#ff8a9c; }
+  .hb .badge.warn { background:#3a2b10; color:#f5c26b; }
+  .hb svg.lucide { width:14px; height:14px; stroke-width:1.75; flex:none; }
+  .hb i.ph, .hb i.ph-fill { font-size:15px; flex:none; }
+  .libs { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  @media (max-width: 900px) { .libs { grid-template-columns:1fr; } }
+</style>
+
+<h2>Icons and status, redone</h2>
+<p class="subtitle">No coloured dots. Each state has its own icon and a word; colour only marks problems (red failed, amber needs a look); everything that is fine stays neutral. The sidebar shows counts instead of dots. The same content in two icon libraries: pick the one whose style you prefer.</p>
+
+<div class="libs">
+
+  <div class="option" data-choice="lucide" onclick="toggleSelect(this)" style="display:block">
+    <h3 style="margin:0 0 4px">A. Lucide</h3>
+    <p style="margin:0 0 10px">Thin, even line icons, about 1,600 of them. Clean and technical; the default look of many modern pro tools. React package: lucide-react.</p>
+    <div class="hb">
+      <div class="panel nav">
+        <div class="row on"><i data-lucide="house"></i><span class="grow">Home</span></div>
+        <div class="row muted"><i data-lucide="braces"></i><span class="grow">Variables</span><span class="badge warn">1</span></div>
+        <div class="row muted"><i data-lucide="file-code"></i><span class="grow">Scripts</span></div>
+        <div class="row muted"><i data-lucide="history"></i><span class="grow">Runs</span><span class="badge bad">1</span></div>
+        <div class="row muted"><i data-lucide="app-window"></i><span class="grow">Hedge apps</span><span class="badge warn">3</span></div>
+        <div class="row muted"><i data-lucide="plug"></i><span class="grow">Connect</span></div>
+        <div class="row muted"><i data-lucide="settings"></i><span class="grow">Settings</span><span class="badge warn">1</span></div>
+      </div>
+      <div class="panel">
+        <div class="title">Needs attention</div>
+        <div class="row"><i data-lucide="circle-x" class="bad"></i><span class="grow">on_copy_complete.py failed at 02:14</span><i data-lucide="chevron-right" class="muted"></i></div>
+        <div class="row"><i data-lucide="braces" class="warn"></i><span class="grow">CLIENT_EMAIL is needed but not set</span><i data-lucide="chevron-right" class="muted"></i></div>
+        <div class="row"><i data-lucide="file-x" class="warn"></i><span class="grow">3 OffShoot events point at deleted scripts</span><i data-lucide="chevron-right" class="muted"></i></div>
+        <div class="row"><i data-lucide="package" class="warn"></i><span class="grow">hedgebuddy package needs 0.11.0</span><i data-lucide="chevron-right" class="muted"></i></div>
+      </div>
+      <div class="panel">
+        <div class="title">Runs</div>
+        <div class="row"><i data-lucide="circle-x" class="bad"></i><span class="grow mono">on_copy_complete.py</span><span class="bad">failed</span><span class="muted">02:14</span></div>
+        <div class="row"><i data-lucide="circle-check" class="muted"></i><span class="grow mono">on_copy_complete.py</span><span class="muted">ok · 01:52</span></div>
+        <div class="row"><i data-lucide="circle-check" class="muted"></i><span class="grow mono">on_disk_added.py</span><span class="muted">ok · 01:40</span></div>
+      </div>
+      <div class="panel">
+        <div class="title">OffShoot events</div>
+        <div class="row"><i data-lucide="link" class="muted"></i><span class="grow">FileCopyCompleted</span><span class="mono">on_copy_complete.py</span></div>
+        <div class="row"><i data-lucide="file-code" class="muted"></i><span class="grow">VerificationIssue</span><span class="muted">your own file</span></div>
+        <div class="row"><i data-lucide="file-x" class="warn"></i><span class="grow">DiskIdle</span><span class="warn">file missing · Clear</span></div>
+        <div class="row muted"><i data-lucide="unlink"></i><span class="grow">DiskRemoved</span><span>nothing attached</span></div>
+        <div class="row muted"><i data-lucide="ban"></i><span class="grow">SourceAdded</span><span>not supported yet</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="phosphor" onclick="toggleSelect(this)" style="display:block">
+    <h3 style="margin:0 0 4px">B. Phosphor</h3>
+    <p style="margin:0 0 10px">Slightly rounder and friendlier, with six weights (thin to bold, plus filled and duotone), so status icons can be filled while navigation stays outlined. React package: @phosphor-icons/react.</p>
+    <div class="hb">
+      <div class="panel nav">
+        <div class="row on"><i class="ph ph-house"></i><span class="grow">Home</span></div>
+        <div class="row muted"><i class="ph ph-brackets-curly"></i><span class="grow">Variables</span><span class="badge warn">1</span></div>
+        <div class="row muted"><i class="ph ph-file-code"></i><span class="grow">Scripts</span></div>
+        <div class="row muted"><i class="ph ph-clock-counter-clockwise"></i><span class="grow">Runs</span><span class="badge bad">1</span></div>
+        <div class="row muted"><i class="ph ph-app-window"></i><span class="grow">Hedge apps</span><span class="badge warn">3</span></div>
+        <div class="row muted"><i class="ph ph-plugs-connected"></i><span class="grow">Connect</span></div>
+        <div class="row muted"><i class="ph ph-gear-six"></i><span class="grow">Settings</span><span class="badge warn">1</span></div>
+      </div>
+      <div class="panel">
+        <div class="title">Needs attention</div>
+        <div class="row"><i class="ph-fill ph-x-circle bad"></i><span class="grow">on_copy_complete.py failed at 02:14</span><i class="ph ph-caret-right muted"></i></div>
+        <div class="row"><i class="ph-fill ph-brackets-curly warn"></i><span class="grow">CLIENT_EMAIL is needed but not set</span><i class="ph ph-caret-right muted"></i></div>
+        <div class="row"><i class="ph-fill ph-file-x warn"></i><span class="grow">3 OffShoot events point at deleted scripts</span><i class="ph ph-caret-right muted"></i></div>
+        <div class="row"><i class="ph-fill ph-package warn"></i><span class="grow">hedgebuddy package needs 0.11.0</span><i class="ph ph-caret-right muted"></i></div>
+      </div>
+      <div class="panel">
+        <div class="title">Runs</div>
+        <div class="row"><i class="ph-fill ph-x-circle bad"></i><span class="grow mono">on_copy_complete.py</span><span class="bad">failed</span><span class="muted">02:14</span></div>
+        <div class="row"><i class="ph ph-check-circle muted"></i><span class="grow mono">on_copy_complete.py</span><span class="muted">ok · 01:52</span></div>
+        <div class="row"><i class="ph ph-check-circle muted"></i><span class="grow mono">on_disk_added.py</span><span class="muted">ok · 01:40</span></div>
+      </div>
+      <div class="panel">
+        <div class="title">OffShoot events</div>
+        <div class="row"><i class="ph ph-link muted"></i><span class="grow">FileCopyCompleted</span><span class="mono">on_copy_complete.py</span></div>
+        <div class="row"><i class="ph ph-file-code muted"></i><span class="grow">VerificationIssue</span><span class="muted">your own file</span></div>
+        <div class="row"><i class="ph-fill ph-file-x warn"></i><span class="grow">DiskIdle</span><span class="warn">file missing · Clear</span></div>
+        <div class="row muted"><i class="ph ph-link-break"></i><span class="grow">DiskRemoved</span><span>nothing attached</span></div>
+        <div class="row muted"><i class="ph ph-prohibit"></i><span class="grow">SourceAdded</span><span>not supported yet</span></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/lucide@latest/dist/umd/lucide.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@phosphor-icons/web@2.1.1"></script>
+<script>
+  if (window.lucide) { lucide.createIcons(); }
+</script>

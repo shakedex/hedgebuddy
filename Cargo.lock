@@ -1563,6 +1563,7 @@ name = "hedgebuddy-app"
 version = "0.11.0"
 dependencies = [
  "hedgebuddy-core",
+ "hedgebuddy-tools",
  "serde",
  "serde_json",
  "tauri",
@@ -1576,10 +1577,10 @@ dependencies = [
  "assert_cmd",
  "clap",
  "hedgebuddy-core",
+ "hedgebuddy-tools",
  "jiff",
  "predicates",
  "rmcp",
- "schemars 1.2.2",
  "serde",
  "serde_json",
  "tempfile",
@@ -1595,6 +1596,7 @@ dependencies = [
  "jsonschema",
  "notify",
  "open",
+ "schemars 1.2.2",
  "serde",
  "serde_json",
  "sysinfo",
@@ -1602,6 +1604,19 @@ dependencies = [
  "thiserror 2.0.20",
  "toml 1.1.6+spec-1.1.0",
  "winreg 0.56.0",
+]
+
+[[package]]
+name = "hedgebuddy-tools"
+version = "0.11.0"
+dependencies = [
+ "hedgebuddy-core",
+ "jiff",
+ "jsonschema",
+ "schemars 1.2.2",
+ "serde",
+ "serde_json",
+ "tempfile",
 ]
 
 [[package]]

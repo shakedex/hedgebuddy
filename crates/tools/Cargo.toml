@@ -1,0 +1,18 @@
+[package]
+name = "hedgebuddy-tools"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "HedgeBuddy's tools, MCP resources and prompt, shared by the CLI and the desktop app"
+
+[dependencies]
+hedgebuddy-core = { workspace = true }
+jiff = "0.2"
+schemars = "1"
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+jsonschema = "0.56"
+tempfile = "3"

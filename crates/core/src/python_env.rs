@@ -23,7 +23,7 @@ pub const PROBE: &str = "import json, sys\ntry:\n    from importlib import metad
 pub const SYNTAX_CHECK: &str = "import sys\nsrc = open(sys.argv[1], 'rb').read()\ncompile(src, sys.argv[1], 'exec', dont_inherit=True)\n";
 
 /// The interpreter Hedge apps use.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct PythonInfo {
     pub launcher: Vec<String>,
     pub executable: PathBuf,

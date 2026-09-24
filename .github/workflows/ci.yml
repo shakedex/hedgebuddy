@@ -40,6 +40,7 @@ jobs:
         working-directory: crates/app/ui
         run: |
           bun install --frozen-lockfile
+          bun run gen:check
           bun run build
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets -- -D warnings

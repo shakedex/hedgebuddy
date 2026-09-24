@@ -11,7 +11,7 @@ use crate::error::{CoreError, Result};
 use crate::host::{Os, RegValue};
 
 /// How scripts are attached for an app on this platform.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ScriptingSupport {
     Registry,
@@ -21,7 +21,7 @@ pub enum ScriptingSupport {
 }
 
 /// What HedgeBuddy knows about one Hedge app on this machine.
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, schemars::JsonSchema)]
 pub struct AppStatus {
     pub id: String,
     pub name: String,
@@ -36,7 +36,7 @@ pub struct AppStatus {
 }
 
 /// An app's file locations with `%VAR%` and `~` expanded for this machine.
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, schemars::JsonSchema)]
 pub struct ResolvedFiles {
     pub callback_log: Option<PathBuf>,
     pub event_log: Option<PathBuf>,
@@ -45,7 +45,7 @@ pub struct ResolvedFiles {
 
 /// Everything an agent needs about one app: its status, its full catalog
 /// entry, and its resolved files.
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, schemars::JsonSchema)]
 pub struct AppDescription {
     pub status: AppStatus,
     pub manifest: AppManifest,

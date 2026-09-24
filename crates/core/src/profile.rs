@@ -12,7 +12,7 @@ use crate::store::Store;
 use crate::variable::{validate_slug, validate_var_name, Variable};
 
 /// Contents of `profile.json`. Variables are kept sorted by name.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Profile {
     pub version: u32,

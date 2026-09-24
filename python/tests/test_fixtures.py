@@ -47,6 +47,9 @@ def summarize(root):
     for name in profile_names(root):
         variables = load_variables(root, name)
         types = {n: v.type for n, v in variables.items()}
+        # A variable counts as declared only when it has a value, as
+        # _script.py checks when the script runs.
+        declared = {n: v.type for n, v in variables.items() if v.raw is not None}
         scripts = {}
         for script in sorted((root / "profiles" / name / "scripts").glob("*.py")):
             m = parse_manifest(script.read_text(encoding="utf-8"))
@@ -55,7 +58,7 @@ def summarize(root):
                 "app": m.app,
                 "event": m.event,
                 "requires": sorted(m.requires),
-                "unmet": [issue.name for issue in check_requirements(m, types)],
+                "unmet": [issue.name for issue in check_requirements(m, declared)],
             }
         profiles[name] = {
             "variable_count": len(variables),

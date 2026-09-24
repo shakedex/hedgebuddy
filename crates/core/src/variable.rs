@@ -8,7 +8,7 @@ use serde_json::Value;
 use crate::error::{CoreError, Result};
 
 /// The nine variable types. Serialized names are the schema's exact strings.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub enum VarType {
     #[serde(rename = "string")]
     String,
@@ -71,7 +71,7 @@ impl FromStr for VarType {
 }
 
 /// One entry in `profile.json`'s `variables` map.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Variable {
     /// The variable's declared type.

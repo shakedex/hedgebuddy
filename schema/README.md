@@ -9,6 +9,8 @@ The JSON Schemas here (draft 2020-12) are the contract between the Rust core and
 | `secrets.schema.json` | `<data>/profiles/<name>/secrets.json` |
 | `run-record.schema.json` | one line of `<data>/runs/*.jsonl` |
 | `script-manifest.schema.json` | the JSON block at the top of a script's module docstring |
+| `activity-record.schema.json` | one line of `<data>/activity.jsonl` |
+| `preferences.schema.json` | `<data>/preferences.json` |
 
 ## Fixture convention
 
@@ -19,6 +21,8 @@ The JSON Schemas here (draft 2020-12) are the contract between the Rust core and
 - `profiles/*/secrets.json` against `secrets.schema.json`, when the file exists (a profile with no secret-typed variables has none)
 - every line of `runs/*.jsonl` against `run-record.schema.json`
 - the manifest extracted from every `profiles/*/scripts/*.py` against `script-manifest.schema.json`
+- every line of `activity.jsonl` against `activity-record.schema.json`, when the file is present
+- `preferences.json` against `preferences.schema.json`, when the file is present
 
 Across all valid cases together there must be at least one profile, one script, and one run-record line, so that every schema is exercised by a valid instance and not only by invalid ones.
 

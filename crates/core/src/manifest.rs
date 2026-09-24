@@ -10,7 +10,7 @@ use crate::profile::Profile;
 use crate::variable::{validate_var_name, VarType, Variable};
 
 /// One entry of a manifest's `requires` map.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Requirement {
     #[serde(rename = "type")]
@@ -27,7 +27,7 @@ pub struct Requirement {
 /// patterns for known apps and events (`^[a-z][a-z0-9-]*$` and
 /// `^[A-Za-z][A-Za-z0-9]*$`) are enforced against the phase 2B catalog, not
 /// by this type.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Manifest {
     pub hedgebuddy: u32,
@@ -40,7 +40,7 @@ pub struct Manifest {
 }
 
 /// Why a profile does not satisfy a manifest.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum RequirementIssue {
     /// The profile has no variable with this name.
@@ -139,12 +139,25 @@ fn check_default(ty: VarType, default: &Value) -> Result<()> {
     .map(|_| ())
 }
 
-/// Every requirement the profile fails, sorted by variable name.
-pub fn check_requirements(manifest: &Manifest, profile: &Profile) -> Vec<RequirementIssue> {
+/// Requirements `profile` does not meet. A variable counts as declared only
+/// when it has a value: a plain variable's value in `profile.json`, a
+/// secret's entry in `secrets`. This matches what the Python library checks
+/// when the script runs.
+pub fn check_requirements(
+    manifest: &Manifest,
+    profile: &Profile,
+    secrets: &BTreeMap<String, String>,
+) -> Vec<RequirementIssue> {
+    let declared = |name: &str| {
+        profile.variables.get(name).filter(|var| match var.ty {
+            VarType::Secret => secrets.contains_key(name),
+            _ => var.value.is_some(),
+        })
+    };
     manifest
         .requires
         .iter()
-        .filter_map(|(name, req)| match profile.variables.get(name) {
+        .filter_map(|(name, req)| match declared(name) {
             Some(var) if var.ty == req.ty => None,
             Some(var) => Some(RequirementIssue::TypeMismatch {
                 name: name.clone(),
@@ -283,7 +296,7 @@ mod tests {
             .unwrap();
         assert_eq!(m.requires["PORT"].default, None);
         assert_eq!(
-            check_requirements(&m, &Profile::new("p", "")),
+            check_requirements(&m, &Profile::new("p", ""), &BTreeMap::new()),
             vec![RequirementIssue::Missing {
                 name: "PORT".into(),
                 ty: VarType::Int
@@ -306,7 +319,7 @@ mod tests {
         let mut p = Profile::new("p", "");
         // Nothing set: SLACK_WEBHOOK missing; PROJECT_NAME has a default so it is fine.
         assert_eq!(
-            check_requirements(&m, &p),
+            check_requirements(&m, &p, &BTreeMap::new()),
             vec![RequirementIssue::Missing {
                 name: "SLACK_WEBHOOK".into(),
                 ty: VarType::Secret
@@ -321,7 +334,7 @@ mod tests {
             },
         );
         assert_eq!(
-            check_requirements(&m, &p),
+            check_requirements(&m, &p, &BTreeMap::new()),
             vec![RequirementIssue::TypeMismatch {
                 name: "SLACK_WEBHOOK".into(),
                 expected: VarType::Secret,
@@ -344,8 +357,10 @@ mod tests {
                 description: String::new(),
             },
         );
+        // SLACK_WEBHOOK now has a stored secret value, so only PROJECT_NAME mismatches.
+        let secrets = BTreeMap::from([("SLACK_WEBHOOK".to_owned(), "x".to_owned())]);
         assert_eq!(
-            check_requirements(&m, &p),
+            check_requirements(&m, &p, &secrets),
             vec![RequirementIssue::TypeMismatch {
                 name: "PROJECT_NAME".into(),
                 expected: VarType::String,
@@ -355,12 +370,40 @@ mod tests {
     }
 
     #[test]
+    fn a_secret_without_a_stored_value_is_missing() {
+        let m = parse_manifest(
+            "\"\"\"\n{\"hedgebuddy\": 1, \"requires\": {\"HOOK\": {\"type\": \"secret\"}}}\n---\n\"\"\"\n",
+        )
+        .unwrap()
+        .unwrap();
+        let mut p = Profile::new("p", "");
+        p.variables.insert(
+            "HOOK".into(),
+            Variable {
+                ty: VarType::Secret,
+                value: None,
+                description: String::new(),
+            },
+        );
+        let none = BTreeMap::new();
+        assert_eq!(
+            check_requirements(&m, &p, &none),
+            vec![RequirementIssue::Missing {
+                name: "HOOK".into(),
+                ty: VarType::Secret
+            }]
+        );
+        let stored = BTreeMap::from([("HOOK".to_owned(), "https://h".to_owned())]);
+        assert!(check_requirements(&m, &p, &stored).is_empty());
+    }
+
+    #[test]
     fn requirement_issues_are_sorted_by_name() {
         let src = "\"\"\"\n{\"hedgebuddy\": 1, \"requires\": {\"ZED\": {\"type\": \"int\"}, \"ALPHA\": {\"type\": \"string\"}}}\n---\n\"\"\"\n";
         let m = parse_manifest(src).unwrap().unwrap();
         let p = Profile::new("p", "");
         assert_eq!(
-            check_requirements(&m, &p),
+            check_requirements(&m, &p, &BTreeMap::new()),
             vec![
                 RequirementIssue::Missing {
                     name: "ALPHA".into(),

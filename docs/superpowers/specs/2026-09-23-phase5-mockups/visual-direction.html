@@ -1,0 +1,129 @@
+<h2>Which visual direction feels right for HedgeBuddy?</h2>
+<p class="subtitle">Same home screen, three looks, all dark. Each is shown at a small window size (about 560 px wide), the way it would sit beside OffShoot. Click the one you like; say in the terminal what you'd keep or change.</p>
+
+<div class="cards">
+
+  <!-- A: Console -->
+  <div class="card" data-choice="console" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:0;background:#0d0d0e">
+      <div style="display:flex;height:360px;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;font-size:12px;color:#d6d6d6;background:#141415">
+        <div style="width:118px;background:#0d0d0e;border-right:1px solid #222;padding:10px 8px;display:flex;flex-direction:column;gap:2px">
+          <div style="font-weight:600;color:#fff;margin:2px 6px 10px">HedgeBuddy</div>
+          <div style="padding:5px 6px;border-radius:4px;background:#232325;color:#fff">Home</div>
+          <div style="padding:5px 6px;color:#9a9a9a">Variables</div>
+          <div style="padding:5px 6px;color:#9a9a9a">Scripts</div>
+          <div style="padding:5px 6px;color:#9a9a9a">Runs</div>
+          <div style="padding:5px 6px;color:#9a9a9a">Hedge apps</div>
+          <div style="padding:5px 6px;color:#9a9a9a">Connect</div>
+          <div style="margin-top:auto;padding:5px 6px;color:#9a9a9a">Settings</div>
+        </div>
+        <div style="flex:1;padding:12px 14px;display:flex;flex-direction:column;gap:10px">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div style="color:#fff;font-weight:600">commercial-one-day <span style="color:#777;font-weight:400">▾</span></div>
+            <div style="color:#777">active profile</div>
+          </div>
+          <div style="border:1px solid #2a2a2c;border-radius:4px;padding:8px 10px;display:flex;justify-content:space-between">
+            <span>Since you last opened: <b style="color:#fff">14 runs</b></span><span style="color:#ff8a3d">1 failed ›</span>
+          </div>
+          <div style="color:#777;text-transform:uppercase;font-size:10px;letter-spacing:.06em">Attachments</div>
+          <div style="display:grid;grid-template-columns:1fr auto;row-gap:5px;border-top:1px solid #222;padding-top:6px">
+            <span>OffShoot 26.1</span><span style="color:#9a9a9a">3 attached</span>
+            <span>FoolCat 26.1.1</span><span style="color:#9a9a9a">1 attached</span>
+            <span>Stale entries</span><span style="color:#ff8a3d">1 to clear</span>
+          </div>
+          <div style="color:#777;text-transform:uppercase;font-size:10px;letter-spacing:.06em;margin-top:4px">Recent runs</div>
+          <div style="display:flex;flex-direction:column;gap:4px;border-top:1px solid #222;padding-top:6px">
+            <div style="display:flex;justify-content:space-between"><span>on_copy_complete.py</span><span style="color:#ff8a3d">failed · 02:14</span></div>
+            <div style="display:flex;justify-content:space-between"><span>on_copy_complete.py</span><span style="color:#9a9a9a">ok · 01:52</span></div>
+            <div style="display:flex;justify-content:space-between"><span>on_disk_added.py</span><span style="color:#9a9a9a">ok · 01:40</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A. Console</h3>
+      <p>Close to the Hedge apps: near-black graphite, compact rows, grey text, one warm accent used only for problems. System font. Feels like part of the same toolkit; quiet until something is wrong.</p>
+    </div>
+  </div>
+
+  <!-- B: Instrument panel -->
+  <div class="card" data-choice="instrument" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:0;background:#0b1016">
+      <div style="display:flex;height:360px;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;font-size:12px;color:#c9d4e0;background:#0f151d">
+        <div style="width:44px;background:#0b1016;border-right:1px solid #1c2633;padding:10px 0;display:flex;flex-direction:column;align-items:center;gap:8px">
+          <div style="width:22px;height:22px;border-radius:6px;background:linear-gradient(135deg,#3dd6c6,#2a7cf7)"></div>
+          <div style="width:26px;height:26px;border-radius:6px;background:#1a2432;display:flex;align-items:center;justify-content:center;color:#fff">⌂</div>
+          <div style="color:#5d6c80">{x}</div>
+          <div style="color:#5d6c80">▤</div>
+          <div style="color:#5d6c80">◷</div>
+          <div style="color:#5d6c80">▣</div>
+          <div style="color:#5d6c80">⇄</div>
+          <div style="margin-top:auto;color:#5d6c80">⚙</div>
+        </div>
+        <div style="flex:1;padding:12px 14px;display:flex;flex-direction:column;gap:10px">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div style="font-size:14px;color:#fff;font-weight:600">Home</div>
+            <div style="background:#16202c;border:1px solid #243244;border-radius:999px;padding:3px 10px;color:#dfe8f2">● commercial-one-day ▾</div>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+            <div style="background:#141c26;border:1px solid #1f2a38;border-radius:8px;padding:8px"><div style="color:#6f7f93;font-size:10px">RUNS SINCE LAST OPEN</div><div style="font-size:20px;color:#fff;font-weight:600">14</div></div>
+            <div style="background:#2a1418;border:1px solid #5a2330;border-radius:8px;padding:8px"><div style="color:#e58a98;font-size:10px">FAILED</div><div style="font-size:20px;color:#ff6b81;font-weight:600">1</div></div>
+            <div style="background:#141c26;border:1px solid #1f2a38;border-radius:8px;padding:8px"><div style="color:#6f7f93;font-size:10px">ATTACHED</div><div style="font-size:20px;color:#3dd6c6;font-weight:600">4</div></div>
+          </div>
+          <div style="background:#141c26;border:1px solid #1f2a38;border-radius:8px;padding:8px 10px;display:flex;flex-direction:column;gap:6px">
+            <div style="display:flex;justify-content:space-between"><span>OffShoot 26.1</span><span style="background:#123a36;color:#3dd6c6;border-radius:999px;padding:1px 8px">3 attached</span></div>
+            <div style="display:flex;justify-content:space-between"><span>FoolCat 26.1.1</span><span style="background:#123a36;color:#3dd6c6;border-radius:999px;padding:1px 8px">1 attached</span></div>
+            <div style="display:flex;justify-content:space-between"><span>Stale entries</span><span style="background:#3a2b10;color:#f5b73b;border-radius:999px;padding:1px 8px">1 to clear</span></div>
+          </div>
+          <div style="background:#141c26;border:1px solid #1f2a38;border-radius:8px;padding:8px 10px;display:flex;flex-direction:column;gap:5px;font-family:ui-monospace,Consolas,monospace;font-size:11px">
+            <div style="display:flex;justify-content:space-between"><span><span style="color:#ff6b81">●</span> on_copy_complete.py</span><span style="color:#6f7f93">02:14</span></div>
+            <div style="display:flex;justify-content:space-between"><span><span style="color:#3dd6c6">●</span> on_copy_complete.py</span><span style="color:#6f7f93">01:52</span></div>
+            <div style="display:flex;justify-content:space-between"><span><span style="color:#3dd6c6">●</span> on_disk_added.py</span><span style="color:#6f7f93">01:40</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B. Instrument panel</h3>
+      <p>Status first: big numbers, colored status pills (teal ok, amber attention, red failed), rounded cards, an icon rail instead of a text sidebar to save width, monospace for file names. Reads at a glance; more "dashboard".</p>
+    </div>
+  </div>
+
+  <!-- C: Calm editorial -->
+  <div class="card" data-choice="calm" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:0;background:#1b1a19">
+      <div style="display:flex;height:360px;font-family:Georgia,'Iowan Old Style','Times New Roman',serif;font-size:12.5px;color:#e7e2da;background:#1f1e1c">
+        <div style="width:124px;background:#1b1a19;padding:14px 12px;display:flex;flex-direction:column;gap:6px;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;font-size:12px">
+          <div style="color:#f3eee6;font-weight:600;margin-bottom:8px">HedgeBuddy</div>
+          <div style="color:#f3eee6;border-left:2px solid #d9b26f;padding-left:8px">Home</div>
+          <div style="color:#8f887e;padding-left:10px">Variables</div>
+          <div style="color:#8f887e;padding-left:10px">Scripts</div>
+          <div style="color:#8f887e;padding-left:10px">Runs</div>
+          <div style="color:#8f887e;padding-left:10px">Hedge apps</div>
+          <div style="color:#8f887e;padding-left:10px">Connect</div>
+          <div style="margin-top:auto;color:#8f887e;padding-left:10px">Settings</div>
+        </div>
+        <div style="flex:1;padding:16px 18px;display:flex;flex-direction:column;gap:12px">
+          <div>
+            <div style="font-size:18px;color:#f3eee6">commercial-one-day</div>
+            <div style="font-family:system-ui,sans-serif;font-size:11px;color:#8f887e">Client X, single-day commercial · switch profile</div>
+          </div>
+          <div style="font-size:14px;line-height:1.45">14 scripts ran since you last looked. <span style="color:#e59a7a">One failed</span>: the Slack post after card A003.</div>
+          <div style="font-family:system-ui,sans-serif;font-size:11.5px;display:flex;flex-direction:column;gap:6px;border-top:1px solid #33312d;padding-top:10px">
+            <div style="display:flex;justify-content:space-between"><span>OffShoot runs 3 scripts, FoolCat 1</span><span style="color:#8f887e">all present</span></div>
+            <div style="display:flex;justify-content:space-between"><span>One old entry points at a deleted file</span><span style="color:#d9b26f">clear it</span></div>
+          </div>
+          <div style="font-family:system-ui,sans-serif;font-size:11.5px;display:flex;flex-direction:column;gap:6px;border-top:1px solid #33312d;padding-top:10px">
+            <div style="display:flex;justify-content:space-between"><span>on_copy_complete.py</span><span style="color:#e59a7a">failed, 02:14</span></div>
+            <div style="display:flex;justify-content:space-between"><span>on_copy_complete.py</span><span style="color:#8f887e">ok, 01:52</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C. Calm, written</h3>
+      <p>Warm charcoal, generous spacing, a serif for headings, and the home screen speaks in sentences ("One failed: the Slack post after card A003"). Softer and more personal; less like a pro tool, more like a notebook that explains itself.</p>
+    </div>
+  </div>
+
+</div>

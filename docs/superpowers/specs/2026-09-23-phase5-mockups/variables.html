@@ -1,0 +1,97 @@
+<h2>How should the Variables screen work?</h2>
+<p class="subtitle">Same profile in all three: nine variables, one secret, and a script that needs a variable nobody has set yet. Shown at a medium window (about 640 px). Click the one that feels right.</p>
+
+<div class="cards">
+
+  <!-- A: inline table -->
+  <div class="card" data-choice="table" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:0">
+      <div style="background:#0f151d;color:#c9d4e0;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;font-size:11.5px;padding:12px 14px;height:380px;display:flex;flex-direction:column;gap:8px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div style="font-size:14px;color:#fff;font-weight:600">Variables</div>
+          <div style="display:flex;gap:6px"><span style="background:#16202c;border:1px solid #243244;border-radius:999px;padding:2px 9px">● commercial-one-day ▾</span><span style="background:#2a7cf7;color:#fff;border-radius:6px;padding:2px 9px">+ Add</span></div>
+        </div>
+        <div style="background:#2a1d0c;border:1px solid #5a4318;border-radius:8px;padding:6px 9px;color:#f5c26b">on_copy_complete.py needs <b>CLIENT_EMAIL</b> (string), not set · <u>Add it</u></div>
+        <div style="display:grid;grid-template-columns:1.1fr .55fr 1.4fr .9fr;gap:0;border:1px solid #1f2a38;border-radius:8px;overflow:hidden">
+          <div style="background:#141c26;color:#6f7f93;padding:5px 8px;font-size:10px">NAME</div><div style="background:#141c26;color:#6f7f93;padding:5px 8px;font-size:10px">TYPE</div><div style="background:#141c26;color:#6f7f93;padding:5px 8px;font-size:10px">VALUE</div><div style="background:#141c26;color:#6f7f93;padding:5px 8px;font-size:10px">REQUIRED BY</div>
+          <div style="padding:5px 8px;font-family:ui-monospace,Consolas,monospace">PROJECT_NAME</div><div style="padding:5px 8px;color:#6f7f93">string</div><div style="padding:5px 8px;background:#18222e;border-radius:4px;margin:2px">ClientX Spot</div><div style="padding:5px 8px"><span style="background:#1c2b44;color:#8fb6ff;border-radius:999px;padding:0 6px">copy</span></div>
+          <div style="padding:5px 8px;font-family:ui-monospace,Consolas,monospace">SLACK_WEBHOOK</div><div style="padding:5px 8px;color:#6f7f93">secret</div><div style="padding:5px 8px">•••••••• <span style="color:#6f7f93">👁</span></div><div style="padding:5px 8px"><span style="background:#1c2b44;color:#8fb6ff;border-radius:999px;padding:0 6px">copy</span></div>
+          <div style="padding:5px 8px;font-family:ui-monospace,Consolas,monospace">DEST_ROOTS</div><div style="padding:5px 8px;color:#6f7f93">path[]</div><div style="padding:5px 8px">D:/Offload, F:/Offload</div><div style="padding:5px 8px;color:#4c5a6b">—</div>
+          <div style="padding:5px 8px;font-family:ui-monospace,Consolas,monospace">NOTIFY</div><div style="padding:5px 8px;color:#6f7f93">bool</div><div style="padding:5px 8px"><span style="display:inline-block;width:22px;height:12px;border-radius:999px;background:#3dd6c6;vertical-align:middle"></span></div><div style="padding:5px 8px"><span style="background:#1c2b44;color:#8fb6ff;border-radius:999px;padding:0 6px">disk</span></div>
+          <div style="padding:5px 8px;font-family:ui-monospace,Consolas,monospace">RETRIES</div><div style="padding:5px 8px;color:#6f7f93">int</div><div style="padding:5px 8px">3</div><div style="padding:5px 8px;color:#4c5a6b">—</div>
+          <div style="padding:5px 8px;font-family:ui-monospace,Consolas,monospace">REPORT_DIR</div><div style="padding:5px 8px;color:#6f7f93">path</div><div style="padding:5px 8px">D:/Reports <span style="color:#f5b73b">⚠ not mounted</span></div><div style="padding:5px 8px;color:#4c5a6b">—</div>
+        </div>
+        <div style="color:#6f7f93">Click a value to edit it in place. Import · Export</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A. Table, edit in place</h3>
+      <p>Everything visible at once, like a spreadsheet: click a value to edit it right there with the editor its type needs (toggle, number, path picker, list). Fast for many small changes. In a narrow window the type and "required by" columns fold under the name.</p>
+    </div>
+  </div>
+
+  <!-- B: list + detail -->
+  <div class="card" data-choice="list-detail" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:0">
+      <div style="background:#0f151d;color:#c9d4e0;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;font-size:11.5px;height:380px;display:flex">
+        <div style="width:48%;border-right:1px solid #1f2a38;padding:12px 10px;display:flex;flex-direction:column;gap:6px">
+          <div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:14px;color:#fff;font-weight:600">Variables</span><span style="background:#2a7cf7;color:#fff;border-radius:6px;padding:1px 7px">+</span></div>
+          <div style="background:#16202c;border:1px solid #243244;border-radius:6px;padding:3px 8px;color:#6f7f93">⌕ Filter</div>
+          <div style="background:#2a1d0c;border:1px solid #5a4318;border-radius:6px;padding:4px 8px;color:#f5c26b">CLIENT_EMAIL · missing</div>
+          <div style="background:#1a2432;border-radius:6px;padding:5px 8px"><div style="font-family:ui-monospace,Consolas,monospace;color:#fff">SLACK_WEBHOOK</div><div style="color:#6f7f93">secret · ••••••••</div></div>
+          <div style="padding:5px 8px"><div style="font-family:ui-monospace,Consolas,monospace">PROJECT_NAME</div><div style="color:#6f7f93">string · ClientX Spot</div></div>
+          <div style="padding:5px 8px"><div style="font-family:ui-monospace,Consolas,monospace">DEST_ROOTS</div><div style="color:#6f7f93">path[] · 2 folders</div></div>
+          <div style="padding:5px 8px"><div style="font-family:ui-monospace,Consolas,monospace">NOTIFY</div><div style="color:#6f7f93">bool · on</div></div>
+          <div style="padding:5px 8px"><div style="font-family:ui-monospace,Consolas,monospace">REPORT_DIR</div><div style="color:#6f7f93">path · D:/Reports <span style="color:#f5b73b">⚠</span></div></div>
+        </div>
+        <div style="flex:1;padding:12px 12px;display:flex;flex-direction:column;gap:9px">
+          <div style="font-family:ui-monospace,Consolas,monospace;color:#fff;font-size:13px">SLACK_WEBHOOK</div>
+          <div><div style="color:#6f7f93;font-size:10px;margin-bottom:3px">VALUE · secret</div><div style="background:#18222e;border:1px solid #2a3a50;border-radius:6px;padding:5px 8px;display:flex;justify-content:space-between"><span>••••••••••••••••</span><span style="color:#6f7f93">Reveal</span></div></div>
+          <div><div style="color:#6f7f93;font-size:10px;margin-bottom:3px">DESCRIPTION</div><div style="background:#18222e;border:1px solid #243244;border-radius:6px;padding:5px 8px">Incoming webhook URL</div></div>
+          <div><div style="color:#6f7f93;font-size:10px;margin-bottom:3px">REQUIRED BY</div><div style="display:flex;flex-direction:column;gap:3px"><span>on_copy_complete.py <span style="color:#6f7f93">· OffShoot · FileCopyCompleted</span></span></div></div>
+          <div style="margin-top:auto;display:flex;justify-content:space-between"><span style="color:#ff6b81">Delete</span><span style="background:#2a7cf7;color:#fff;border-radius:6px;padding:2px 10px">Save</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B. List and detail</h3>
+      <p>A searchable list on the left, the selected variable on the right with a full editor, its description and every script that uses it. Calmer and clearer about what each variable is for; one variable at a time. In a narrow window the detail slides over the list.</p>
+    </div>
+  </div>
+
+  <!-- C: grouped by script -->
+  <div class="card" data-choice="grouped" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:0">
+      <div style="background:#0f151d;color:#c9d4e0;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;font-size:11.5px;padding:12px 14px;height:380px;display:flex;flex-direction:column;gap:8px">
+        <div style="display:flex;justify-content:space-between;align-items:center"><div style="font-size:14px;color:#fff;font-weight:600">Variables</div><span style="background:#2a7cf7;color:#fff;border-radius:6px;padding:2px 9px">+ Add</span></div>
+        <div style="background:#141c26;border:1px solid #1f2a38;border-radius:8px;padding:8px 10px">
+          <div style="display:flex;justify-content:space-between;margin-bottom:6px"><b style="color:#fff">on_copy_complete.py</b><span style="color:#6f7f93">OffShoot · FileCopyCompleted</span></div>
+          <div style="display:grid;grid-template-columns:1fr 1.2fr;row-gap:4px">
+            <span style="font-family:ui-monospace,Consolas,monospace">SLACK_WEBHOOK</span><span>•••••••• <span style="color:#6f7f93">secret</span></span>
+            <span style="font-family:ui-monospace,Consolas,monospace">PROJECT_NAME</span><span>ClientX Spot</span>
+            <span style="font-family:ui-monospace,Consolas,monospace;color:#f5c26b">CLIENT_EMAIL</span><span style="color:#f5c26b">not set · add</span>
+          </div>
+        </div>
+        <div style="background:#141c26;border:1px solid #1f2a38;border-radius:8px;padding:8px 10px">
+          <div style="display:flex;justify-content:space-between;margin-bottom:6px"><b style="color:#fff">on_disk_added.py</b><span style="color:#6f7f93">OffShoot · DiskAdded</span></div>
+          <div style="display:grid;grid-template-columns:1fr 1.2fr;row-gap:4px">
+            <span style="font-family:ui-monospace,Consolas,monospace">NOTIFY</span><span><span style="display:inline-block;width:22px;height:12px;border-radius:999px;background:#3dd6c6;vertical-align:middle"></span></span>
+          </div>
+        </div>
+        <div style="background:#141c26;border:1px solid #1f2a38;border-radius:8px;padding:8px 10px">
+          <div style="margin-bottom:6px"><b style="color:#fff">Not used by any script</b></div>
+          <div style="display:grid;grid-template-columns:1fr 1.2fr;row-gap:4px">
+            <span style="font-family:ui-monospace,Consolas,monospace">DEST_ROOTS</span><span>D:/Offload, F:/Offload</span>
+            <span style="font-family:ui-monospace,Consolas,monospace">RETRIES</span><span>3</span>
+            <span style="font-family:ui-monospace,Consolas,monospace">REPORT_DIR</span><span>D:/Reports <span style="color:#f5b73b">⚠</span></span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C. Grouped by script</h3>
+      <p>Variables sorted under the scripts that use them, so you set up "what the Slack script needs" in one place; missing ones sit right where they belong. Clear before a shoot, but a variable used by two scripts appears twice, and plain variables fall into an "unused" group.</p>
+    </div>
+  </div>
+
+</div>

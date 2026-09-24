@@ -14,7 +14,7 @@ use crate::fs_util;
 use crate::host::RegValue;
 
 /// The fields of an OffShoot preset (`<name>.hedge`) that HedgeBuddy reads and writes.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct Preset {
     pub name: String,
     pub folder_pattern: String,
@@ -26,7 +26,7 @@ pub struct Preset {
 }
 
 /// Which app log to read.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum LogKind {
     Callback,

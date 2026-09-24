@@ -1,0 +1,92 @@
+<h2>Scripts and Runs, in the same list-and-detail pattern</h2>
+<p class="subtitle">Not a choice this time: does each screen show the right things and offer the right actions? Say what's missing or unnecessary.</p>
+
+<div class="mockup" style="margin-bottom:18px">
+  <div class="mockup-header">Scripts</div>
+  <div class="mockup-body" style="padding:0">
+    <div style="background:#0f151d;color:#c9d4e0;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;font-size:11.5px;height:400px;display:flex">
+      <div style="width:40%;border-right:1px solid #1f2a38;padding:12px 10px;display:flex;flex-direction:column;gap:6px">
+        <div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:14px;color:#fff;font-weight:600">Scripts</span><span style="background:#2a7cf7;color:#fff;border-radius:6px;padding:1px 8px">+ New</span></div>
+        <div style="background:#16202c;border:1px solid #2a7cf7;border-radius:6px;padding:4px 8px;color:#8fb6ff;text-align:center">⇄ Sync attachments to this profile</div>
+        <div style="background:#1a2432;border-radius:6px;padding:6px 8px">
+          <div style="display:flex;justify-content:space-between"><span style="font-family:ui-monospace,Consolas,monospace;color:#fff">on_copy_complete.py</span><span style="color:#f5b73b">●</span></div>
+          <div style="color:#6f7f93">OffShoot · FileCopyCompleted · 1 unmet</div>
+        </div>
+        <div style="padding:6px 8px">
+          <div style="display:flex;justify-content:space-between"><span style="font-family:ui-monospace,Consolas,monospace">on_disk_added.py</span><span style="color:#3dd6c6">●</span></div>
+          <div style="color:#6f7f93">OffShoot · DiskAdded · attached</div>
+        </div>
+        <div style="padding:6px 8px">
+          <div style="display:flex;justify-content:space-between"><span style="font-family:ui-monospace,Consolas,monospace">foolcat_report.py</span><span style="color:#3dd6c6">●</span></div>
+          <div style="color:#6f7f93">FoolCat · ReportCreated · attached</div>
+        </div>
+        <div style="padding:6px 8px">
+          <div style="display:flex;justify-content:space-between"><span style="font-family:ui-monospace,Consolas,monospace">helpers_notes.py</span><span style="color:#4c5a6b">○</span></div>
+          <div style="color:#6f7f93">no manifest · not attached</div>
+        </div>
+      </div>
+      <div style="flex:1;padding:12px 14px;display:flex;flex-direction:column;gap:9px">
+        <div style="display:flex;justify-content:space-between;align-items:baseline">
+          <span style="font-family:ui-monospace,Consolas,monospace;color:#fff;font-size:13px">on_copy_complete.py</span>
+          <span style="color:#6f7f93">Open in editor ↗</span>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <span style="background:#16202c;border:1px solid #243244;border-radius:999px;padding:1px 8px">OffShoot · FileCopyCompleted</span>
+          <span style="background:#123a36;color:#3dd6c6;border-radius:999px;padding:1px 8px">attached</span>
+        </div>
+        <div>
+          <div style="color:#6f7f93;font-size:10px;margin-bottom:3px">NEEDS</div>
+          <div style="display:grid;grid-template-columns:1fr auto;row-gap:3px">
+            <span style="font-family:ui-monospace,Consolas,monospace">SLACK_WEBHOOK</span><span style="color:#3dd6c6">✓ set</span>
+            <span style="font-family:ui-monospace,Consolas,monospace">PROJECT_NAME</span><span style="color:#3dd6c6">✓ set</span>
+            <span style="font-family:ui-monospace,Consolas,monospace;color:#f5c26b">CLIENT_EMAIL</span><span style="color:#f5c26b">missing · add</span>
+          </div>
+        </div>
+        <div>
+          <div style="color:#6f7f93;font-size:10px;margin-bottom:3px">CHECK</div>
+          <div>Python 3.13.5 <span style="color:#3dd6c6">✓</span> · compiles <span style="color:#3dd6c6">✓</span> · hedgebuddy 0.11.0 <span style="color:#3dd6c6">✓</span></div>
+        </div>
+        <div style="flex:1;background:#0b1016;border:1px solid #1c2633;border-radius:6px;padding:6px 8px;font-family:ui-monospace,Consolas,monospace;font-size:10.5px;color:#7d8da2;overflow:hidden;line-height:1.5">
+          """<br>{"hedgebuddy": 1, "app": "offshoot", "event": "FileCopyCompleted", …}<br>---<br>Posts a summary to Slack after each card finishes.<br>"""<br>import hedgebuddy as hb<br><br>@hb.script<br>def main(event, vars): …
+        </div>
+        <div style="display:flex;justify-content:space-between"><span style="color:#ff6b81">Delete</span><span style="display:flex;gap:6px"><span style="border:1px solid #243244;border-radius:6px;padding:2px 10px">Detach</span></span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-header">Runs</div>
+  <div class="mockup-body" style="padding:0">
+    <div style="background:#0f151d;color:#c9d4e0;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;font-size:11.5px;height:360px;display:flex">
+      <div style="width:40%;border-right:1px solid #1f2a38;padding:12px 10px;display:flex;flex-direction:column;gap:6px">
+        <div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:14px;color:#fff;font-weight:600">Runs</span><span style="display:flex;gap:4px"><span style="background:#1a2432;border-radius:999px;padding:1px 8px;color:#fff">All</span><span style="border:1px solid #5a2330;border-radius:999px;padding:1px 8px;color:#ff6b81">Failed 1</span></span></div>
+        <div style="color:#6f7f93;font-size:10px">TODAY · since you last opened: 14</div>
+        <div style="background:#1a2432;border-radius:6px;padding:6px 8px">
+          <div style="display:flex;justify-content:space-between"><span><span style="color:#ff6b81">●</span> <span style="font-family:ui-monospace,Consolas,monospace;color:#fff">on_copy_complete.py</span></span><span style="color:#6f7f93">02:14</span></div>
+          <div style="color:#6f7f93">FileCopyCompleted · exit 1</div>
+        </div>
+        <div style="padding:6px 8px">
+          <div style="display:flex;justify-content:space-between"><span><span style="color:#3dd6c6">●</span> <span style="font-family:ui-monospace,Consolas,monospace">on_copy_complete.py</span></span><span style="color:#6f7f93">01:52</span></div>
+          <div style="color:#6f7f93">FileCopyCompleted · 1.2 s</div>
+        </div>
+        <div style="padding:6px 8px">
+          <div style="display:flex;justify-content:space-between"><span><span style="color:#3dd6c6">●</span> <span style="font-family:ui-monospace,Consolas,monospace">on_disk_added.py</span></span><span style="color:#6f7f93">01:40</span></div>
+          <div style="color:#6f7f93">DiskAdded · 0.3 s</div>
+        </div>
+      </div>
+      <div style="flex:1;padding:12px 14px;display:flex;flex-direction:column;gap:9px">
+        <div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-family:ui-monospace,Consolas,monospace;color:#fff;font-size:13px">on_copy_complete.py</span><span style="background:#2a1418;color:#ff6b81;border-radius:999px;padding:1px 8px">failed · exit 1</span></div>
+        <div style="color:#6f7f93">OffShoot · FileCopyCompleted · profile commercial-one-day · 02:14:07 → 02:14:09</div>
+        <div>
+          <div style="color:#6f7f93;font-size:10px;margin-bottom:3px">LOG</div>
+          <div style="font-family:ui-monospace,Consolas,monospace;font-size:10.5px">02:14:08 copy of A003 finished, posting to Slack</div>
+        </div>
+        <div style="flex:1;background:#1a0f12;border:1px solid #4a1f28;border-radius:6px;padding:6px 8px;font-family:ui-monospace,Consolas,monospace;font-size:10.5px;color:#f0a3b0;line-height:1.5;overflow:hidden">
+          Traceback (most recent call last):<br>&nbsp;&nbsp;File "on_copy_complete.py", line 24, in main<br>&nbsp;&nbsp;&nbsp;&nbsp;urllib.request.urlopen(request, timeout=10)<br>urllib.error.URLError: &lt;urlopen error timed out&gt;
+        </div>
+        <div style="display:flex;justify-content:flex-end;gap:6px"><span style="border:1px solid #243244;border-radius:6px;padding:2px 10px">Copy details</span><span style="border:1px solid #243244;border-radius:6px;padding:2px 10px">Open script</span></div>
+      </div>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,81 @@
+<h2>How should navigation behave at different window sizes?</h2>
+<p class="subtitle">Direction B, "Instrument panel", is chosen. The app must stay usable in a narrow window beside OffShoot, and it also gets used full size during setup. Each option shows a wide window (about 900 px) and a narrow one (about 480 px).</p>
+
+<div class="options">
+
+  <div class="option" data-choice="adaptive" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Adaptive sidebar (recommended)</h3>
+      <p>Labels and icons when the window is wide; it collapses to the icon rail when narrow (labels show on hover). You always see where you are.</p>
+      <div style="display:flex;gap:14px;align-items:flex-start;margin-top:10px;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;font-size:11px;color:#c9d4e0">
+        <div style="display:flex;width:420px;height:170px;background:#0f151d;border:1px solid #243244;border-radius:6px;overflow:hidden">
+          <div style="width:118px;background:#0b1016;border-right:1px solid #1c2633;padding:8px 6px;display:flex;flex-direction:column;gap:3px">
+            <div style="display:flex;align-items:center;gap:6px;margin:0 4px 6px"><div style="width:14px;height:14px;border-radius:4px;background:linear-gradient(135deg,#3dd6c6,#2a7cf7)"></div><b style="color:#fff">HedgeBuddy</b></div>
+            <div style="padding:3px 6px;border-radius:5px;background:#1a2432;color:#fff">⌂&nbsp; Home</div>
+            <div style="padding:3px 6px;color:#7d8da2">{x}&nbsp; Variables</div>
+            <div style="padding:3px 6px;color:#7d8da2">▤&nbsp; Scripts</div>
+            <div style="padding:3px 6px;color:#7d8da2">◷&nbsp; Runs <span style="color:#ff6b81">●</span></div>
+            <div style="padding:3px 6px;color:#7d8da2">▣&nbsp; Hedge apps</div>
+            <div style="padding:3px 6px;color:#7d8da2">⇄&nbsp; Connect</div>
+          </div>
+          <div style="flex:1;padding:8px;color:#6f7f93">wide window content…</div>
+        </div>
+        <div style="display:flex;width:200px;height:170px;background:#0f151d;border:1px solid #243244;border-radius:6px;overflow:hidden">
+          <div style="width:34px;background:#0b1016;border-right:1px solid #1c2633;padding:8px 0;display:flex;flex-direction:column;align-items:center;gap:7px;color:#7d8da2">
+            <div style="width:14px;height:14px;border-radius:4px;background:linear-gradient(135deg,#3dd6c6,#2a7cf7)"></div>
+            <div style="color:#fff;background:#1a2432;border-radius:5px;padding:1px 4px">⌂</div><div>{x}</div><div>▤</div><div>◷<span style="color:#ff6b81;font-size:8px">●</span></div><div>▣</div><div>⇄</div>
+          </div>
+          <div style="flex:1;padding:8px;color:#6f7f93">narrow…</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="rail" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Icon rail always</h3>
+      <p>Icons only at every size, labels on hover. Most room for content, one consistent look; you learn the icons once.</p>
+      <div style="display:flex;gap:14px;align-items:flex-start;margin-top:10px;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;font-size:11px;color:#c9d4e0">
+        <div style="display:flex;width:420px;height:170px;background:#0f151d;border:1px solid #243244;border-radius:6px;overflow:hidden">
+          <div style="width:34px;background:#0b1016;border-right:1px solid #1c2633;padding:8px 0;display:flex;flex-direction:column;align-items:center;gap:7px;color:#7d8da2">
+            <div style="width:14px;height:14px;border-radius:4px;background:linear-gradient(135deg,#3dd6c6,#2a7cf7)"></div>
+            <div style="color:#fff;background:#1a2432;border-radius:5px;padding:1px 4px">⌂</div><div>{x}</div><div>▤</div><div>◷<span style="color:#ff6b81;font-size:8px">●</span></div><div>▣</div><div>⇄</div>
+          </div>
+          <div style="flex:1;padding:8px;color:#6f7f93">wide window content…</div>
+        </div>
+        <div style="display:flex;width:200px;height:170px;background:#0f151d;border:1px solid #243244;border-radius:6px;overflow:hidden">
+          <div style="width:34px;background:#0b1016;border-right:1px solid #1c2633;padding:8px 0;display:flex;flex-direction:column;align-items:center;gap:7px;color:#7d8da2">
+            <div style="width:14px;height:14px;border-radius:4px;background:linear-gradient(135deg,#3dd6c6,#2a7cf7)"></div>
+            <div style="color:#fff;background:#1a2432;border-radius:5px;padding:1px 4px">⌂</div><div>{x}</div><div>▤</div><div>◷<span style="color:#ff6b81;font-size:8px">●</span></div><div>▣</div><div>⇄</div>
+          </div>
+          <div style="flex:1;padding:8px;color:#6f7f93">narrow…</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="tabs" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Top tabs</h3>
+      <p>A row of tabs under the title bar; no sidebar at all. Full width for content, but seven tabs get cramped in a narrow window, so some move into a "more" menu.</p>
+      <div style="display:flex;gap:14px;align-items:flex-start;margin-top:10px;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;font-size:11px;color:#c9d4e0">
+        <div style="width:420px;height:170px;background:#0f151d;border:1px solid #243244;border-radius:6px;overflow:hidden">
+          <div style="display:flex;gap:12px;padding:7px 10px;border-bottom:1px solid #1c2633;background:#0b1016;color:#7d8da2">
+            <span style="color:#fff;border-bottom:2px solid #3dd6c6;padding-bottom:3px">Home</span><span>Variables</span><span>Scripts</span><span>Runs <span style="color:#ff6b81">●</span></span><span>Hedge apps</span><span>Connect</span><span>⚙</span>
+          </div>
+          <div style="padding:8px;color:#6f7f93">wide window content…</div>
+        </div>
+        <div style="width:200px;height:170px;background:#0f151d;border:1px solid #243244;border-radius:6px;overflow:hidden">
+          <div style="display:flex;gap:8px;padding:7px 8px;border-bottom:1px solid #1c2633;background:#0b1016;color:#7d8da2">
+            <span style="color:#fff;border-bottom:2px solid #3dd6c6;padding-bottom:3px">Home</span><span>Variables</span><span>Scripts</span><span>⋯</span>
+          </div>
+          <div style="padding:8px;color:#6f7f93">narrow…</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>

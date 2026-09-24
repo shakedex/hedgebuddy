@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/shakedex/hedgebuddy/schema/preferences.schema.json",
+  "title": "HedgeBuddy desktop app preferences",
+  "description": "<data>/preferences.json. A missing file means the defaults: version 1 and both fields null.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "last_opened", "editor_command"],
+  "properties": {
+    "version": { "const": 1 },
+    "last_opened": { "type": ["string", "null"], "format": "date-time" },
+    "editor_command": { "type": ["string", "null"], "minLength": 1 }
+  }
+}

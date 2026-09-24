@@ -1,0 +1,187 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "@fontsource-variable/jetbrains-mono";
+
+/* Inter from the official release (inter-ui). Fontsource's Inter comes from Google Fonts, which strips the
+   cv05, cv08 and ss01 features the design depends on. Upright only; nothing in the app is italic. */
+@font-face {
+  font-family: "Inter Variable";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: block;
+  src: url("inter-ui/variable/InterVariable.woff2") format("woff2");
+}
+
+/* The app is always dark; `<html class="dark">` makes shadcn's `dark:` classes apply unconditionally. */
+@custom-variant dark (&:is(.dark *));
+
+/* HedgeBuddy is dark only (spec §2.3). Colours are spec §5.1; nothing else gets a hue. */
+:root {
+  color-scheme: dark;
+
+  --background: #0f151d;
+  --sidebar: #0b1016;
+  --well: #0b1016;
+  --card: #141c26;
+  --accent: #1a2432;
+  --border: #1f2a38;
+  --border-strong: #243244;
+  --foreground: #c9d4e0;
+  --foreground-strong: #ffffff;
+  --muted-foreground: #7d8da2;
+  --primary: #2a7cf7;
+  --primary-foreground: #ffffff;
+  --link: #8fb6ff;
+  --destructive: #ff6b81;
+  --destructive-tint: #2a1418;
+  --destructive-border: #5a2330;
+  --warning: #f5b73b;
+  --warning-tint: #2a1d0c;
+  --warning-border: #5a4318;
+  --brand-from: #3dd6c6;
+  --brand-to: #2a7cf7;
+
+  /* shadcn's names, pointed at the tokens above */
+  --popover: var(--card);
+  --popover-foreground: var(--foreground);
+  --secondary: var(--accent);
+  --secondary-foreground: var(--foreground-strong);
+  --muted: var(--card);
+  --accent-foreground: var(--foreground-strong);
+  --input: var(--border-strong);
+  --ring: var(--primary);
+  --sidebar-foreground: var(--muted-foreground);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: var(--accent);
+  --sidebar-accent-foreground: var(--foreground-strong);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--primary);
+  --radius: 8px;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-foreground-strong: var(--foreground-strong);
+  --color-card: var(--card);
+  --color-card-foreground: var(--foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-tint: var(--destructive-tint);
+  --color-destructive-border: var(--destructive-border);
+  --color-warning: var(--warning);
+  --color-warning-tint: var(--warning-tint);
+  --color-warning-border: var(--warning-border);
+  --color-link: var(--link);
+  --color-well: var(--well);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+@theme {
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono Variable", ui-monospace, "Cascadia Mono", monospace;
+  /* No ligatures in names, paths and tracebacks: `//`, `!=` and `->` stay as typed. */
+  --font-mono--font-feature-settings: "calt" 0;
+
+  /* Floating layers only (menus, tooltips, dialogs, toasts); panels never cast a shadow. */
+  --shadow-float: 0 8px 24px rgb(0 0 0 / 0.45);
+
+  /* spec §5.1: text 11.5–15 px, Home numbers 22 px, mono 10.5–13 px.
+     Overriding Tailwind's steps makes shadcn's components use this scale. */
+  --text-xs: 11.5px;
+  --text-xs--line-height: 16px;
+  --text-sm: 12.5px;
+  --text-sm--line-height: 18px;
+  --text-base: 13px;
+  --text-base--line-height: 20px;
+  --text-lg: 15px;
+  --text-lg--line-height: 22px;
+  --text-stat: 22px;
+  --text-stat--line-height: 26px;
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 8px;
+
+  --animate-rise: hb-rise 180ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  --animate-slide-in: hb-slide-in 200ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+
+  @keyframes hb-rise {
+    from { opacity: 0; transform: translateY(3px); }
+  }
+  @keyframes hb-slide-in {
+    from { opacity: 0.4; transform: translateX(24px); }
+  }
+}
+
+@layer base {
+  /* The outline colour is primary before focus too: `transition-colors` animates outline-color, and
+     from currentColor the focus ring would flash the text colour for 120 ms. */
+  * { @apply border-border; outline-color: var(--primary); }
+  html, body, #root { height: 100%; }
+  body {
+    @apply bg-background font-sans text-base text-foreground antialiased;
+    font-feature-settings: "cv05", "cv08";
+    overflow: hidden;
+  }
+  ::selection { background: color-mix(in srgb, var(--primary) 35%, transparent); color: var(--foreground-strong); }
+  * { scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }
+  :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+}
+
+/* A readout: tabular, open digits, a little tight. */
+@utility readout {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "cv05", "cv08", "ss01", "tnum";
+  letter-spacing: -0.01em;
+}
+/* Uppercase micro label above a value or a group. */
+@utility micro-label {
+  @apply text-xs text-muted-foreground uppercase;
+  letter-spacing: 0.08em;
+}
+/* A milled surface: hairline border, inset top highlight, no drop shadow. */
+@utility surface {
+  @apply rounded-lg border border-border bg-card;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.03);
+}
+/* A recessed well for code, logs and previews. */
+@utility well {
+  @apply rounded-md border border-border bg-well;
+}
+/* The main area's one faint glow; primary at 6 % so it reads as light, not colour. */
+@utility ambient {
+  background:
+    radial-gradient(900px 480px at 100% -12%, color-mix(in srgb, var(--primary) 6%, transparent), transparent 62%),
+    var(--background);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

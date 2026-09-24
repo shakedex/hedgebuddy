@@ -12,22 +12,43 @@
   "app": {
     "windows": [
       {
+        "label": "main",
         "title": "HedgeBuddy",
         "width": 960,
         "height": 640,
         "minWidth": 480,
-        "minHeight": 400
+        "minHeight": 400,
+        "backgroundColor": "#0f151d"
       }
     ],
     "security": {
-      "csp": null
+      "csp": {
+        "default-src": "'self'",
+        "script-src": "'self'",
+        "style-src": "'self' 'unsafe-inline'",
+        "font-src": "'self'",
+        "img-src": "'self'",
+        "connect-src": "ipc: http://ipc.localhost",
+        "object-src": "'none'",
+        "base-uri": "'none'",
+        "form-action": "'none'"
+      },
+      "devCsp": {
+        "default-src": "'self'",
+        "script-src": "'self' 'unsafe-inline'",
+        "style-src": "'self' 'unsafe-inline'",
+        "font-src": "'self'",
+        "img-src": "'self'",
+        "connect-src": "ipc: http://ipc.localhost ws://localhost:5173 http://localhost:5173"
+      },
+      "dangerousDisableAssetCspModification": ["style-src"]
     }
   },
   "bundle": {
     "active": true,
     "targets": "all",
     "macOS": {
-      "minimumSystemVersion": "12.0"
+      "minimumSystemVersion": "26.0"
     },
     "icon": [
       "icons/32x32.png",

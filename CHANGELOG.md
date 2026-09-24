@@ -7,6 +7,10 @@ All notable changes to this project are documented here. Versioning follows [Zer
 ### Changed
 - Fresh start. The Go/Fyne desktop app, the Go updater, and the 0.10 Python library are archived under the git tag `legacy/0.10.0`. Nothing in this line is compatible with them.
 - Default branch is now `main`. The old `master` branch was deleted; its last commit is tag `legacy/0.10.0`.
+- `check_requirements` counts a secret without a stored value as unmet.
+- `list_runs` decodes run files lossily, so one bad byte skips a single line instead of the whole day.
+- On Windows, atomic writes retry a rename that fails with `PermissionDenied` for up to one second.
+- The desktop app now requires macOS 26.0 or newer.
 
 ### Added
 - Cargo workspace with `hedgebuddy-core`, `hedgebuddy-cli`, and `hedgebuddy-app` (Tauri 2).
@@ -26,3 +30,9 @@ All notable changes to this project are documented here. Versioning follows [Zer
 - Python conformance tests assert the shared `expected.json` fixtures, like core.
 - `check_script` reports a missing or mismatched `hedgebuddy` package; manifests may start with a UTF-8 BOM.
 - Manual PyPI publish workflow with trusted publishing (`docs/releasing-python.md`).
+- The desktop app's first screens: Home, Runs with run details, a sidebar that collapses to an icon rail in narrow windows, and profile switching and creation.
+- Every tool has a typed result: `tools/list` advertises each tool's `outputSchema`, and a successful call returns `structuredContent` next to the same JSON text.
+- `hedgebuddy tools --schemas` prints every tool's input and output schema; the app's TypeScript types are generated from it.
+- The MCP server records each tool call in `activity.jsonl` (tool, target and outcome, never argument values) and trims the file to the last 200 calls once it passes 250.
+- Writes from the MCP server, `hedgebuddy call` and the app take a cross-process lock on the data folder, waiting up to 10 seconds before failing with "another HedgeBuddy is busy; try again".
+- The app keeps its preferences, such as when it was last opened, in `preferences.json`.

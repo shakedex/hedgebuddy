@@ -1,4 +1,4 @@
-# Manual smoke checklist (phases 3 and 4)
+# Manual smoke checklist (phases 3, 4 and 5A)
 
 These steps change real Hedge app settings and need a machine with OffShoot Pro (and optionally FoolCat Pro). Run them from Claude Desktop or Claude Code with the HedgeBuddy MCP server connected, or with `hedgebuddy call`. Record results in the boxes.
 
@@ -30,3 +30,17 @@ These steps change real Hedge app settings and need a machine with OffShoot Pro 
 ## 5. macOS (when available)
 - [ ] `attach_script` writes `~/Library/Preferences/Hedge/Workspaces/HedgeBuddy.json`; applying it from the OffShoot Helper menu attaches the script. Result:
 - [ ] `read_app_log` callback shows responses from `~/Library/Logs/Hedge/urlSchemeResponseLog.txt`; note whether that file is appended to or rewritten. Result:
+
+## 6. Desktop app (phase 5A)
+Run on Windows and macOS.
+- [ ] Launch the app (`cargo tauri dev` from `crates/app`, or an installer build). Home shows the active profile, the four readouts and Needs attention. Result:
+- [ ] With the app open, run `hedgebuddy call set_var '{"name":"SMOKE","type":"string","value":"1"}'` in a terminal. The Variables count on Home changes within a second without clicking. Result:
+- [ ] Ask Claude (MCP) to run any write tool. Home's "Claude, lately" shows the call within a second. Result:
+- [ ] Make a script fail (section 3). Home shows the failure with a red Failed readout; Runs shows the run with its traceback; Copy details pastes a readable summary. Result:
+- [ ] In Runs, open a run and click Copy details, then paste into a text editor. In the real webview (not the browser preview), the clipboard holds a readable run summary. Result:
+- [ ] Put the window beside OffShoot at about 480 px wide. The sidebar becomes the icon rail with badges, Home keeps the run counts, Needs attention and Recent runs, and Runs shows the list with the detail sliding over it. Result:
+- [ ] Hold the data folder's lock (run `hedgebuddy call run_app_command` with a long `wait_seconds` from Claude) and switch profiles in the app. The "Another HedgeBuddy is busy" toast offers Try again. Result:
+- [ ] Close the window: the app quits, and nothing stays in the tray or task list. Result:
+
+## 7. Typed tool results (MCP clients)
+- [ ] With Claude Desktop or Claude Code connected, run a tool call. It still works, and the client shows no schema error for the new `outputSchema` / `structuredContent` (JSON Schema 2020-12). Result:

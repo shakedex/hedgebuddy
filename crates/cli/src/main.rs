@@ -6,7 +6,7 @@ use std::process::ExitCode;
 use std::time::Duration;
 
 use clap::{Parser, Subcommand};
-use hedgebuddy_cli::tools::{self, Context};
+use hedgebuddy_tools::{self as tools, Context};
 use serde_json::Value;
 
 #[derive(Parser)]
@@ -26,7 +26,11 @@ enum Command {
     /// Print environment information (data directory and overrides in effect)
     Env,
     /// List every tool `call` and MCP clients can use
-    Tools,
+    Tools {
+        /// Print every tool's input and output JSON Schema as {tool: {input, output}}
+        #[arg(long)]
+        schemas: bool,
+    },
     /// Run one tool with JSON arguments ("-" reads them from stdin) and print its JSON result
     Call {
         /// Tool name, as listed by `hedgebuddy tools`
@@ -51,9 +55,16 @@ fn main() -> ExitCode {
                 ExitCode::FAILURE
             }
         },
-        Command::Tools => {
-            for t in tools::all() {
-                println!("{:<24} {}", t.name, t.description);
+        Command::Tools { schemas } => {
+            if schemas {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&tools::schemas()).expect("schemas serialize")
+                );
+            } else {
+                for t in tools::all() {
+                    println!("{:<24} {}", t.name, t.description);
+                }
             }
             ExitCode::SUCCESS
         }

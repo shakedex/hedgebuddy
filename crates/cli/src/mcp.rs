@@ -1,5 +1,6 @@
-//! The MCP server: an `rmcp` `ServerHandler` over [`crate::tools`] and
-//! [`crate::resources`]. Nothing here contains HedgeBuddy logic.
+//! The MCP server: an `rmcp` `ServerHandler` over `hedgebuddy_tools`'
+//! [`tools`] and [`resources`]. Nothing here contains HedgeBuddy logic.
+//! Every call of a known tool is appended to the Claude activity log.
 
 use std::sync::Arc;
 
@@ -13,8 +14,7 @@ use rmcp::model::{
 use rmcp::service::RequestContext;
 use rmcp::{ErrorData as McpError, RoleServer, ServerHandler, ServiceExt};
 
-use crate::resources;
-use crate::tools::{self, Context};
+use hedgebuddy_tools::{self as tools, resources, Context};
 
 const INSTRUCTIONS: &str = "HedgeBuddy manages variables, profiles and Python scripts for Hedge apps (OffShoot, FoolCat, EditReady, Canister) and drives those apps through their URL commands. Secret values are masked; pass reveal only when the operator explicitly asks to see one. Tools that change a Hedge app's settings, run app commands, or delete something accept dry_run: run them with dry_run first and show the operator the result before applying. run_app_command refuses commands that need confirmation until it is called with confirmed: true after the operator agrees. Start with environment and list_apps; describe_app lists each app's events, payload keys and commands; the author_script prompt gives a script template.";
 
@@ -32,20 +32,22 @@ impl Server {
 }
 
 fn tool_list() -> Vec<Tool> {
+    let object = |v: serde_json::Value| match v {
+        serde_json::Value::Object(map) => map,
+        _ => serde_json::Map::new(),
+    };
     tools::all()
         .into_iter()
         .map(|t| {
-            let schema = match (t.schema)() {
-                serde_json::Value::Object(map) => map,
-                _ => serde_json::Map::new(),
-            };
-            Tool::new(t.name, t.description, Arc::new(schema)).with_annotations(
-                ToolAnnotations::new()
-                    .read_only(t.hints.read_only)
-                    .destructive(t.hints.destructive)
-                    .idempotent(t.hints.idempotent)
-                    .open_world(false),
-            )
+            Tool::new(t.name, t.description, Arc::new(object((t.schema)())))
+                .with_raw_output_schema(Arc::new(object((t.output_schema)())))
+                .with_annotations(
+                    ToolAnnotations::new()
+                        .read_only(t.hints.read_only)
+                        .destructive(t.hints.destructive)
+                        .idempotent(t.hints.idempotent)
+                        .open_world(false),
+                )
         })
         .collect()
 }
@@ -88,13 +90,31 @@ impl ServerHandler for Server {
             .map(serde_json::Value::Object)
             .unwrap_or(serde_json::Value::Null);
         let ctx = self.ctx.clone();
-        let result = tokio::task::spawn_blocking(move || tools::call(&ctx, &name, args))
-            .await
-            .map_err(|e| McpError::internal_error(format!("tool panicked: {e}"), None))?;
+        // Only the name of what the call acts on is kept, never the arguments.
+        let target = hedgebuddy_core::activity_target(&args);
+        let result = tokio::task::spawn_blocking(move || {
+            let result = tools::call(&ctx, &name, args);
+            let record = hedgebuddy_core::ActivityRecord::now(
+                &name,
+                target,
+                tools::activity_outcome(&result),
+            );
+            if let Err(e) = ctx.store.append_activity(&record) {
+                // stdout carries protocol messages only.
+                eprintln!("hedgebuddy: cannot record Claude activity: {e}");
+            }
+            result
+        })
+        .await
+        .map_err(|e| McpError::internal_error(format!("tool panicked: {e}"), None))?;
         let result = match result {
-            Ok(value) => CallToolResult::success(vec![ContentBlock::text(
-                serde_json::to_string_pretty(&value).expect("JSON values serialize"),
-            )]),
+            Ok(value) => {
+                let mut ok = CallToolResult::success(vec![ContentBlock::text(
+                    serde_json::to_string_pretty(&value).expect("JSON values serialize"),
+                )]);
+                ok.structured_content = Some(value);
+                ok
+            }
             Err(e) => CallToolResult::error(vec![ContentBlock::text(e.0)]),
         };
         Ok(result.into())

@@ -62,6 +62,8 @@ fn every_valid_fixture_data_dir_validates() {
     let secrets = validator("secrets");
     let run_record = validator("run-record");
     let manifest = validator("script-manifest");
+    let activity_record = validator("activity-record");
+    let preferences = validator("preferences");
 
     let cases = dirs_in(&schema_root().join("fixtures/valid"));
     assert!(!cases.is_empty(), "no valid fixture cases found");
@@ -110,6 +112,28 @@ fn every_valid_fixture_data_dir_validates() {
                 assert_valid(&run_record, &v, &format!("{}:{}", log.display(), i + 1));
             }
         }
+
+        let activity = case.join("activity.jsonl");
+        if activity.exists() {
+            let text = fs::read_to_string(&activity).unwrap();
+            for (i, line) in text.lines().filter(|l| !l.trim().is_empty()).enumerate() {
+                let v: Value = serde_json::from_str(line).unwrap();
+                assert_valid(
+                    &activity_record,
+                    &v,
+                    &format!("{}:{}", activity.display(), i + 1),
+                );
+            }
+        }
+
+        let prefs = case.join("preferences.json");
+        if prefs.exists() {
+            assert_valid(
+                &preferences,
+                &load_json(&prefs),
+                &format!("{name}/preferences.json"),
+            );
+        }
     }
 
     assert!(
@@ -145,7 +169,43 @@ fn every_invalid_fixture_fails_its_schema() {
         }
     }
     assert!(
-        checked >= 7,
-        "expected at least 7 invalid fixtures, checked {checked}"
+        checked >= 11,
+        "expected at least 11 invalid fixtures, checked {checked}"
+    );
+}
+
+#[test]
+fn activity_records_core_writes_conform() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = hedgebuddy_core::Store::open(dir.path());
+    let args = serde_json::json!({"app": "offshoot"});
+    let rec = hedgebuddy_core::ActivityRecord::now(
+        "run_app_command",
+        hedgebuddy_core::activity_target(&args),
+        hedgebuddy_core::ActivityOutcome::NeedsConfirmation,
+    );
+    store.append_activity(&rec).unwrap();
+    let v = validator("activity-record");
+    for line in std::fs::read_to_string(store.activity_path())
+        .unwrap()
+        .lines()
+    {
+        assert_valid(&v, &serde_json::from_str(line).unwrap(), "activity line");
+    }
+}
+
+#[test]
+fn preferences_core_writes_conform() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = hedgebuddy_core::Store::open(dir.path());
+    let patch: hedgebuddy_core::PreferencesPatch =
+        serde_json::from_str(r#"{"last_opened": "2026-09-23T10:00:00.000Z"}"#).unwrap();
+    store.update_preferences(&patch).unwrap();
+    let v = validator("preferences");
+    let text = std::fs::read_to_string(store.preferences_path()).unwrap();
+    assert_valid(
+        &v,
+        &serde_json::from_str(&text).unwrap(),
+        "preferences.json",
     );
 }

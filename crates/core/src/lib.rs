@@ -15,13 +15,17 @@
 //! [`volumes::inspect_volume`] and [`python_env::find_python`] cover camera
 //! cards and the Python interpreter.
 
+pub mod activity;
 pub mod catalog;
+pub mod clock;
 pub mod error;
 pub(crate) mod fs_util;
 pub mod hedge;
 pub mod host;
+pub mod lock;
 pub mod manifest;
 pub mod paths;
+pub mod preferences;
 pub mod profile;
 pub mod python_env;
 pub mod runs;
@@ -32,19 +36,27 @@ pub mod variable;
 pub mod volumes;
 pub mod watch;
 
+pub use activity::{
+    activity_target, ActivityOutcome, ActivityRecord, ACTIVITY_KEEP, ACTIVITY_TRIM_AT,
+};
 pub use catalog::Catalog;
+pub use clock::now_rfc3339;
 pub use error::{CoreError, Result};
 pub use hedge::Hedge;
 pub use host::{FakeHost, Host, Os, RealHost};
+pub use lock::{DataLock, BUSY_MESSAGE, LOCK_TIMEOUT};
 pub use manifest::{
     check_requirements, extract_manifest_text, parse_manifest, Manifest, Requirement,
     RequirementIssue,
 };
 pub use paths::{data_dir, PathError, DATA_DIR_ENV};
+pub use preferences::{Preferences, PreferencesPatch};
 pub use profile::Profile;
 pub use runs::{LogLine, Run, RunFilter, RunRecord, RunStatus, RUN_RETENTION_DAYS};
 pub use scripts::{validate_script_name, ScriptCheck, ScriptInfo};
 pub use secrets::{ResolvedVariable, VariableInput};
 pub use store::{Index, Store};
 pub use variable::{validate_slug, validate_var_name, VarType, VarValue, Variable};
-pub use watch::{watch, Change, ChangeKind, WatchHandle};
+pub use watch::{
+    categories, watch, watch_batched, Category, Change, ChangeKind, WatchHandle, BATCH_WINDOW,
+};
