@@ -4,7 +4,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { BridgeError } from "@/api/bridge";
-import type { RunStatus } from "@/api/tools.gen";
+import type { Action, AttachState, RunStatus } from "@/api/tools.gen";
+import { ChangePreviewDialog } from "@/components/app/change-preview-dialog";
 import { CountBadge } from "@/components/app/count-badge";
 import { EmptyState } from "@/components/app/empty-state";
 import { ErrorPanel } from "@/components/app/error-panel";
@@ -16,9 +17,6 @@ import { StatusIcon } from "@/components/app/status-icon";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
-} from "@/components/ui/dialog";
-import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioGroup,
   DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -28,6 +26,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { describeActions, describeState } from "@/lib/actions";
 import { appName, clock, dayKey, dayLabel, duration, plural, when } from "@/lib/format";
 import { NAV_ICONS, STATUS, runStatusKey, type StatusKey } from "@/lib/status";
 import { cn } from "@/lib/utils";
@@ -136,6 +135,9 @@ export function DesignGallery() {
           </Section>
           <Section index={10} title="List and detail" note="Two panes from 640 px of container width; below that the detail slides over the list with a back button.">
             <ListDetailDemo />
+          </Section>
+          <Section index={11} title="Change preview" note="Spec §7: any action outside the data folder, and any deletion, opens this dialog. It dry-runs the tool, then shows the plan in plain words; Apply runs it for real.">
+            <ChangePreviewGallery />
           </Section>
         </div>
       </main>
@@ -585,10 +587,6 @@ function Controls() {
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-        <div className="flex items-center justify-between gap-3">
-          <span className="text-sm font-medium text-foreground">Change preview</span>
-          <DetachDialog />
-        </div>
         <div className="flex flex-wrap items-center gap-2 pt-1">
           <Badge>OffShoot · FileCopyCompleted</Badge>
           <Badge variant="outline">no manifest</Badge>
@@ -598,34 +596,6 @@ function Controls() {
         </div>
       </div>
     </div>
-  );
-}
-
-function DetachDialog() {
-  return (
-    <Dialog>
-      <DialogTrigger asChild>
-        <Button variant="outline" size="sm">Detach…</Button>
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Detach <Mono>on_copy_complete.py</Mono>?</DialogTitle>
-          <DialogDescription>HedgeBuddy will make these changes in OffShoot for the profile <Mono className="text-foreground">commercial-one-day</Mono>.</DialogDescription>
-        </DialogHeader>
-        <ul className="well flex flex-col gap-1 px-3 py-2 font-mono text-xs text-foreground">
-          <li>FileCopyCompleted: on_copy_complete.py → nothing attached</li>
-          <li className="text-muted-foreground">The script file stays in your scripts folder.</li>
-        </ul>
-        <DialogFooter>
-          <DialogClose asChild>
-            <Button variant="outline" size="sm">Cancel</Button>
-          </DialogClose>
-          <DialogClose asChild>
-            <Button size="sm">Detach</Button>
-          </DialogClose>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
   );
 }
 
@@ -738,6 +708,120 @@ function RunDetail({ run }: { run: FakeRun }) {
         <Button variant="outline" size="sm"><Copy aria-hidden /> Copy details</Button>
         <Button variant="outline" size="sm"><FileCode aria-hidden /> Open script</Button>
       </div>
+    </div>
+  );
+}
+
+/* 11 Change preview --------------------------------------------------------------------------------- */
+
+/** What an attach on Windows would replace: the operator's own file, wired straight into OffShoot's registry. */
+const REPLACES_EXTERNAL: AttachState = { state: "external", path: "C:\\Tools\\notify_dit.py" };
+/** What an attach on macOS would replace: an entry already staged for OffShoot Helper to pick up. */
+const REPLACES_STAGED: AttachState = { state: "staged", path: "on_x.py", workspace: "doc-series" };
+
+const ATTACH_WIN_ACTIONS: Action[] = [
+  {
+    action: "registry_set",
+    key: "HKCU\\Software\\Bounce Software\\OffShoot\\Scripting",
+    value: "FileCopyCompleted",
+    data: { type: "string", data: "C:\\Users\\op\\HedgeBuddy\\commercial-one-day\\scripts\\on_copy_complete.py" },
+  },
+];
+const ATTACH_MAC_ACTIONS: Action[] = [
+  { action: "workspace_prefs", path: "~/Library/Application Support/OffShoot Helper/workspace.json", set: { FileCopyCompleted: "on_x.py" } },
+];
+
+const CHANGE_PREVIEW_BUTTONS = [
+  { key: "planning", label: "Planning forever" },
+  { key: "failed", label: "Plan failed" },
+  { key: "blocked", label: "Blocked" },
+  { key: "nothing", label: "Nothing to do" },
+  { key: "attach-win", label: "Attach, replaces a file" },
+  { key: "attach-mac", label: "Attach, macOS staged" },
+  { key: "delete", label: "Delete script" },
+] as const;
+
+function ChangePreviewGallery() {
+  const [openKey, setOpenKey] = useState<(typeof CHANGE_PREVIEW_BUTTONS)[number]["key"] | null>(null);
+  const close = () => setOpenKey(null);
+  const confirmed = (message: string) => () => toast(message);
+
+  return (
+    <div className="flex flex-wrap gap-2">
+      {CHANGE_PREVIEW_BUTTONS.map(({ key, label }) => (
+        <Button key={key} variant="outline" size="sm" onClick={() => setOpenKey(key)}>{label}</Button>
+      ))}
+
+      <ChangePreviewDialog
+        open={openKey === "planning"} onOpenChange={close}
+        title="Attach on_copy_complete.py?" applyLabel="Attach"
+        plan={() => new Promise<never>(() => undefined)}
+        describe={() => ({ summary: "", changes: [] })}
+        apply={() => Promise.resolve()}
+      />
+
+      <ChangePreviewDialog
+        open={openKey === "failed"} onOpenChange={close}
+        title="Attach on_copy_complete.py?" applyLabel="Attach"
+        plan={() => Promise.reject<{ actions: Action[] }>(new Error("cannot read OffShoot's registry key"))}
+        describe={(p) => ({ summary: "HedgeBuddy will make these changes.", changes: describeActions(p.actions) })}
+        apply={() => Promise.resolve()}
+      />
+
+      <ChangePreviewDialog
+        open={openKey === "blocked"} onOpenChange={close}
+        title="Delete profile commercial-one-day?" applyLabel="Delete" destructive
+        plan={() => Promise.resolve({ actions: [] as Action[] })}
+        describe={() => ({ summary: "", changes: [], blocked: "OffShoot is running. Quit it before deleting this profile." })}
+        apply={() => Promise.resolve()}
+      />
+
+      <ChangePreviewDialog
+        open={openKey === "nothing"} onOpenChange={close}
+        title="Sync attachments?" applyLabel="Sync"
+        plan={() => Promise.resolve({ actions: [] as Action[] })}
+        describe={() => ({ summary: "", changes: [], nothingToDo: "Every script already matches its manifest. Nothing to change." })}
+        apply={() => Promise.resolve()}
+      />
+
+      <ChangePreviewDialog
+        open={openKey === "attach-win"} onOpenChange={close}
+        title="Attach on_copy_complete.py?" applyLabel="Attach"
+        plan={() => Promise.resolve({ actions: ATTACH_WIN_ACTIONS })}
+        describe={(p) => ({
+          summary: <>HedgeBuddy will attach <Mono className="text-foreground">on_copy_complete.py</Mono> to OffShoot's FileCopyCompleted event.</>,
+          changes: describeActions(p.actions),
+          warnings: [<>Replaces {describeState(REPLACES_EXTERNAL)}</>],
+        })}
+        apply={() => Promise.resolve()}
+        onApplied={confirmed("Attached on_copy_complete.py")}
+      />
+
+      <ChangePreviewDialog
+        open={openKey === "attach-mac"} onOpenChange={close}
+        title="Attach on_x.py?" applyLabel="Attach"
+        plan={() => Promise.resolve({ actions: ATTACH_MAC_ACTIONS })}
+        describe={(p) => ({
+          summary: <>HedgeBuddy will stage <Mono className="text-foreground">on_x.py</Mono> for OffShoot Helper to attach next time it runs.</>,
+          changes: describeActions(p.actions),
+          warnings: [<>Replaces {describeState(REPLACES_STAGED)}</>],
+        })}
+        apply={() => Promise.resolve()}
+        onApplied={confirmed("Staged on_x.py")}
+      />
+
+      <ChangePreviewDialog
+        open={openKey === "delete"} onOpenChange={close}
+        title="Delete on_copy_complete.py?" applyLabel="Delete" destructive
+        plan={() => Promise.resolve({ actions: [] as Action[] })}
+        describe={() => ({
+          summary: <>HedgeBuddy will delete <Mono className="text-foreground">on_copy_complete.py</Mono> from commercial-one-day.</>,
+          changes: [{ kind: "delete", target: "on_copy_complete.py", detail: "removed from commercial-one-day" }],
+          warnings: [<>OffShoot · FileCopyCompleted will be left pointing at a file that no longer exists</>],
+        })}
+        apply={() => Promise.resolve()}
+        onApplied={confirmed("Deleted on_copy_complete.py")}
+      />
     </div>
   );
 }
