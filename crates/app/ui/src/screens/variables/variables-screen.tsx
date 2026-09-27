@@ -47,6 +47,7 @@ export function VariablesScreen({ name }: { name?: string }) {
           onFilterTextChange={setFilterText}
           onSelect={(n) => navigate(`/variables/${encodeURIComponent(n)}`, { replace: Boolean(name) })}
           noProfile={noProfile}
+          allProfiles={profiles.data?.profiles ?? []}
         />
       }
       detail={

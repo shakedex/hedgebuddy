@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { useImportProfile } from "@/hooks/use-import-profile";
 import { useListKeyboard } from "@/hooks/use-list-keyboard";
 import { summarize } from "@/lib/var-values";
 import { cn } from "@/lib/utils";
@@ -124,13 +125,16 @@ function VariableListSkeleton() {
  * above the profile's own variables, one flat listbox. `noProfile` (from `list_profiles`) takes priority over
  * whatever `overview` itself is doing, since with no active profile that query only ever errors.
  */
-export function VariableList({ overview, selectedName, filterText, onFilterTextChange, onSelect, noProfile }: {
+export function VariableList({ overview, selectedName, filterText, onFilterTextChange, onSelect, noProfile, allProfiles }: {
   overview: UseQueryResult<VariablesOverviewOutput>;
   selectedName: string | null;
   filterText: string;
   onFilterTextChange: (text: string) => void;
   onSelect: (name: string) => void;
   noProfile: boolean;
+  /** Every profile name, active or not — tells the no-profile empty state "nobody has made one yet" from
+   *  "one exists, just none is active" (spec §6.1's own distinction for Home's first-run step). */
+  allProfiles: string[];
 }) {
   // See RunList: keeps the *last* error across the "pending" flicker a retry causes.
   const lastError = useRef<unknown>(null);
@@ -140,6 +144,7 @@ export function VariableList({ overview, selectedName, filterText, onFilterTextC
   const [createOpen, setCreateOpen] = useState(false);
   const newProfileRef = useRef<HTMLButtonElement>(null);
   const filterInputRef = useRef<HTMLInputElement>(null);
+  const importProfile = useImportProfile();
 
   // Creating a profile from the empty state below unmounts that whole branch (and `newProfileRef` with it)
   // once `noProfile` goes false, so the dialog's own close-focus restore has nothing left to land on. This
@@ -169,21 +174,36 @@ export function VariableList({ overview, selectedName, filterText, onFilterTextC
   const onKeyDown = useListKeyboard(rowIds, selectedRowId, onRowSelect, (id) => id);
 
   // No profile and a failed load each replace the whole pane (see RunList): neither the filter nor New would
-  // do anything useful yet.
+  // do anything useful yet. "No profile yet" (nobody has made one) and "No active profile" (one exists, just
+  // not this one) are different situations with different fixes — spec §6.1 draws the same line for Home's
+  // own first-run step.
   if (noProfile) {
+    const hasOtherProfiles = allProfiles.length > 0;
     return (
       <div className="flex h-full flex-col">
         <EmptyState
           icon={Braces}
-          title="No profile yet"
+          title={hasOtherProfiles ? "No active profile" : "No profile yet"}
           className="px-3 py-6"
           action={
-            <Button ref={newProfileRef} size="sm" onClick={() => setCreateOpen(true)}>
-              New profile
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              {hasOtherProfiles && (
+                <Button asChild size="sm">
+                  <Link href="/">Choose a profile</Link>
+                </Button>
+              )}
+              <Button ref={newProfileRef} variant={hasOtherProfiles ? "outline" : "default"} size="sm" onClick={() => setCreateOpen(true)}>
+                New profile
+              </Button>
+              <Button variant="outline" size="sm" onClick={importProfile.start}>
+                Import a profile…
+              </Button>
+            </div>
           }
         >
-          Variables belong to a profile — create one to start adding them.
+          {hasOtherProfiles
+            ? "Pick a profile on Home to make it active, or add another."
+            : "Variables belong to a profile — create one to start adding them."}
         </EmptyState>
         <CreateProfileDialog
           open={createOpen}
@@ -191,6 +211,7 @@ export function VariableList({ overview, selectedName, filterText, onFilterTextC
           activate
           onCloseFocus={() => newProfileRef.current?.focus()}
         />
+        {importProfile.dialog}
       </div>
     );
   }

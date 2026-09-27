@@ -36,7 +36,15 @@ export function markSaved(key: string) {
   dirty.delete(key);
 }
 
-/** True to go ahead (discarding the edits), false to stay. Asks only when something is unsaved. */
+/**
+ * True to go ahead (discarding the edits), false to stay. Asks only when something is unsaved.
+ *
+ * Deliberately does not clear `dirty` on "Discard": the actual leaving (a navigate, a profile switch, a
+ * delete) unmounts whichever form was dirty, and `useUnsaved`'s own cleanup unregisters its key then. Until
+ * that leaving genuinely happens — Discard doesn't guarantee it does, since the caller can still bail out
+ * afterwards (Cancel on a delete's own preview, say) — the form is still on screen and still unsaved, so a
+ * *different* attempt to leave should still ask. Forcing the set clean here left exactly that gap.
+ */
 export function confirmLeave(): Promise<boolean> {
   if (!hasUnsaved()) return Promise.resolve(true);
   if (pending) return Promise.resolve(false);
@@ -44,7 +52,6 @@ export function confirmLeave(): Promise<boolean> {
     pending = {
       decide: (leave) => {
         pending = null;
-        if (leave) dirty.clear();
         notify();
         resolve(leave);
       },

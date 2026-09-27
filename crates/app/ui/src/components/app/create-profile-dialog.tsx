@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { useCreateProfile } from "@/api/queries";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,12 @@ export function CreateProfileDialog({ open, onOpenChange, activate, onCloseFocus
   const create = useCreateProfile();
   const invalid = name.length > 0 && !SLUG.test(name);
 
+  // A busy toast's "Try again" can outlive Cancel — guard it the same way Export and Import do, so it does
+  // nothing once the dialog has closed, and never fires twice at once.
+  const openRef = useRef(open);
+  openRef.current = open;
+  const inFlightRef = useRef(false);
+
   /** Closing (Create, Cancel, Escape or an overlay click) always clears the fields for next time, and the
    *  create-retry memory with them (ruling 16): a later create starts clean rather than reusing this round's. */
   const close = (next: boolean) => {
@@ -34,21 +40,29 @@ export function CreateProfileDialog({ open, onOpenChange, activate, onCloseFocus
     }
   };
 
-  const go = () =>
+  const go = () => {
+    if (inFlightRef.current || !openRef.current) return;
+    inFlightRef.current = true;
     create.mutate(
       { name, description, activate },
       {
         onSuccess: () => {
+          inFlightRef.current = false;
           toast(`Profile ${name} created`);
           close(false);
         },
-        onError: (e) => showError(e, submit),
+        onError: (e) => {
+          inFlightRef.current = false;
+          showError(e, submit);
+        },
       },
     );
+  };
 
   // Rule for this task: creating a profile that activates changes the active profile, so it asks first,
   // exactly like switching profiles does. Declining leaves the dialog open with nothing done.
   const submit = () => {
+    if (inFlightRef.current || !openRef.current) return;
     if (activate) void confirmLeave().then((ok) => { if (ok) go(); });
     else go();
   };

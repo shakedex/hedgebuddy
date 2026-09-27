@@ -4,6 +4,7 @@ import { useActivateProfile } from "@/api/queries";
 import { CreateProfileDialog } from "@/components/app/create-profile-dialog";
 import { Mono } from "@/components/app/mono";
 import { Button } from "@/components/ui/button";
+import { useImportProfile } from "@/hooks/use-import-profile";
 import { showError } from "@/lib/toast";
 
 function StepNumber({ n }: { n: number }) {
@@ -37,12 +38,19 @@ function ChooseProfile({ profiles }: { profiles: string[] }) {
 function CreateFirstProfile() {
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const importProfile = useImportProfile();
   return (
     <>
-      <Button ref={triggerRef} size="sm" className="w-fit" onClick={() => setOpen(true)}>
-        Create profile
-      </Button>
+      <div className="flex flex-wrap gap-2">
+        <Button ref={triggerRef} size="sm" className="w-fit" onClick={() => setOpen(true)}>
+          Create profile
+        </Button>
+        <Button variant="outline" size="sm" className="w-fit" onClick={importProfile.start}>
+          Import a profile…
+        </Button>
+      </div>
       <CreateProfileDialog open={open} onOpenChange={setOpen} activate onCloseFocus={() => triggerRef.current?.focus()} />
+      {importProfile.dialog}
     </>
   );
 }

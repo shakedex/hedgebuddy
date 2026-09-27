@@ -5,6 +5,7 @@ import { invalidateFor } from "@/api/queries";
 import { ChangePreviewDialog } from "@/components/app/change-preview-dialog";
 import { Mono } from "@/components/app/mono";
 import { appName, plural } from "@/lib/format";
+import { focusMainHeading } from "@/lib/focus";
 
 /**
  * Spec §6.3 "Profile menu": delete previews which attached scripts would be left pointing at deleted files.
@@ -58,6 +59,11 @@ export function DeleteProfileDialog({ open, onOpenChange, name, returnFocus }: {
         // "No profile yet" — so this doesn't force a navigation of its own.
         await invalidateFor(["index"]);
         toast(`Deleted ${name}`);
+        // This dialog's own close animation (`returnFocus` above) races the profile pill actually unmounting
+        // once `active` goes to `null` — the animation usually wins, refocusing the pill for a moment before
+        // it's yanked out from under itself, stranding focus on `<body>`. Landing it on the screen's own
+        // heading here, after the data (and so the unmount) has definitely happened, isn't racing anything.
+        focusMainHeading();
       }}
     />
   );

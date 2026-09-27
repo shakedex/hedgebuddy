@@ -1,16 +1,15 @@
 import { useRef, useState } from "react";
 import { ChevronDown, Download, Layers, Plus, Trash2, Upload } from "lucide-react";
-import { callApp } from "@/api/bridge";
 import { useActivateProfile, useProfiles } from "@/api/queries";
 import { CreateProfileDialog } from "@/components/app/create-profile-dialog";
 import { DeleteProfileDialog } from "@/components/app/delete-profile-dialog";
 import { ExportProfileDialog } from "@/components/app/export-profile-dialog";
-import { ImportProfileDialog } from "@/components/app/import-profile-dialog";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useImportProfile } from "@/hooks/use-import-profile";
 import { showError } from "@/lib/toast";
 import { confirmLeave } from "@/lib/unsaved";
 
@@ -18,7 +17,8 @@ type PendingAction = "create" | "export" | "import" | "delete" | null;
 
 /**
  * Spec §6.1: sits in the toolbar. With no active profile, Home shows its first-run steps instead (the
- * trigger and its menu render nothing then; the dialogs below still do, so one closing mid-animation from a
+ * trigger and its menu render nothing then — spec §6.1/§6.2's own first-run steps are where Import lives in
+ * that case; see `useImportProfile`. The dialogs below still do render, so one closing mid-animation from a
  * delete that just cleared the active profile is never yanked out from under itself).
  *
  * Reads `list_profiles`, not the home summary: the summary reads nearly everything, so one bad file can fail
@@ -30,11 +30,7 @@ export function ProfileSwitcher() {
   const [createOpen, setCreateOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const [importOpen, setImportOpen] = useState(false);
-  const [importPath, setImportPath] = useState<string | null>(null);
-  // Bumped every time a file is picked, so `ImportProfileDialog` fully remounts (a fresh NAME field and
-  // "Switch to it") even when the very same file is chosen twice in a row.
-  const [importKey, setImportKey] = useState(0);
+  const importProfile = useImportProfile();
   const triggerRef = useRef<HTMLButtonElement>(null);
   /** Set by a menu item's `onSelect`, consumed by the dropdown's `onCloseAutoFocus` once it has actually
    *  closed — see that handler's own comment for why this can't happen straight from `onSelect`. */
@@ -98,8 +94,8 @@ export function ProfileSwitcher() {
               // from onSelect (while the menu is still tearing down its own focus scope) is what left a
               // ghost DropdownMenuContent behind and broke focus restoration before — running it from here,
               // once the menu has genuinely closed, avoids that. Focus goes to the trigger up front so
-              // there's never a gap with nothing focused, and so a `ChangePreviewDialog` opened a beat later
-              // still captures the right element as its "opener".
+              // there's never a gap with nothing focused, and so a `ChangePreviewDialog` (or `start()`'s own
+              // opener capture) opened a beat later still captures the right element.
               e.preventDefault();
               triggerRef.current?.focus();
 
@@ -116,15 +112,7 @@ export function ProfileSwitcher() {
               }
 
               // action === "import"
-              callApp("pick_import_file", {}).then(
-                (r) => {
-                  if (!r.path) return; // Cancelled: nothing to import, nothing changed.
-                  setImportPath(r.path);
-                  setImportKey((k) => k + 1);
-                  setImportOpen(true);
-                },
-                (err: unknown) => showError(err),
-              );
+              importProfile.start();
             }}
           >
             <DropdownMenuLabel>Profiles</DropdownMenuLabel>
@@ -174,17 +162,11 @@ export function ProfileSwitcher() {
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
         name={deletingNameRef.current}
-        returnFocus={() => triggerRef.current}
+        // Deleting the active profile is exactly what unmounts this pill; fall back to the screen's own
+        // heading rather than a trigger that's no longer there (or leaving focus on `<body>`).
+        returnFocus={() => document.getElementById("screen-heading")}
       />
-      {importPath && (
-        <ImportProfileDialog
-          key={importKey}
-          open={importOpen}
-          onOpenChange={setImportOpen}
-          path={importPath}
-          onCloseFocus={() => triggerRef.current?.focus()}
-        />
-      )}
+      {importProfile.dialog}
     </>
   );
 }
