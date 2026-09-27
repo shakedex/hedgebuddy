@@ -8,7 +8,9 @@
 use std::collections::HashMap;
 use std::ffi::OsString;
 use std::fs;
+use std::net::{Ipv4Addr, Ipv6Addr};
 use std::path::{Component, Path, PathBuf, Prefix};
+use std::str::FromStr;
 
 use hedgebuddy_core::{
     read_profile_export, validate_script_name, write_profile_export, CoreError, ImportSummary, Os,
@@ -172,11 +174,21 @@ fn unc_server(path: &str) -> Option<&str> {
 /// That is a server named with a dot (`files.example.com`, `nas.`, `10.0.0.5`,
 /// also with an ideographic or full-width dot), an IPv6 address (`fe80::1`,
 /// `[::1]`), or a one-number address Windows also accepts (`167772165`,
-/// `0x0a000005`). The host of a WebDAV name (`host@SSL@443`) is the part
-/// before `@`. A one-word name such as `nas` is found on the local network
-/// only, and is looked at.
+/// `0x0a000005`) — except a strictly parsed IPv4 or IPv6 literal that stays
+/// on the local network ([`is_local_ip_literal`]: private/[RFC 1918],
+/// loopback or link-local), or a `*.local` name (mDNS), both of which are
+/// looked at instead. A decimal or hex address is never such a literal (it
+/// parses as neither dotted-quad IPv4 nor colon-separated IPv6), so it stays
+/// unchecked along with every other dotted, numeric or hex host. The host of
+/// a WebDAV name (`host@SSL@443`) is the part before `@`. A one-word name
+/// such as `nas` is found on the local network only, and is looked at.
+///
+/// [RFC 1918]: https://www.rfc-editor.org/rfc/rfc1918
 fn is_remote_host(server: &str) -> bool {
     let host = server.split('@').next().unwrap_or(server);
+    if is_local_ip_literal(host) || host.to_ascii_lowercase().ends_with(".local") {
+        return false;
+    }
     let b = host.as_bytes();
     let decimal = !b.is_empty() && b.iter().all(u8::is_ascii_digit);
     let hex = b.len() > 2
@@ -184,6 +196,30 @@ fn is_remote_host(server: &str) -> bool {
         && b[1].eq_ignore_ascii_case(&b'x')
         && b[2..].iter().all(u8::is_ascii_hexdigit);
     decimal || hex || host.contains(['.', ':', '[', ']', '\u{3002}', '\u{ff0e}', '\u{ff61}'])
+}
+
+/// Whether `host` (optionally bracketed, `[::1]`) is a strictly parsed IPv4
+/// or IPv6 literal that stays on the local network: private ([RFC 1918]),
+/// loopback or link-local. A decimal or hex number (`167772165`,
+/// `0x0a000005`) never parses as one, even though it names the same address
+/// — [`is_remote_host`] means those to stay unchecked regardless.
+///
+/// [RFC 1918]: https://www.rfc-editor.org/rfc/rfc1918
+fn is_local_ip_literal(host: &str) -> bool {
+    let unbracketed = host
+        .strip_prefix('[')
+        .and_then(|h| h.strip_suffix(']'))
+        .unwrap_or(host);
+    if let Ok(v4) = Ipv4Addr::from_str(unbracketed) {
+        return v4.is_private() || v4.is_loopback() || v4.is_link_local();
+    }
+    if let Ok(v6) = Ipv6Addr::from_str(unbracketed) {
+        // `Ipv6Addr::is_unicast_link_local` checks the same `fe80::/10` prefix by hand, rather than leaning
+        // on a standard-library method whose stability has moved around across Rust versions.
+        let link_local = (v6.segments()[0] & 0xffc0) == 0xfe80;
+        return v6.is_loopback() || link_local;
+    }
+    false
 }
 
 /// Whether each volume root seen in one `path_status` call is present, by
@@ -1551,16 +1587,15 @@ mod tests {
             r"\\?\UNC\files.example.com\share\x",
             r"\\?\unc\files.example.com\share\x",
             r"\\?\UNC\nas/evil.example\share\x",
-            r"\\10.0.0.5\share\x",
-            r"\\127.0.0.1\c$\x",
-            r"\\[fe80::1]\share\x",
-            r"\\fe80::1\share\x",
             r"\\167772165\share\x",
             r"\\0x0A000005\share\x",
             r"\\files.example.com@SSL@443\DavWWWRoot\x",
             r"\\134744072@80\share\x",
             "\\\\files\u{3002}example\\share\\x",
             "\\\\files\u{ff0e}example\\share\\x",
+            // A public IPv4/IPv6 literal is not on the local network either.
+            r"\\8.8.8.8\share\x",
+            r"\\[2001:4860:4860::8888]\share\x",
         ];
         let (states, seen) = probed(&remote, &[]);
         assert!(seen.is_empty(), "{seen:?}");
@@ -1579,6 +1614,22 @@ mod tests {
             assert!(states[0].checked, "{p}");
             assert!(!seen.is_empty(), "{p}");
         }
+        // A strictly parsed private, loopback or link-local IP literal, and a `*.local` (mDNS) name, stay on
+        // the local network too: looked at like a one-word server, not skipped like a dotted host (ruling
+        // narrowing the blanket "any dot" rule above).
+        for p in [
+            r"\\10.0.0.5\share\x",
+            r"\\127.0.0.1\c$\x",
+            r"\\[fe80::1]\share\x",
+            r"\\fe80::1\share\x",
+            r"\\[::1]\share\x",
+            r"\\nas.local\share\x",
+            r"\\NAS.LOCAL\share\x",
+        ] {
+            let (states, seen) = probed(&[p], &[]);
+            assert!(states[0].checked, "{p}");
+            assert!(!seen.is_empty(), "{p}");
+        }
         assert_eq!(unc_server(r"\\nas\share"), Some("nas"));
         assert_eq!(unc_server("//nas/share"), Some("nas"));
         assert_eq!(unc_server(r"\\?\UNC\nas/x\share"), Some("nas/x"));
@@ -1588,6 +1639,27 @@ mod tests {
         assert_eq!(unc_server("/Volumes/x.y/z"), None);
         for name in ["nas", "NAS-01", "0xnas", "0x", ""] {
             assert!(!is_remote_host(name), "{name}");
+        }
+        // Direct coverage of `is_local_ip_literal`'s narrowing, independent of UNC parsing.
+        for name in [
+            "10.0.0.5",
+            "127.0.0.1",
+            "fe80::1",
+            "[fe80::1]",
+            "::1",
+            "nas.local",
+            "NAS.LOCAL",
+        ] {
+            assert!(!is_remote_host(name), "{name}");
+        }
+        for name in [
+            "files.example.com",
+            "8.8.8.8",
+            "2001:4860:4860::8888",
+            "167772165",
+            "0x0a000005",
+        ] {
+            assert!(is_remote_host(name), "{name}");
         }
     }
 

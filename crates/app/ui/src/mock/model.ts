@@ -33,14 +33,54 @@ function offline(path: string): boolean {
   return /^[Xx]:/.test(path) || path === "/Volumes/Offline" || path.startsWith("/Volumes/Offline/");
 }
 
+/** A strictly parsed IPv4 dotted quad's octets, or null for anything else (a decimal or hex number included:
+ *  those never parse as dotted-quad, matching files.rs's `Ipv4Addr::from_str`). */
+function parseIpv4(host: string): [number, number, number, number] | null {
+  const parts = host.split(".");
+  if (parts.length !== 4) return null;
+  const octets: number[] = [];
+  for (const p of parts) {
+    if (!/^\d{1,3}$/.test(p) || (p.length > 1 && p[0] === "0")) return null;
+    const n = Number(p);
+    if (n > 255) return null;
+    octets.push(n);
+  }
+  return octets as [number, number, number, number];
+}
+
+/** Whether a strictly parsed IPv4 literal is private (RFC 1918), loopback or link-local. */
+function isLocalIpv4(host: string): boolean {
+  const octets = parseIpv4(host);
+  if (!octets) return false;
+  const [a, b] = octets;
+  return a === 127 || a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 169 && b === 254);
+}
+
+/** Whether a (bracket-stripped) IPv6 literal is loopback (`::1`) or link-local (`fe80::/10`): the same two
+ *  shapes files.rs's `is_local_ip_literal` checks, by hand rather than a strict full-address parse \u2014 plenty
+ *  for the mock, which only ever sees the fixtures' own test addresses. */
+function isLocalIpv6(host: string): boolean {
+  return host === "::1" || /^fe[89ab][0-9a-f]:/i.test(host);
+}
+
+/** Whether `host` (optionally bracketed, `[::1]`) is a strictly parsed IPv4 or IPv6 literal that stays on the
+ *  local network: private, loopback or link-local (files.rs `is_local_ip_literal`). */
+function isLocalIpLiteral(host: string): boolean {
+  const unbracketed = host.startsWith("[") && host.endsWith("]") ? host.slice(1, -1) : host;
+  return isLocalIpv4(unbracketed) || isLocalIpv6(unbracketed);
+}
+
 /** A share whose server is named with a dot, or is an IP address, which `path_status` never contacts
- *  (files.rs `is_remote_host_path`): `\\files.example.com\x`, `//10.0.0.5/x`, `\\?\UNC\[::1]\x`, `\\167772165\x`. */
+ *  (files.rs `is_remote_host_path`): `\\files.example.com\x`, `//8.8.8.8/x`, `\\?\UNC\[2001:db8::1]\x`,
+ *  `\\167772165\x` \u2014 except a strictly parsed private, loopback or link-local IP literal, or a `*.local`
+ *  name (mDNS), which stay on the local network and are checked instead (`\\10.0.0.5\x`, `\\nas.local\x`). */
 function remoteShare(path: string): boolean {
   const verbatim = /^\\\\\?\\UNC[\\/]([^\\]*)/i.exec(path);
   const plain = /^[\\/]{2}([^\\/]*)/.exec(path);
   const server = verbatim ? verbatim[1] : plain && plain[1] !== "?" && plain[1] !== "." ? plain[1] : null;
   if (server === null) return false;
   const host = server.split("@")[0];
+  if (isLocalIpLiteral(host) || /\.local$/i.test(host)) return false;
   return /^\d+$/.test(host) || /^0x[0-9a-f]+$/i.test(host) || /[.:[\]\u3002\uff0e\uff61]/.test(host);
 }
 
