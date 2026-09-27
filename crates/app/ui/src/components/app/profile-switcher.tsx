@@ -162,9 +162,10 @@ export function ProfileSwitcher() {
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
         name={deletingNameRef.current}
-        // Deleting the active profile is exactly what unmounts this pill; fall back to the screen's own
-        // heading rather than a trigger that's no longer there (or leaving focus on `<body>`).
-        returnFocus={() => document.getElementById("screen-heading")}
+        // Deleting the active profile is exactly what unmounts this pill; prefer the trigger if it's somehow
+        // still connected (it stays the same node across an ordinary re-render, just not across the
+        // unmount a delete causes), and only fall back to the screen's own heading once it's genuinely gone.
+        returnFocus={() => (triggerRef.current?.isConnected ? triggerRef.current : document.getElementById("screen-heading"))}
       />
       {importProfile.dialog}
     </>

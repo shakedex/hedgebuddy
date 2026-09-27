@@ -74,7 +74,11 @@ export function ImportProfileDialog({ open, onOpenChange, path, onCloseFocus }: 
 
   const existing = profilesQuery.data?.profiles ?? [];
   const invalid = name.length > 0 && !SLUG.test(name);
-  const collision = SLUG.test(name) && existing.includes(name);
+  // Suppressed once `imported` is set: invalidating `index` after a successful import makes the new profile
+  // show up in `existing`, which would otherwise flash "already exists" against the profile this dialog
+  // itself just created, in the moment before it closes (or before the read-only switch view replaces the
+  // form, when a switch is still pending).
+  const collision = !imported && SLUG.test(name) && existing.includes(name);
   const canImport = SLUG.test(name) && !collision;
 
   // A busy toast's "Try again" can outlive an edit to these fields, or the dialog itself closing; read at
@@ -116,6 +120,7 @@ export function ImportProfileDialog({ open, onOpenChange, path, onCloseFocus }: 
   // The profile is already created by the time this can run; a failure here retries only the switch, never
   // `import_profile` again (which would now fail with "already exists").
   const trySwitch = (result: ImportProfileOutput) => {
+    if (inFlightRef.current || !openRef.current) return;
     inFlightRef.current = true;
     setPhase("switching");
     callTool("set_active_profile", { name: result.profile }).then(
@@ -147,7 +152,10 @@ export function ImportProfileDialog({ open, onOpenChange, path, onCloseFocus }: 
     // Rule for this task: switching changes the active profile, so it asks first, same as switching
     // profiles from the pill does. Declining leaves this dialog exactly as it was.
     void confirmLeave().then((ok) => {
-      if (ok) trySwitch(imported);
+      // Re-checked: confirmLeave's own prompt can take arbitrarily long, and a busy retry (or a second click
+      // before this resolved) could already be in flight, or the dialog could already be gone, by the time
+      // the operator answers it.
+      if (ok && !inFlightRef.current && openRef.current) trySwitch(imported);
     });
   };
 
@@ -209,20 +217,40 @@ export function ImportProfileDialog({ open, onOpenChange, path, onCloseFocus }: 
           </DialogDescription>
         </DialogHeader>
 
-        {phase === "switch-pending" || phase === "switching" ? (
+        {phase === "switch-pending" ? (
           <>
             <div className="flex flex-col gap-1.5">
               <span className="micro-label">Name</span>
-              <Mono className="text-foreground-strong">{imported?.profile}</Mono>
+              <Mono className="break-all text-foreground-strong">{imported?.profile}</Mono>
             </div>
             <p className="text-sm text-muted-foreground">Imported. Switching to it didn't go through yet.</p>
             <DialogFooter>
-              <Button type="button" variant="outline" disabled={phase === "switching"} onClick={() => onOpenChange(false)}>
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Close
               </Button>
-              <Button ref={switchRef} type="button" autoFocus disabled={phase === "switching"} aria-busy={phase === "switching"} onClick={doSwitch}>
-                {phase === "switching" && <LoaderCircle aria-hidden className="size-3.5 animate-spin" strokeWidth={1.75} />}
-                {phase === "switching" ? "Switching…" : `Switch to ${imported?.profile}`}
+              {/* The name is already shown above; the button says "it" rather than repeating a name that,
+                  at 64 characters, would otherwise overflow the button (and, at 480 px, push Close off). */}
+              <Button ref={switchRef} type="button" autoFocus onClick={doSwitch}>
+                Switch to it
+              </Button>
+            </DialogFooter>
+          </>
+        ) : phase === "switching" ? (
+          <>
+            <div className="flex flex-col gap-1.5">
+              <span className="micro-label">Name</span>
+              <Mono className="break-all text-foreground-strong">{imported?.profile}</Mono>
+            </div>
+            {/* Neutral, not the switch-pending copy above: this is the ordinary in-flight moment of a normal
+                successful import-and-switch, not (yet) a failure. */}
+            <p className="text-sm text-muted-foreground">Imported. Switching to it…</p>
+            <DialogFooter>
+              <Button type="button" variant="outline" disabled>
+                Close
+              </Button>
+              <Button type="button" disabled aria-busy>
+                <LoaderCircle aria-hidden className="size-3.5 animate-spin" strokeWidth={1.75} />
+                Switching…
               </Button>
             </DialogFooter>
           </>

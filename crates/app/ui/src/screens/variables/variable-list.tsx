@@ -195,7 +195,7 @@ export function VariableList({ overview, selectedName, filterText, onFilterTextC
               <Button ref={newProfileRef} variant={hasOtherProfiles ? "outline" : "default"} size="sm" onClick={() => setCreateOpen(true)}>
                 New profile
               </Button>
-              <Button variant="outline" size="sm" onClick={importProfile.start}>
+              <Button variant="outline" size="sm" disabled={importProfile.picking} onClick={importProfile.start}>
                 Import a profile…
               </Button>
             </div>
