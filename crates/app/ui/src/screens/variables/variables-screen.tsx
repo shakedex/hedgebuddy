@@ -28,10 +28,14 @@ export function VariablesScreen({ name }: { name?: string }) {
   // one never gets its own row), so the "nothing selected" filler doesn't appear when the list has nothing.
   const { filteredNeeds, filteredVars } = filterOverview(overview.data, filterText);
   const hasRows = filteredNeeds.length + filteredVars.length > 0;
+  // A detail URL alone isn't enough to switch the narrow layout over to the detail pane: with no active
+  // profile yet (still loading, none active, or `list_profiles` failed), there's no detail to show, and the
+  // list pane's own empty state or `ErrorPanel` needs the full width instead of hiding behind "← Variables".
+  const selected = Boolean(name) && activeProfile !== null;
 
   return (
     <ListDetail
-      selected={Boolean(name)}
+      selected={selected}
       // Replaces the history entry so Back returns to the bare list once, not into the detail it just closed.
       onBack={() => navigate("/variables", { replace: true })}
       backLabel="Variables"

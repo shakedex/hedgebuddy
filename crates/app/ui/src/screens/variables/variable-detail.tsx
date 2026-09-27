@@ -57,6 +57,15 @@ function editEquals(type: VarType, a: EditValue, b: EditValue): boolean {
   return a === b;
 }
 
+/** Whether an edit value is worth saving on its own, with nothing else touched: false for `""` and an empty
+ *  list (a prefilled-but-blank field isn't "filled in" just because the form was opened), true for any bool
+ *  (Off is exactly as meaningful as On). */
+function hasValue(v: EditValue): boolean {
+  if (typeof v === "boolean") return true;
+  if (Array.isArray(v)) return v.length > 0;
+  return v.trim() !== "";
+}
+
 /**
  * The editable form for one variable (spec §6.3, §7): an existing variable, or a new one — created blank
  * from `/variables/new`, or prefilled from a same-named requirement so Home's "needed" link lands ready to
@@ -151,9 +160,10 @@ function VariableForm({ name, profile, data }: { name: string; profile: string; 
   const secretNeedsValue = !secretState.changed && (creating || baseline.type !== "secret");
   const valueErr = type === "secret" ? (secretNeedsValue ? "Enter a value." : null) : validateValue(type, value);
   // While creating, a prefilled-but-untouched form (a bool requirement that's fine left Off, say) must still
-  // be saveable — `dirty` alone would block it. Leaving with nothing entered still asks nothing, since the
-  // guard below stays keyed on plain `dirty`.
-  const canSave = (dirty || creating) && nameErr === null && valueErr === null;
+  // be saveable even though nothing is `dirty` — but only once the value itself is one worth saving, so a
+  // blank string/path/list field can't be saved empty by a single click on an otherwise-untouched form.
+  // Leaving with nothing entered still asks nothing, since the guard below stays keyed on plain `dirty`.
+  const canSave = (dirty || (creating && hasValue(value))) && nameErr === null && valueErr === null;
 
   const mismatchRow =
     !creating && requirementRow?.state === "type_mismatch" && type !== requirementRow.type ? requirementRow : null;
@@ -173,6 +183,9 @@ function VariableForm({ name, profile, data }: { name: string; profile: string; 
   latestRef.current = { nameField, trimmedName, type, description, value, secretState, creating, canSave, saving };
 
   const doSave = () => {
+    // A toast's "Try again" can outlive the form it came from (the operator discarded and left in the
+    // meantime); a leftover Try again does nothing rather than saving into a screen no one is looking at.
+    if (!mountedRef.current) return;
     const cur = latestRef.current;
     if (!cur.canSave || cur.saving) return;
     setSaving(true);
@@ -196,7 +209,9 @@ function VariableForm({ name, profile, data }: { name: string; profile: string; 
         if (!mountedRef.current) return;
         setSaving(false);
         setBaseline({ name: result.name, type: result.type, description: result.description, value: cur.value, secretChanged: false });
-        setSecretState(EMPTY_SECRET);
+        // Only if nothing has typed a *newer* secret since this save started (reference-equal to the
+        // snapshot `cur` took) — otherwise this would wipe out an edit made while the save was in flight.
+        setSecretState((current) => (current === cur.secretState ? EMPTY_SECRET : current));
         if (cur.creating) setPendingRedirect(result.name);
       },
       (e: unknown) => {
@@ -306,7 +321,9 @@ function VariableForm({ name, profile, data }: { name: string; profile: string; 
               <div className="flex flex-col gap-1">
                 {requiredBy.map((r) => (
                   <Link key={r.script} href={`/scripts/${encodeURIComponent(r.script)}`} className="w-fit text-sm text-link hover:underline">
-                    <Mono>{r.script}</Mono> <span className="text-muted-foreground">· {appName(r.app)} · {r.event ?? "—"}</span>
+                    {/* Mono sets its own text-foreground-strong, which a parent's text-link can't override
+                        by inheritance — it has to be overridden directly on the Mono itself. */}
+                    <Mono className="text-link">{r.script}</Mono> <span className="text-muted-foreground">· {appName(r.app)} · {r.event ?? "—"}</span>
                   </Link>
                 ))}
               </div>
@@ -351,7 +368,11 @@ function VariableForm({ name, profile, data }: { name: string; profile: string; 
               changes: [{ kind: "delete", target: `${deletedFrom} › ${deletedName}`, detail: { text: "removed" } }],
               warnings:
                 requiredBy.length > 0
-                  ? requiredBy.map((r) => `${r.script} needs it and will stop with an error until it is set again.`)
+                  ? requiredBy.map((r) => (
+                      <>
+                        <Mono className="text-warning">{r.script}</Mono> needs it and will stop with an error until it is set again.
+                      </>
+                    ))
                   : undefined,
             };
           }}
@@ -388,6 +409,12 @@ export function VariableDetail({ name, profile, overview }: {
       </div>
     );
   }
-  if (!overview.data) return <DetailSkeleton />;
+  // `overview` is keyed on the active profile, but a profile switch invalidates it and `list_profiles` (which
+  // this is keyed on, in `VariablesScreen`) separately — their refetches can land at different times. Until
+  // this data actually belongs to `profile`, treat it like still loading: seeding the form's one-time starting
+  // values from the *previous* profile's data would go on to save into the new one. This also covers a
+  // refetch that fails outright — `overview.data` then just keeps the last (wrong) profile's data, which
+  // fails this same check rather than being mistaken for the real thing.
+  if (!overview.data || overview.data.profile !== profile) return <DetailSkeleton />;
   return <VariableForm name={name} profile={profile} data={overview.data} />;
 }

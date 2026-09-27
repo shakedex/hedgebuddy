@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { showError } from "@/lib/toast";
+import { cn } from "@/lib/utils";
 
 /**
  * A secret's edit state: one value on screen is the value Save writes. `changed` false means "keep the
@@ -99,15 +100,17 @@ export function SecretEditor({ id, state, onChange, reveal, error, canRevealStor
           aria-invalid={!!error}
           aria-describedby={error ? errorId : undefined}
         />
-        {showToggle && (
-          <Button
-            type="button" variant="ghost" size="sm"
-            className="min-w-[88px] justify-center aria-disabled:pointer-events-none aria-disabled:opacity-45"
-            onClick={toggle} aria-disabled={revealing} aria-busy={revealing}
-          >
-            {revealing ? "Revealing…" : revealed ? "Hide" : "Reveal"}
-          </Button>
-        )}
+        {/* Always rendered, reserving its width, rather than mounted only once `showToggle` is true — that
+            would shrink the input by the button's own width right as the operator's first keystroke makes
+            it appear. `invisible` keeps the space without the button being seen, clicked or announced. */}
+        <Button
+          type="button" variant="ghost" size="sm"
+          className={cn("min-w-[88px] justify-center aria-disabled:pointer-events-none aria-disabled:opacity-45", !showToggle && "invisible")}
+          onClick={toggle} aria-disabled={revealing || !showToggle} aria-busy={revealing}
+          aria-hidden={!showToggle} tabIndex={showToggle ? undefined : -1}
+        >
+          {revealing ? "Revealing…" : revealed ? "Hide" : "Reveal"}
+        </Button>
       </div>
       {error && (
         <p id={errorId} className="text-xs text-destructive">

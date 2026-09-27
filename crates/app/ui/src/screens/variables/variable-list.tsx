@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { UseQueryResult } from "@tanstack/react-query";
 import { Braces, Plus, Search, SearchX, TriangleAlert } from "lucide-react";
 import { Link } from "wouter";
@@ -139,6 +139,16 @@ export function VariableList({ overview, selectedName, filterText, onFilterTextC
 
   const [createOpen, setCreateOpen] = useState(false);
   const newProfileRef = useRef<HTMLButtonElement>(null);
+  const filterInputRef = useRef<HTMLInputElement>(null);
+
+  // Creating a profile from the empty state below unmounts that whole branch (and `newProfileRef` with it)
+  // once `noProfile` goes false, so the dialog's own close-focus restore has nothing left to land on. This
+  // reacts to that exact transition instead, once the toolbar (and its filter input) actually exists.
+  const wasNoProfile = useRef(noProfile);
+  useEffect(() => {
+    if (wasNoProfile.current && !noProfile) filterInputRef.current?.focus();
+    wasNoProfile.current = noProfile;
+  }, [noProfile]);
 
   const data = overview.data;
   const { variables, needs, filteredNeeds, filteredVars } = filterOverview(data, filterText);
@@ -199,6 +209,7 @@ export function VariableList({ overview, selectedName, filterText, onFilterTextC
       <div className="relative min-w-0 flex-1">
         <Search aria-hidden className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground" strokeWidth={1.75} />
         <Input
+          ref={filterInputRef}
           value={filterText}
           onChange={(e) => onFilterTextChange(e.target.value)}
           placeholder="Filter variables"

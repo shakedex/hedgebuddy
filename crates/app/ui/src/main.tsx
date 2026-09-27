@@ -12,8 +12,9 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     <QueryClientProvider client={queryClient}>
       <TooltipProvider delayDuration={300}>
         <App />
-        {/* Top-right: a bottom toast would sit over a detail pane's sticky Save for the 4-8 s it's up. */}
-        <Toaster theme="dark" position="top-right" />
+        {/* Bottom-right (top-right sat over the profile pill, and at 480 px the Back button): the offset
+            clears the detail pane's 44 px sticky footer plus a comfortable gap, at both breakpoints. */}
+        <Toaster theme="dark" position="bottom-right" offset={{ bottom: "60px" }} mobileOffset={{ bottom: "60px" }} />
       </TooltipProvider>
     </QueryClientProvider>
   </React.StrictMode>,
