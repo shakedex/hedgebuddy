@@ -72,7 +72,11 @@ function EventRow({
   return (
     <div className="grid grid-cols-1 gap-x-3 gap-y-1 border-t border-border px-3 py-2 @min-[415px]/events:grid-cols-[1.1fr_1.6fr_auto] @min-[415px]/events:items-start @min-[415px]/events:gap-y-0 @min-[415px]/events:py-1.5">
       <div className="min-w-0">
-        <span className="block truncate text-sm text-foreground" title={description}>
+        {/* Wraps rather than truncates (review round 3, Minor A): a CamelCase id like `FileConversionCompleted`
+            has no natural break point, so cutting it off left no way to recover the full text — the `title`
+            here is the catalog description, not the id, so a sighted operator had no tooltip to fall back on
+            either. */}
+        <span className="block break-words text-sm text-foreground [overflow-wrap:anywhere]" title={description}>
           {row.event}
         </span>
         {description && <span className="hidden truncate text-xs text-muted-foreground @min-[560px]/events:block">{description}</span>}

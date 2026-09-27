@@ -57,42 +57,42 @@ export function AppDetail({ app, overview, activeProfile }: {
   const [openingDocs, setOpeningDocs] = useState(false);
   const [clearing, setClearing] = useState<{ event: string; path: string } | null>(null);
   const [clearAllOpen, setClearAllOpen] = useState(false);
-  // How many events the *current* plan still has left to clear (review round 1, item 9: the Apply label and
-  // the ledger must agree with the plan itself, not with `appRow.stale`, which can disagree with it — two
-  // separate queries that do not necessarily land at the same moment).
+  // How many events the *current* Clear all plan still has left, so the Apply button's own label stays
+  // roughly accurate through a busy retry (review round 3 ruling: no remount for this — see the dialog below).
   const [clearAllRemaining, setClearAllRemaining] = useState(0);
-  // Bumped to remount (and so re-plan) the Clear all dialog once a partial failure's reload has landed, so a
-  // still-open dialog's summary and ledger pick up the fresh, smaller stale list rather than staying frozen
-  // at the count from before the failure (review round 1, item 9).
-  const [clearAllKey, setClearAllKey] = useState(0);
   const eventsTableRef = useRef<HTMLDivElement>(null);
-  // Tracks Clear all's own progress across a partial failure and a same-instance retry before the remount
-  // above has landed (design direction, Lesson 1): reset only when a fresh plan runs, so clicking Apply again
-  // right after a failure — before the dialog has had a chance to re-plan — skips the events already cleared
-  // for real instead of re-clearing (and re-failing "not stale" on) them.
+  const clearAllButtonRef = useRef<HTMLButtonElement>(null);
+  // Tracks Clear all's own progress across a busy failure and its retry (design direction, Lesson 1). Reset
+  // only when a fresh plan runs. Review round 3 ruling: a busy failure leaves this same dialog open (as
+  // ChangePreviewDialog normally does) rather than remounting it — a retry, from Apply or the busy toast's own
+  // Try again, continues with only the events not yet cleared, and this ref is what makes that safe. A real
+  // (non-busy) failure instead closes the dialog; the operator runs Clear all again for a fresh plan.
   const clearedRef = useRef<Set<string>>(new Set());
   const plannedRef = useRef<string[]>([]);
-  // Set right when a Clear or Clear all applies. Radix's own close-focus restore lands on the row's Clear
-  // button (or the stale bar's "Clear all") while it's still connected — the refetches this triggers haven't
-  // landed yet — then those same refetches remove it a moment later once it's no longer stale, dropping focus
-  // to <body> with nothing to catch it, since ChangePreviewDialog's own `returnFocus` fallback only runs at
-  // the moment it closes (Lesson 2). This re-checks once both queries have actually settled: `list_attachments`
-  // (`attachments`) removes a row's own Clear button, but the stale bar's opener is removed by `apps_overview`
-  // (`overview`) instead, and the two do not necessarily land at the same moment (review round 1, item 4).
+  // Set right when a dialog is about to close on its own (a full success, or — for Clear all — a real failure
+  // that closes it too; see below). Radix's own close-focus restore lands on the opener while it's still
+  // connected — the refetch this triggers hasn't landed yet — then that same refetch removes it a moment
+  // later once it's no longer stale, dropping focus to <body> with nothing to catch it, since
+  // ChangePreviewDialog's own `returnFocus` fallback only runs at the moment it closes (Lesson 2). These
+  // re-check once both queries have actually settled: `list_attachments` (`attachments`) removes a row's own
+  // Clear button, but the stale bar's own opener is removed by `apps_overview` (`overview`) instead, and the
+  // two do not necessarily land at the same moment (review round 1, item 4).
   const pendingRefocusRef = useRef(false);
-  const pendingReplanRef = useRef(false);
+  const pendingClearAllRefocusRef = useRef(false);
   useEffect(() => {
     if (attachments.isFetching || overview.isFetching) return; // Wait for both to settle before acting on either.
-    if (pendingReplanRef.current) {
-      pendingReplanRef.current = false;
-      setClearAllKey((k) => k + 1);
-    }
+    const refocusIfLost = (el: HTMLElement | null) => {
+      const active = document.activeElement;
+      if (active === document.body || active === document.documentElement || active === null) el?.focus();
+    };
     if (pendingRefocusRef.current) {
       pendingRefocusRef.current = false;
-      const active = document.activeElement;
-      if (active === document.body || active === document.documentElement || active === null) {
-        eventsTableRef.current?.focus();
-      }
+      refocusIfLost(eventsTableRef.current);
+    }
+    if (pendingClearAllRefocusRef.current) {
+      pendingClearAllRefocusRef.current = false;
+      // The stale bar's own "Clear all" if it's still there (more events are still stale), else the table.
+      refocusIfLost(clearAllButtonRef.current ?? eventsTableRef.current);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [attachments.data, attachments.isFetching, overview.data, overview.isFetching]);
@@ -199,6 +199,7 @@ export function AppDetail({ app, overview, activeProfile }: {
                 {appRow.stale} {plural(appRow.stale, "event")} {plural(appRow.stale, "points", "point")} at scripts that no longer exist
               </span>
               <button
+                ref={clearAllButtonRef}
                 type="button"
                 className="inline-flex min-h-7 shrink-0 items-center text-sm font-medium text-warning hover:underline"
                 onClick={() => setClearAllOpen(true)}
@@ -260,15 +261,11 @@ export function AppDetail({ app, overview, activeProfile }: {
       />
 
       <ChangePreviewDialog
-        // Remounted (via `clearAllKey`) once a partial failure's reload has landed, so a still-open dialog
-        // re-plans from the fresh, smaller stale list instead of staying frozen at the old one (review round
-        // 1, item 9) — a plain prop change wouldn't do this, since `describe()` only ever runs once per plan.
-        key={clearAllKey}
         open={clearAllOpen}
         onOpenChange={setClearAllOpen}
         title="Clear all"
         applyLabel={`Clear ${clearAllRemaining}`}
-        returnFocus={() => eventsTableRef.current}
+        returnFocus={() => clearAllButtonRef.current ?? eventsTableRef.current}
         plan={async () => {
           clearedRef.current = new Set();
           // Fresh every time, not the cached `attachments.data` (review round 1, item 10): while that query is
@@ -284,42 +281,62 @@ export function AppDetail({ app, overview, activeProfile }: {
           }
           return { items };
         }}
-        describe={(p: { items: { event: string; path: string; actions: Action[] }[] }) => ({
-          summary: `Clear ${p.items.length} ${plural(p.items.length, "event")} that point at missing files.`,
-          changes: p.items.flatMap((i) => describeActions(i.actions)),
-          nothingToDo: p.items.length === 0 ? "Nothing to clear." : undefined,
-        })}
+        describe={(p: { items: { event: string; path: string; actions: Action[] }[] }) => {
+          const n = p.items.length;
+          return {
+            summary: `Clear ${n} ${plural(n, "event")} that ${plural(n, "points", "point")} at ${n === 1 ? "a missing file" : "missing files"}.`,
+            changes: p.items.flatMap((i) => describeActions(i.actions)),
+            nothingToDo: n === 0 ? "Nothing to clear." : undefined,
+          };
+        }}
         apply={async () => {
-          // Sequential and in order (spec §6.5 step 3): a partial failure must stop, not race, so the ones
-          // still to come stay untouched and the caller can say exactly which one failed.
+          // Sequential and in order (spec §6.5 step 3): a real failure must stop, not race, so the ones still
+          // to come stay untouched and the caller can say exactly which one failed. A busy failure instead
+          // rethrows, so ChangePreviewDialog's own generic handling takes over — its own toast, this same
+          // dialog stays open — and `clearedRef` makes a retry (from that toast's Try again, or from Apply)
+          // skip what already succeeded (review round 3 ruling: no remount, so this ref is the only thing
+          // guarding against re-clearing — and re-failing "not stale" on — those events).
           let note: string | undefined;
           let clearedThisRun = 0;
-          for (const event of plannedRef.current) {
-            if (clearedRef.current.has(event)) continue; // A same-instance retry right after a partial failure.
-            try {
-              const r = await callTool("clear_stale_attachment", { app, event });
-              clearedRef.current.add(event);
-              clearedThisRun++;
-              note = r.note ?? note;
-            } catch (e) {
-              // The ones before this one really are cleared; reload now rather than only on full success, and
-              // re-plan once that reload lands (the effect above) so the dialog stops disagreeing with itself.
-              invalidateHedgeState();
-              pendingReplanRef.current = true;
-              const message = e instanceof Error ? e.message : String(e);
-              throw e instanceof BridgeError ? new BridgeError(e.kind, `${event}: ${message}`) : new Error(`${event}: ${message}`);
+          let stoppedEarly = false;
+          try {
+            for (const event of plannedRef.current) {
+              if (clearedRef.current.has(event)) continue;
+              try {
+                const r = await callTool("clear_stale_attachment", { app, event });
+                clearedRef.current.add(event);
+                clearedThisRun++;
+                note = r.note ?? note;
+                setClearAllRemaining((n) => Math.max(0, n - 1));
+              } catch (e) {
+                if (e instanceof BridgeError && e.kind === "busy") throw e;
+                // A real failure: stop, and say which one, with its message (spec §6.5 step 3). Resolving
+                // (not throwing) here — rather than letting ChangePreviewDialog's own generic failure handling
+                // run — is what closes the dialog: a fresh Clear all then plans only what's actually still
+                // stale, instead of this same dialog staying open, disagreeing with its own frozen ledger
+                // (review round 1, item 9; round 3 ruling: closing beats remounting to fix that).
+                const message = e instanceof Error ? e.message : String(e);
+                showError(new Error(`${event}: ${message}`));
+                stoppedEarly = true;
+                break;
+              }
             }
+          } finally {
+            // The screen must refresh no matter how this ends — full success, a real failure that's about to
+            // close the dialog, or a busy failure about to reopen it (still open, in Radix's own telling) for
+            // a retry (review round 3, R2: this must not depend on the dialog still being around afterwards).
+            invalidateHedgeState();
           }
-          return { count: clearedThisRun, note };
+          return { count: clearedThisRun, note, stoppedEarly };
         }}
         onApplied={(result) => {
-          invalidateHedgeState();
           // The number actually cleared *in this run* (review round 1, item 9), not the plan's original size —
-          // a retry after a partial failure only clears what was left, even though the plan may have started
-          // out bigger.
-          toast(`Cleared ${result.count} ${plural(result.count, "event")}`);
+          // a retry after a busy failure only clears what was left, even though the plan may have started out
+          // bigger. A real failure already got its own toast above; this only adds the success one when there
+          // wasn't one.
+          if (!result.stoppedEarly) toast(`Cleared ${result.count} ${plural(result.count, "event")}`);
           if (overview.data?.os === "macos" && result.note) toast(result.note, { duration: 8000 });
-          pendingRefocusRef.current = true;
+          pendingClearAllRefocusRef.current = true;
         }}
       />
     </div>

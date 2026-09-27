@@ -66,8 +66,11 @@ function RowIcon({ row }: { row: AppRow }) {
     const { icon: Icon } = STATUS.alert;
     const label = reasons.join(", ");
     return (
-      <span title={label} aria-label={label} className="inline-flex shrink-0">
+      // `aria-label` on a plain `span` has no effect (review round 3, Minor C: it needs a role, which this
+      // isn't); sr-only text beside the icon reaches the same screen readers the stale branch above does.
+      <span title={label} className="inline-flex shrink-0">
         <Icon aria-hidden className="size-3.5 text-warning" strokeWidth={1.75} />
+        <span className="sr-only">{label}</span>
       </span>
     );
   }
@@ -156,7 +159,11 @@ export function AppList({ overview, selectedId, onSelect }: {
       </div>
     );
   } else if (rows.length === 0) {
-    body = <EmptyState icon={AppWindow} title="No Hedge apps in the catalog" className="px-3 py-6" />;
+    body = (
+      <EmptyState icon={AppWindow} title="No Hedge apps in the catalog" className="px-3 py-6">
+        Check the catalog folder in Settings.
+      </EmptyState>
+    );
   } else {
     body = (
       <div
