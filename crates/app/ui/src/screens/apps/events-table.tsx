@@ -1,7 +1,8 @@
 import type { LucideIcon } from "lucide-react";
 import type { EventAttachment } from "@/api/tools.gen";
+import { wrapPath } from "@/components/app/change-preview-dialog";
 import { Mono } from "@/components/app/mono";
-import { STATUS, type StatusKey, type Tone } from "@/lib/status";
+import { STATUS, TONE_TEXT, type StatusKey, type Tone } from "@/lib/status";
 import { cn } from "@/lib/utils";
 
 /** The `EventAttachment` union's own `state` values, in the order `STATUS` names them (spec §5.2 / §6.5). */
@@ -63,30 +64,39 @@ function EventRow({
   row: EventAttachment; description?: string; activeProfile: string | null; onClear: (row: Extract<EventAttachment, { state: "stale" }>) => void;
 }) {
   const c = content(row, activeProfile);
+  // The icon follows `TONE_TEXT` (so `muted` reads a touch dimmer than `neutral`, matching `StatusIcon`'s own
+  // convention); the word's own colour stays a simpler two-way split (only warning stands out, review round
+  // 1 item 12) since dimming body text the same way would hurt its contrast.
+  const iconClass = TONE_TEXT[c.tone];
   const wordClass = c.tone === "warning" ? "text-warning" : "text-muted-foreground";
   return (
-    <div className="grid grid-cols-1 gap-x-3 gap-y-1 border-t border-border px-3 py-2 @min-[480px]/events:grid-cols-[1.1fr_1.6fr_auto] @min-[480px]/events:items-center @min-[480px]/events:gap-y-0 @min-[480px]/events:py-1.5">
+    <div className="grid grid-cols-1 gap-x-3 gap-y-1 border-t border-border px-3 py-2 @min-[415px]/events:grid-cols-[1.1fr_1.6fr_auto] @min-[415px]/events:items-start @min-[415px]/events:gap-y-0 @min-[415px]/events:py-1.5">
       <div className="min-w-0">
         <span className="block truncate text-sm text-foreground" title={description}>
           {row.event}
         </span>
         {description && <span className="hidden truncate text-xs text-muted-foreground @min-[560px]/events:block">{description}</span>}
       </div>
-      <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5">
-        <c.icon aria-hidden className={cn("size-3.5 shrink-0", wordClass)} strokeWidth={1.75} />
-        {c.mono && (
-          <Mono className={cn("min-w-0 truncate text-xs [overflow-wrap:anywhere]", c.monoMuted && "text-muted-foreground")} title={c.mono}>
-            {c.mono}
-          </Mono>
-        )}
-        <span className={cn("truncate text-xs", wordClass)} title={c.title}>
+      {/* Icon and mono are one `items-start` pair (review round 1 item 3), so a long path wraps under the
+          icon instead of truncating; the word wraps after them, on its own line when there's no room left. */}
+      <div className="flex min-w-0 flex-wrap items-start gap-x-1.5 gap-y-0.5">
+        <span className="flex min-w-0 items-start gap-1.5">
+          <c.icon aria-hidden className={cn("mt-0.5 size-3.5 shrink-0", iconClass)} strokeWidth={1.75} />
+          {c.mono && (
+            <Mono className={cn("min-w-0 break-words text-xs [overflow-wrap:anywhere]", c.monoMuted && "text-muted-foreground")} title={c.mono}>
+              {wrapPath(c.mono)}
+            </Mono>
+          )}
+        </span>
+        <span className={cn("break-words text-xs", wordClass)} title={c.title}>
           {c.word}
         </span>
       </div>
-      <div className="flex justify-start @min-[480px]/events:justify-end">
+      <div className="flex justify-start @min-[415px]/events:justify-end">
         {row.state === "stale" && (
           <button
             type="button"
+            aria-label={`Clear ${row.event}`}
             className="inline-flex min-h-7 items-center text-sm font-medium text-warning hover:underline"
             onClick={() => onClear(row)}
           >
@@ -102,10 +112,13 @@ function EventRow({
  * The Hedge apps events table (spec §6.5, design direction 5B "Tables"): one row per app event, what it runs
  * (icon, mono target and a qualifying word from `STATUS`'s own vocabulary), and a Clear action on stale rows.
  * The event's catalog description sits below its id from 560 px of this table's own width, and as a `title`
- * tooltip below that; the three columns stack into one below 480 px. Takes its own named `@container/events`
- * context (the pattern `run-detail.tsx` already uses) so those breakpoints read this table's own width, not
- * the screen-wide one `ListDetail` already establishes (an element never queries itself, so the table's own
- * wrapper still needs a name to be queried by its children rather than by its own, unrelated classes).
+ * tooltip below that; the three columns stack into one below 415 px (review round 1 item 2: this table's own
+ * width measures about 429 px at the app's own default 960×640 window and about 402 px at 480×640 — the
+ * threshold sits between the two, so the hairline-ruled table reads at 960 and stacks at 480, as the spec
+ * means it to). Takes its own named `@container/events` context (the pattern
+ * `run-detail.tsx` already uses) so those breakpoints read this table's own width, not the screen-wide one
+ * `ListDetail` already establishes (an element never queries itself, so the table's own wrapper still needs a
+ * name to be queried by its children rather than by its own, unrelated classes).
  */
 export function EventsTable({
   events, descriptions, activeProfile, onClear, tableRef,
@@ -122,7 +135,7 @@ export function EventsTable({
   return (
     <div className="@container/events">
       <div ref={tableRef} tabIndex={-1} className="surface overflow-hidden">
-        <div className="hidden border-b border-border bg-card px-3 py-1.5 @min-[480px]/events:grid @min-[480px]/events:grid-cols-[1.1fr_1.6fr_auto] @min-[480px]/events:gap-x-3">
+        <div className="hidden border-b border-border bg-card px-3 py-1.5 @min-[415px]/events:grid @min-[415px]/events:grid-cols-[1.1fr_1.6fr_auto] @min-[415px]/events:gap-x-3">
           <span className="micro-label">Event</span>
           <span className="micro-label">Runs</span>
           <span className="micro-label" aria-hidden />

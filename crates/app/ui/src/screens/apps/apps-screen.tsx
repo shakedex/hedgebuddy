@@ -26,7 +26,13 @@ export function AppsScreen({ id }: { id?: string }) {
       // Replaces the history entry so Back returns to the bare list once, not into the detail it just closed.
       onBack={() => navigate("/apps", { replace: true })}
       backLabel="Hedge apps"
-      list={<AppList overview={overview} selectedId={id ?? null} onSelect={(appId) => navigate(`/apps/${appId}`, { replace: Boolean(id) })} />}
+      list={
+        <AppList
+          overview={overview}
+          selectedId={id ?? null}
+          onSelect={(appId) => navigate(`/apps/${encodeURIComponent(appId)}`, { replace: Boolean(id) })}
+        />
+      }
       detail={
         id ? (
           <AppDetail key={id} app={id} overview={overview} activeProfile={profiles.data?.active ?? null} />

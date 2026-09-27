@@ -188,9 +188,12 @@ pub struct AppRow {
     pub docs: String,
     /// Its scripting events, in catalog order.
     pub events: Vec<AppEventInfo>,
-    /// Events that run a file: attached, staged or external (0 when its
+    /// Events attached to a profile script, running or staged (0 when its
     /// attachments cannot be read).
     pub attached: usize,
+    /// Events that run the operator's own file, outside any profile (0 when
+    /// its attachments cannot be read).
+    pub external: usize,
     /// Events that point at a file that no longer exists (0 when its
     /// attachments cannot be read).
     pub stale: usize,
@@ -407,13 +410,12 @@ pub fn apps_overview(ctx: &Context, _: NoParams) -> Result<AppsOverview, ToolErr
     let mut apps = Vec::new();
     for status in ctx.hedge.apps()? {
         let manifest = ctx.hedge.catalog().app(&status.id)?;
-        let (mut attached, mut stale) = (0, 0);
+        let (mut attached, mut external, mut stale) = (0, 0, 0);
         if let Ok(list) = ctx.hedge.attachments(&status.id, &ctx.store) {
             for a in &list {
                 match a.state {
-                    AttachState::Attached { .. }
-                    | AttachState::Staged { .. }
-                    | AttachState::External { .. } => attached += 1,
+                    AttachState::Attached { .. } | AttachState::Staged { .. } => attached += 1,
+                    AttachState::External { .. } => external += 1,
                     AttachState::Stale { .. } => stale += 1,
                     _ => {}
                 }
@@ -431,6 +433,7 @@ pub fn apps_overview(ctx: &Context, _: NoParams) -> Result<AppsOverview, ToolErr
                 })
                 .collect(),
             attached,
+            external,
             stale,
             status,
         });
@@ -661,7 +664,10 @@ mod tests {
             .iter()
             .find(|a| a.status.id == "offshoot")
             .unwrap();
-        assert_eq!((offshoot.attached, offshoot.stale), (1, 0));
+        assert_eq!(
+            (offshoot.attached, offshoot.external, offshoot.stale),
+            (1, 0, 0)
+        );
 
         let workspace = home
             .path()
@@ -685,7 +691,10 @@ mod tests {
             .iter()
             .find(|a| a.status.id == "offshoot")
             .unwrap();
-        assert_eq!((offshoot.attached, offshoot.stale), (0, 0));
+        assert_eq!(
+            (offshoot.attached, offshoot.external, offshoot.stale),
+            (0, 0, 0)
+        );
     }
 
     #[test]
@@ -700,7 +709,29 @@ mod tests {
         assert!(offshoot.available_here);
         assert_eq!(offshoot.stale, 1);
         assert_eq!(offshoot.attached, 0);
+        assert_eq!(offshoot.external, 0);
         assert!(offshoot.events.iter().any(|e| e.id == "FileCopyCompleted"));
         assert!(offshoot.docs.starts_with("https://"));
+    }
+
+    #[test]
+    fn apps_count_the_operators_own_file_as_external_not_attached() {
+        let own = tempfile::NamedTempFile::new().unwrap();
+        let host = host().with_registry_value(
+            KEY,
+            "EventScriptCheckpointIssue",
+            RegValue::String(own.path().display().to_string()),
+        );
+        let (_d, _f, ctx) = test_ctx(host);
+        let o = checked(
+            "apps_overview",
+            apps_overview(&ctx, crate::NoParams {}).unwrap(),
+        );
+        let offshoot = o.apps.iter().find(|a| a.status.id == "offshoot").unwrap();
+        // The stale `DiskIdle` entry from `host()` still counts as stale, not attached; the operator's own
+        // file counts as `external`, not `attached` (spec §6.5: "attached" is only a profile script).
+        assert_eq!(offshoot.attached, 0);
+        assert_eq!(offshoot.external, 1);
+        assert_eq!(offshoot.stale, 1);
     }
 }

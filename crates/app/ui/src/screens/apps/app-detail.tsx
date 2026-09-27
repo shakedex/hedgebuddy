@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { describeActions } from "@/lib/actions";
+import { plural } from "@/lib/format";
 import { showError } from "@/lib/toast";
 import { EventsTable } from "./events-table";
 
@@ -56,27 +57,45 @@ export function AppDetail({ app, overview, activeProfile }: {
   const [openingDocs, setOpeningDocs] = useState(false);
   const [clearing, setClearing] = useState<{ event: string; path: string } | null>(null);
   const [clearAllOpen, setClearAllOpen] = useState(false);
+  // How many events the *current* plan still has left to clear (review round 1, item 9: the Apply label and
+  // the ledger must agree with the plan itself, not with `appRow.stale`, which can disagree with it — two
+  // separate queries that do not necessarily land at the same moment).
+  const [clearAllRemaining, setClearAllRemaining] = useState(0);
+  // Bumped to remount (and so re-plan) the Clear all dialog once a partial failure's reload has landed, so a
+  // still-open dialog's summary and ledger pick up the fresh, smaller stale list rather than staying frozen
+  // at the count from before the failure (review round 1, item 9).
+  const [clearAllKey, setClearAllKey] = useState(0);
   const eventsTableRef = useRef<HTMLDivElement>(null);
-  // Tracks Clear all's own progress across a partial failure and its retry (design direction, Lesson 1): reset
-  // only when a fresh plan runs, so a retry after a partial failure skips the events already cleared for real
-  // instead of re-clearing (and re-failing "not stale" on) them.
+  // Tracks Clear all's own progress across a partial failure and a same-instance retry before the remount
+  // above has landed (design direction, Lesson 1): reset only when a fresh plan runs, so clicking Apply again
+  // right after a failure — before the dialog has had a chance to re-plan — skips the events already cleared
+  // for real instead of re-clearing (and re-failing "not stale" on) them.
   const clearedRef = useRef<Set<string>>(new Set());
   const plannedRef = useRef<string[]>([]);
   // Set right when a Clear or Clear all applies. Radix's own close-focus restore lands on the row's Clear
-  // button while it's still connected (the refetch this triggers hasn't landed yet), then that same refetch
-  // removes it a moment later once the row is no longer stale — dropping focus to <body> with nothing to
-  // catch it, since ChangePreviewDialog's own `returnFocus` fallback only runs at the moment it closes. This
-  // re-checks once the refetch has actually landed and reclaims focus if that race happened (Lesson 2).
+  // button (or the stale bar's "Clear all") while it's still connected — the refetches this triggers haven't
+  // landed yet — then those same refetches remove it a moment later once it's no longer stale, dropping focus
+  // to <body> with nothing to catch it, since ChangePreviewDialog's own `returnFocus` fallback only runs at
+  // the moment it closes (Lesson 2). This re-checks once both queries have actually settled: `list_attachments`
+  // (`attachments`) removes a row's own Clear button, but the stale bar's opener is removed by `apps_overview`
+  // (`overview`) instead, and the two do not necessarily land at the same moment (review round 1, item 4).
   const pendingRefocusRef = useRef(false);
+  const pendingReplanRef = useRef(false);
   useEffect(() => {
-    if (!pendingRefocusRef.current) return;
-    pendingRefocusRef.current = false;
-    const active = document.activeElement;
-    if (active === document.body || active === document.documentElement || active === null) {
-      eventsTableRef.current?.focus();
+    if (attachments.isFetching || overview.isFetching) return; // Wait for both to settle before acting on either.
+    if (pendingReplanRef.current) {
+      pendingReplanRef.current = false;
+      setClearAllKey((k) => k + 1);
+    }
+    if (pendingRefocusRef.current) {
+      pendingRefocusRef.current = false;
+      const active = document.activeElement;
+      if (active === document.body || active === document.documentElement || active === null) {
+        eventsTableRef.current?.focus();
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [attachments.data]);
+  }, [attachments.data, attachments.isFetching, overview.data, overview.isFetching]);
 
   if (overview.isPending) return <DetailSkeleton />;
   if (overview.isError && !overview.isSuccess) {
@@ -157,9 +176,14 @@ export function AppDetail({ app, overview, activeProfile }: {
         <div className="flex flex-col gap-4">
           <div className="flex flex-wrap items-center gap-1.5">
             {status.scripting_enabled === true && <Badge>scripting on</Badge>}
-            {status.scripting_enabled === false && (
-              <Badge variant={appRow.attached > 0 ? "warning" : "outline"}>scripting off</Badge>
-            )}
+            {status.scripting_enabled === false &&
+              (appRow.attached + appRow.external > 0 ? (
+                <Badge variant="warning">
+                  <TriangleAlert aria-hidden strokeWidth={1.75} /> scripting off
+                </Badge>
+              ) : (
+                <Badge variant="outline">scripting off</Badge>
+              ))}
             {status.requires_pro && <Badge>needs Pro</Badge>}
             <Badge>tested with {status.tested_against}</Badge>
             {status.newer_than_tested && (
@@ -171,7 +195,9 @@ export function AppDetail({ app, overview, activeProfile }: {
 
           {appRow.stale > 0 && (
             <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-warning-border bg-warning-tint px-3 py-2">
-              <span className="text-sm text-warning">{appRow.stale} events point at scripts that no longer exist</span>
+              <span className="text-sm text-warning">
+                {appRow.stale} {plural(appRow.stale, "event")} {plural(appRow.stale, "points", "point")} at scripts that no longer exist
+              </span>
               <button
                 type="button"
                 className="inline-flex min-h-7 shrink-0 items-center text-sm font-medium text-warning hover:underline"
@@ -234,15 +260,23 @@ export function AppDetail({ app, overview, activeProfile }: {
       />
 
       <ChangePreviewDialog
+        // Remounted (via `clearAllKey`) once a partial failure's reload has landed, so a still-open dialog
+        // re-plans from the fresh, smaller stale list instead of staying frozen at the old one (review round
+        // 1, item 9) — a plain prop change wouldn't do this, since `describe()` only ever runs once per plan.
+        key={clearAllKey}
         open={clearAllOpen}
         onOpenChange={setClearAllOpen}
         title="Clear all"
-        applyLabel={`Clear ${appRow.stale}`}
+        applyLabel={`Clear ${clearAllRemaining}`}
         returnFocus={() => eventsTableRef.current}
         plan={async () => {
           clearedRef.current = new Set();
-          const stale = (attachments.data?.events ?? []).filter((e): e is StaleEvent => e.state === "stale");
+          // Fresh every time, not the cached `attachments.data` (review round 1, item 10): while that query is
+          // still loading it would otherwise plan against nothing and say "Nothing to clear."
+          const fresh = await callTool("list_attachments", { app });
+          const stale = fresh.events.filter((e): e is StaleEvent => e.state === "stale");
           plannedRef.current = stale.map((e) => e.event);
+          setClearAllRemaining(stale.length);
           const items: { event: string; path: string; actions: Action[] }[] = [];
           for (const e of stale) {
             const r = await callTool("clear_stale_attachment", { app, event: e.event, dry_run: true });
@@ -251,7 +285,7 @@ export function AppDetail({ app, overview, activeProfile }: {
           return { items };
         }}
         describe={(p: { items: { event: string; path: string; actions: Action[] }[] }) => ({
-          summary: `Clear ${p.items.length} events that point at missing files.`,
+          summary: `Clear ${p.items.length} ${plural(p.items.length, "event")} that point at missing files.`,
           changes: p.items.flatMap((i) => describeActions(i.actions)),
           nothingToDo: p.items.length === 0 ? "Nothing to clear." : undefined,
         })}
@@ -259,24 +293,31 @@ export function AppDetail({ app, overview, activeProfile }: {
           // Sequential and in order (spec §6.5 step 3): a partial failure must stop, not race, so the ones
           // still to come stay untouched and the caller can say exactly which one failed.
           let note: string | undefined;
+          let clearedThisRun = 0;
           for (const event of plannedRef.current) {
-            if (clearedRef.current.has(event)) continue; // A retry after a partial failure: already cleared.
+            if (clearedRef.current.has(event)) continue; // A same-instance retry right after a partial failure.
             try {
               const r = await callTool("clear_stale_attachment", { app, event });
               clearedRef.current.add(event);
+              clearedThisRun++;
               note = r.note ?? note;
             } catch (e) {
-              // The ones before this one really are cleared; reload now rather than only on full success.
+              // The ones before this one really are cleared; reload now rather than only on full success, and
+              // re-plan once that reload lands (the effect above) so the dialog stops disagreeing with itself.
               invalidateHedgeState();
+              pendingReplanRef.current = true;
               const message = e instanceof Error ? e.message : String(e);
               throw e instanceof BridgeError ? new BridgeError(e.kind, `${event}: ${message}`) : new Error(`${event}: ${message}`);
             }
           }
-          return { count: plannedRef.current.length, note };
+          return { count: clearedThisRun, note };
         }}
         onApplied={(result) => {
           invalidateHedgeState();
-          toast(`Cleared ${result.count} events`);
+          // The number actually cleared *in this run* (review round 1, item 9), not the plan's original size —
+          // a retry after a partial failure only clears what was left, even though the plan may have started
+          // out bigger.
+          toast(`Cleared ${result.count} ${plural(result.count, "event")}`);
           if (overview.data?.os === "macos" && result.note) toast(result.note, { duration: 8000 });
           pendingRefocusRef.current = true;
         }}

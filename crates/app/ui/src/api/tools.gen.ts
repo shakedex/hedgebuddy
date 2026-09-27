@@ -1097,7 +1097,7 @@ export type AppManifest = {
 
 /** One Hedge app. */
 export type AppRow = {
-  /** Events that run a file: attached, staged or external (0 when its attachments cannot be read). */
+  /** Events attached to a profile script, running or staged (0 when its attachments cannot be read). */
   attached: number;
   /** Whether the catalog knows how to find it on this platform. */
   available_here: boolean;
@@ -1105,6 +1105,8 @@ export type AppRow = {
   docs: string;
   /** Its scripting events, in catalog order. */
   events: Array<AppEventInfo>;
+  /** Events that run the operator's own file, outside any profile (0 when its attachments cannot be read). */
+  external: number;
   /** Events that point at a file that no longer exists (0 when its attachments cannot be read). */
   stale: number;
   /** Whether it is installed, its version and its scripting support. */
