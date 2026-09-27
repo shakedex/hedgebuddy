@@ -3,6 +3,7 @@ import { isPreview } from "@/api/bridge";
 import { useDataChanged } from "@/api/events";
 import { AppShell } from "@/components/app/app-shell";
 import { useGuardedHashLocation } from "@/lib/guarded-location";
+import { AppsScreen } from "@/screens/apps/apps-screen";
 import { DesignGallery } from "@/screens/design/design-gallery";
 import { HomeScreen } from "@/screens/home/home-screen";
 import { Placeholder } from "@/screens/placeholder";
@@ -26,8 +27,9 @@ export default function App() {
           <Route path="/scripts"><ScriptsScreen /></Route>
           {/* wouter already decodes route params; decoding again breaks on names containing "%25". */}
           <Route path="/scripts/:name">{(p) => <ScriptsScreen name={p.name} />}</Route>
-          <Route path="/apps">{() => <Placeholder screen="apps" />}</Route>
-          <Route path="/apps/:id">{(p) => <Placeholder screen="apps" name={p.id} />}</Route>
+          <Route path="/apps"><AppsScreen /></Route>
+          {/* wouter already decodes route params; decoding again breaks on ids containing "%25". */}
+          <Route path="/apps/:id">{(p) => <AppsScreen id={p.id} />}</Route>
           <Route path="/connect">{() => <Placeholder screen="connect" />}</Route>
           <Route path="/settings">{() => <Placeholder screen="settings" />}</Route>
           {isPreview && <Route path="/_design"><DesignGallery /></Route>}

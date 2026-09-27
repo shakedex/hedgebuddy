@@ -534,8 +534,12 @@ function windowsApps(stale: boolean): HedgeSeed {
     registry: {
       [OFFSHOOT_KEY]: offshoot,
       [FOOLCAT_KEY]: {
-        BuildVersion: str("26.1.1"),
-        EventScriptAllowScripting: dword(1),
+        // `stale` (really "the non-`healthy` scenarios": problems, busy, error) also makes FoolCat newer than
+        // tested and scripting-off, its one script left attached — so those scenarios exercise both `app_newer`
+        // and `scripting_off` (Home and the Hedge apps screen) without disturbing `healthy`, which must still
+        // have nothing to flag.
+        BuildVersion: str(stale ? "26.2 (1050)" : "26.1.1"),
+        EventScriptAllowScripting: dword(stale ? 0 : 1),
         EventScriptReportCreated: str(scriptPath("windows", "foolcat_report.py")),
       },
     },
