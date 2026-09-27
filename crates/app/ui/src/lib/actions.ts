@@ -10,8 +10,11 @@ export type ChangeKind = "registry" | "registry_delete" | "workspace" | "file" |
 export interface Words {
   /** The words before the path (or the whole sentence, when there is no path). */
   text: string;
-  /** A file path or registry value worth setting in mono, if these words carry one. */
+  /** A file path, registry value or script name worth setting in mono, if these words carry one. */
   path?: string;
+  /** Plain words after the mono segment, for the rare sentence that has more to say once it ("… from
+   *  profile doc-series"). */
+  after?: string;
 }
 
 /** One line of the change preview (spec §7: the words come from the dry-run result). */
@@ -60,11 +63,35 @@ export function describeActions(actions: Action[]): ChangeRow[] {
   });
 }
 
+/**
+ * A sync skip's raw `reason` in plain words (Task 12 ruling: "Sync skip reasons"). Core's own text for unmet
+ * requirements reads `"unmet requirements: NAME (TYPE missing)"` or `"NAME (is X, needs Y)"`
+ * (`describe_issues`, `crates/core/src/hedge/sync.rs`); this turns each into "needs NAME" or "NAME should be
+ * Y". Everything else — a bad manifest, an unknown app or event, an unsupported location — is already plain
+ * English from core, so it passes through unchanged.
+ */
+export function describeSkipReason(reason: string): string {
+  const m = /^unmet requirements: (.+)$/.exec(reason);
+  if (!m) return reason;
+  const parts = m[1].split(/,\s*(?=[A-Z][A-Z0-9_]*\s*\()/);
+  const words = parts.map((part) => {
+    const trimmed = part.trim();
+    const missing = /^([A-Z][A-Z0-9_]*)\s*\([^)]*missing\)$/.exec(trimmed);
+    if (missing) return `needs ${missing[1]}`;
+    const mismatch = /^([A-Z][A-Z0-9_]*)\s*\(is\s+[^,]+,\s*needs\s+([^)]+)\)$/.exec(trimmed);
+    if (mismatch) return `${mismatch[1]} should be ${mismatch[2]}`;
+    return trimmed;
+  });
+  return words.join(", ");
+}
+
 /** Plain words for what an app event runs now, so a change preview can say what an attach would replace (spec §7). */
 export function describeState(state: AttachState): Words {
   switch (state.state) {
     case "attached":
-      return { text: `${state.script} from profile ${state.profile}` };
+      // The script name is the mono segment (typography rule: script names are mono everywhere); "from
+      // profile …" is plain words after it, not before, so `path` (not `text`) carries the name.
+      return { text: "", path: state.script, after: ` from profile ${state.profile}` };
     case "external":
       return { text: "your own file ", path: state.path };
     case "stale":

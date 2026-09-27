@@ -24,7 +24,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { describeActions, describeState } from "@/lib/actions";
 import { appName } from "@/lib/format";
-import { focusMainHeading } from "@/lib/focus";
+import { focusListbox, focusMainHeading } from "@/lib/focus";
 import { STATUS, TONE_TEXT, type StatusKey, type Tone } from "@/lib/status";
 import { showError } from "@/lib/toast";
 import { cn } from "@/lib/utils";
@@ -367,7 +367,11 @@ export function ScriptDetail({ name, profile, overview, appsOverview }: {
       <div className="flex h-full p-4 @max-[640px]:p-3">
         <EmptyState
           icon={FileCode}
-          title="This script is gone"
+          title={
+            <>
+              No <Mono className="text-foreground-strong">{name}</Mono> in <Mono className="text-foreground-strong">{profile}</Mono>.
+            </>
+          }
           className="m-auto"
           action={
             <Button asChild variant="outline" size="sm">
@@ -375,7 +379,7 @@ export function ScriptDetail({ name, profile, overview, appsOverview }: {
             </Button>
           }
         >
-          It may have been deleted or renamed.
+          It may be in another profile, or deleted.
         </EmptyState>
       </div>
     );
@@ -477,7 +481,7 @@ export function ScriptDetail({ name, profile, overview, appsOverview }: {
               variable (design direction rule 7b). */}
           {canAttach && attachDisabled && (
             <span id={`script-attach-reason-${name}`} className="max-w-[24rem] text-xs text-muted-foreground">
-              Set {unmetNames.join(", ")} first
+              Set <Mono className="text-muted-foreground">{unmetNames.join(", ")}</Mono> first
             </span>
           )}
           {canDetach && (
@@ -596,8 +600,9 @@ export function ScriptDetail({ name, profile, overview, appsOverview }: {
           // Radix's own close-focus restore lands on the Delete button — still connected at that instant,
           // since the navigate above hasn't unmounted this pane yet — and once it does, `ListDetail`'s own
           // effect moves focus again on its way to the bare list. Neither is where focus belongs once the
-          // dust settles, so this reasserts it a frame later, after both of those have already happened.
-          requestAnimationFrame(() => focusMainHeading());
+          // dust settles, so this reasserts it a frame later, after both of those have already happened
+          // (ruling: after deleting a script, focus goes to the list — the listbox — not the heading).
+          requestAnimationFrame(() => focusListbox("scripts-listbox"));
           invalidateHedgeState();
           await invalidateFor([`scripts:${profile}`]);
         }}

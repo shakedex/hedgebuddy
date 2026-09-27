@@ -23,6 +23,14 @@ function shortVersion(version: string): string {
   return i === -1 ? version : version.slice(0, i);
 }
 
+/** Which group a row sorts into (design direction, Task 12 ruling: "Installed apps sort first in the list;
+ *  then not installed; then unavailable on this OS; by name within each group"). */
+function groupRank(row: AppRow): number {
+  if (!row.available_here) return 2;
+  if (!row.status.installed) return 1;
+  return 0;
+}
+
 /** The row's second line (spec §6.5 step 1: "omit zero parts"). `attached` is only a profile script; the
  *  operator's own file is its own part (review round 1: "N attached" must not count it). */
 function subtitleFor(row: AppRow, os: Os): string {
@@ -124,14 +132,21 @@ export function AppList({ overview, selectedId, onSelect }: {
   onSelect: (id: string) => void;
 }) {
   const data = overview.data;
-  const rows = data ? data.apps.map((row) => ({ ...row, subtitle: subtitleFor(row, data.os) })) : [];
+  const rows = data
+    ? data.apps
+        .map((row) => ({ ...row, subtitle: subtitleFor(row, data.os) }))
+        .sort((a, b) => groupRank(a) - groupRank(b) || a.status.name.localeCompare(b.status.name))
+    : [];
   const rowIds = rows.map((r) => rowId(r.status.id));
   const selectedRowId = selectedId !== null && rows.some((r) => r.status.id === selectedId) ? rowId(selectedId) : null;
   const onRowSelect = (id: string) => onSelect(id.slice("app-".length));
   const onKeyDown = useListKeyboard(rowIds, selectedRowId, onRowSelect, (id) => id);
 
   const toolbar = (
-    <div className="flex shrink-0 items-center justify-end border-b border-border px-2 py-1.5">
+    <div className="flex h-11 shrink-0 items-center justify-between border-b border-border px-2">
+      <span className="micro-label">
+        {rows.length} {plural(rows.length, "app")}
+      </span>
       <Tooltip>
         <TooltipTrigger asChild>
           <Button

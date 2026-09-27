@@ -67,7 +67,7 @@ function NeedRow({ row, selected }: { row: RequirementRow; selected: boolean }) 
       aria-selected={selected}
       tabIndex={-1}
       className={cn(
-        "flex items-start gap-2 rounded-md border border-warning-border bg-warning-tint px-2.5 py-1.5 transition-colors duration-120",
+        "flex items-start gap-2 rounded-md border border-warning-border bg-warning-tint px-2.5 py-1 transition-colors duration-120",
         selected ? "ring-1 ring-inset ring-primary" : "hover:bg-warning-tint/70",
       )}
     >
@@ -82,6 +82,10 @@ function NeedRow({ row, selected }: { row: RequirementRow; selected: boolean }) 
 }
 
 function VariableRow({ v, selected, notMounted }: { v: VarView; selected: boolean; notMounted: boolean }) {
+  // Path and URL values are mono everywhere (typography rule); every other summary (a count, "on"/"off",
+  // a comma-joined list) stays plain text.
+  const monoValue = v.type === "path" || v.type === "url";
+  const summary = summarize(v.type, v.value);
   return (
     <Link
       href={`/variables/${encodeURIComponent(v.name)}`}
@@ -90,19 +94,19 @@ function VariableRow({ v, selected, notMounted }: { v: VarView; selected: boolea
       aria-selected={selected}
       tabIndex={-1}
       className={cn(
-        "flex flex-col gap-0.5 border-l-2 px-2.5 py-1.5 transition-colors duration-120",
+        "flex flex-col gap-0.5 border-l-2 px-2.5 py-1 transition-colors duration-120",
         selected ? "border-l-primary bg-accent" : "border-l-transparent hover:bg-accent/50",
       )}
     >
       <Mono className="truncate text-sm">{v.name}</Mono>
       <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-        <span className="truncate">
-          {v.type} · {summarize(v.type, v.value)}
+        <span className="min-w-0 truncate">
+          {v.type} · {monoValue ? <Mono className="text-muted-foreground">{summary}</Mono> : summary}
         </span>
         {notMounted && (
-          <span title="Drive not connected" className="inline-flex shrink-0 items-center">
+          <span title="Not connected" className="inline-flex shrink-0 items-center">
             <TriangleAlert aria-hidden className="size-3.5 text-warning" strokeWidth={1.75} />
-            <span className="sr-only">Drive not connected</span>
+            <span className="sr-only">Not connected</span>
           </span>
         )}
       </span>
@@ -193,10 +197,10 @@ export function VariableList({ overview, selectedName, filterText, onFilterTextC
                 </Button>
               )}
               <Button ref={newProfileRef} variant={hasOtherProfiles ? "outline" : "default"} size="sm" onClick={() => setCreateOpen(true)}>
-                New profile
+                New profile…
               </Button>
               <Button variant="outline" size="sm" disabled={importProfile.picking} onClick={importProfile.start}>
-                Import a profile…
+                Import profile…
               </Button>
             </div>
           }
@@ -226,7 +230,7 @@ export function VariableList({ overview, selectedName, filterText, onFilterTextC
   }
 
   const toolbar = (
-    <div className="flex shrink-0 items-center gap-2 border-b border-border px-2 py-1.5">
+    <div className="flex h-11 shrink-0 items-center gap-2 border-b border-border px-2">
       <div className="relative min-w-0 flex-1">
         <Search aria-hidden className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground" strokeWidth={1.75} />
         <Input
@@ -240,9 +244,9 @@ export function VariableList({ overview, selectedName, filterText, onFilterTextC
       </div>
       <Tooltip>
         <TooltipTrigger asChild>
-          <Button asChild size="icon">
-            <Link href="/variables/new" aria-label="New variable">
-              <Plus aria-hidden strokeWidth={1.75} />
+          <Button asChild variant="outline" size="sm">
+            <Link href="/variables/new">
+              <Plus aria-hidden strokeWidth={1.75} /> New
             </Link>
           </Button>
         </TooltipTrigger>
@@ -274,6 +278,7 @@ export function VariableList({ overview, selectedName, filterText, onFilterTextC
   } else {
     body = (
       <div
+        id="variables-listbox"
         role="listbox"
         aria-label="Variables"
         tabIndex={0}

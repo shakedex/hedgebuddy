@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { appName } from "@/lib/format";
+import { focusListbox } from "@/lib/focus";
 import { showError } from "@/lib/toast";
 import { markSaved, useUnsaved } from "@/lib/unsaved";
 import { VAR_TYPES, emptyEdit, fromEdit, toEdit, validateName, validateValue, type EditValue } from "@/lib/var-values";
@@ -155,9 +156,11 @@ function VariableForm({ name, profile, data }: { name: string; profile: string; 
     : trimmedName === ""
       ? "Name the variable."
       : (validateName(trimmedName) ?? (nameCollision ? "A variable with this name already exists." : null));
-  // A secret needs typing when there is nothing stored to keep instead: creating one from scratch, or one
-  // just retyped from another type (the profile's stored value, if any, is of the *old* type).
-  const secretNeedsValue = !secretState.changed && (creating || baseline.type !== "secret");
+  // A secret needs typing when there is nothing stored to keep instead: creating one from scratch, one just
+  // retyped from another type (the profile's stored value, if any, is of the *old* type), or an existing
+  // secret variable whose own value is missing (M6: an imported profile that left secrets out declares the
+  // variable — so it's not "creating" — but has nothing to keep, and Save must not go through as though it did).
+  const secretNeedsValue = !secretState.changed && (creating || baseline.type !== "secret" || existingVar?.missing === true);
   const valueErr = type === "secret" ? (secretNeedsValue ? "Enter a value." : null) : validateValue(type, value);
   // While creating, a prefilled-but-untouched form (a bool requirement that's fine left Off, say) must still
   // be saveable even though nothing is `dirty` — but only once the value itself is one worth saving, so a
@@ -286,7 +289,7 @@ function VariableForm({ name, profile, data }: { name: string; profile: string; 
                 </p>
                 <button
                   type="button"
-                  className="w-fit font-medium text-warning underline decoration-dotted underline-offset-2 hover:decoration-solid"
+                  className="inline-flex min-h-7 w-fit items-center font-medium text-warning underline decoration-dotted underline-offset-2 hover:decoration-solid"
                   onClick={() => handleTypeChange(mismatchRow.type)}
                 >
                   Change type to {mismatchRow.type}
@@ -320,7 +323,11 @@ function VariableForm({ name, profile, data }: { name: string; profile: string; 
             ) : (
               <div className="flex flex-col gap-1">
                 {requiredBy.map((r) => (
-                  <Link key={r.script} href={`/scripts/${encodeURIComponent(r.script)}`} className="w-fit text-sm text-link hover:underline">
+                  <Link
+                    key={r.script}
+                    href={`/scripts/${encodeURIComponent(r.script)}`}
+                    className="inline-flex min-h-7 w-fit items-center text-sm text-link hover:underline"
+                  >
                     {/* Mono sets its own text-foreground-strong, which a parent's text-link can't override
                         by inheritance — it has to be overridden directly on the Mono itself. */}
                     <Mono className="text-link">{r.script}</Mono> <span className="text-muted-foreground">· {appName(r.app)} · {r.event ?? "—"}</span>
@@ -385,6 +392,11 @@ function VariableForm({ name, profile, data }: { name: string; profile: string; 
             // this clears the guard's set directly rather than waiting on one.
             markSaved(`variable:${name}`);
             navigate("/variables", { replace: true });
+            // Ruling: after deleting a variable, focus goes to the list (the listbox), not a heading. A
+            // frame later, matching `ScriptDetail`'s own delete — see its comment for why immediately isn't
+            // enough (Radix's own close-focus restore and `ListDetail`'s Back-focus effect both still have
+            // to happen first).
+            requestAnimationFrame(() => focusListbox("variables-listbox"));
           }}
         />
       )}

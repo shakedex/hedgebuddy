@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Braces } from "lucide-react";
 import { useLocation } from "wouter";
 import { useProfiles, useVariablesOverview } from "@/api/queries";
@@ -27,11 +27,34 @@ export function VariablesScreen({ name }: { name?: string }) {
   // What the list actually renders, filter included — not every requirement (an already-`set` or `defaulted`
   // one never gets its own row), so the "nothing selected" filler doesn't appear when the list has nothing.
   const { filteredNeeds, filteredVars } = filterOverview(overview.data, filterText);
-  const hasRows = filteredNeeds.length + filteredVars.length > 0;
+  // Gated on the overview genuinely belonging to the active profile (Task 12 ruling): between a profile
+  // switch and its own overview refetch landing, `overview.data` can still read the *previous* profile's
+  // rows, which would otherwise flash as "nothing selected" fillers for a beat.
+  const hasRows = !noProfile && overview.data?.profile === activeProfile && filteredNeeds.length + filteredVars.length > 0;
   // A detail URL alone isn't enough to switch the narrow layout over to the detail pane: with no active
   // profile yet (still loading, none active, or `list_profiles` failed), there's no detail to show, and the
   // list pane's own empty state or `ErrorPanel` needs the full width instead of hiding behind "← Variables".
   const selected = Boolean(name) && activeProfile !== null;
+
+  // Ruling: when the active profile changes and the open name isn't in the *new* profile's overview (neither
+  // an existing variable nor a pending requirement), the screen returns to the bare list — a same-named item
+  // that does exist there just stays open instead (`VariableDetail`'s own `key` already re-keys it to the new
+  // profile's data). Only acts once that new overview has actually loaded, and only on a genuine switch: a
+  // fresh navigation straight to a requirement link (Home's "CLIENT_EMAIL is needed") must still open a ready
+  // Add form on the very first load, which is why this tracks the *last profile it already checked* rather
+  // than firing on every render where the name happens to be missing.
+  const checkedProfileRef = useRef<string | null>(activeProfile);
+  useEffect(() => {
+    if (!name || name === "new" || !activeProfile) {
+      checkedProfileRef.current = activeProfile;
+      return;
+    }
+    if (!overview.data || overview.data.profile !== activeProfile) return; // Still the old profile's data.
+    if (checkedProfileRef.current === activeProfile) return; // Already checked this profile.
+    checkedProfileRef.current = activeProfile;
+    const exists = overview.data.variables.some((v) => v.name === name) || overview.data.requirements.some((r) => r.name === name);
+    if (!exists) navigate("/variables", { replace: true });
+  }, [activeProfile, overview.data, name, navigate]);
 
   return (
     <ListDetail

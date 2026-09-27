@@ -58,6 +58,18 @@ function content(row: EventAttachment, activeProfile: string | null): RowContent
   }
 }
 
+/** Break opportunities before each capital letter (bar the first), so a CamelCase event id like
+ *  `FileConversionCompleted` wraps between words instead of at an arbitrary letter (Task 12 ruling). */
+function wrapCamel(id: string): React.ReactNode {
+  const parts = id.split(/(?=[A-Z])/);
+  const nodes: React.ReactNode[] = [];
+  parts.forEach((part, i) => {
+    nodes.push(part);
+    if (i < parts.length - 1) nodes.push(<wbr key={i} />);
+  });
+  return nodes;
+}
+
 function EventRow({
   row, description, activeProfile, onClear,
 }: {
@@ -70,32 +82,48 @@ function EventRow({
   const iconClass = TONE_TEXT[c.tone];
   const wordClass = c.tone === "warning" ? "text-warning" : "text-muted-foreground";
   return (
-    <div className="grid grid-cols-1 gap-x-3 gap-y-1 border-t border-border px-3 py-2 @min-[415px]/events:grid-cols-[1.1fr_1.6fr_auto] @min-[415px]/events:items-start @min-[415px]/events:gap-y-0 @min-[415px]/events:py-1.5">
+    <div className="grid min-h-9 grid-cols-1 gap-x-3 gap-y-1 border-t border-border px-3 py-2 @min-[415px]/events:grid-cols-[1.1fr_1.6fr_auto] @min-[415px]/events:items-start @min-[415px]/events:gap-y-0 @min-[415px]/events:py-1.5">
       <div className="min-w-0">
         {/* Wraps rather than truncates (review round 3, Minor A): a CamelCase id like `FileConversionCompleted`
-            has no natural break point, so cutting it off left no way to recover the full text — the `title`
-            here is the catalog description, not the id, so a sighted operator had no tooltip to fall back on
-            either. */}
-        <span className="block break-words text-sm text-foreground [overflow-wrap:anywhere]" title={description}>
-          {row.event}
+            has no natural break point of its own, so `wrapCamel` inserts one before each capital instead of
+            leaving the browser to break at any letter (Task 12 ruling) — the `title` here is the catalog
+            description, not the id, so a sighted operator had no tooltip to fall back on either. */}
+        <span className="block break-words text-sm text-foreground" title={description}>
+          {wrapCamel(row.event)}
         </span>
         {description && <span className="hidden truncate text-xs text-muted-foreground @min-[560px]/events:block">{description}</span>}
       </div>
-      {/* Icon and mono are one `items-start` pair (review round 1 item 3), so a long path wraps under the
-          icon instead of truncating; the word wraps after them, on its own line when there's no room left. */}
-      <div className="flex min-w-0 flex-wrap items-start gap-x-1.5 gap-y-0.5">
-        <span className="flex min-w-0 items-start gap-1.5">
-          <c.icon aria-hidden className={cn("mt-0.5 size-3.5 shrink-0", iconClass)} strokeWidth={1.75} />
+      {row.state === "stale" ? (
+        // Task 12 ruling: "file missing" sits on the icon line; the path it points at wraps below, indented
+        // to align under it (`pl-5` = the icon's own width plus the gap after it).
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <span className="flex min-w-0 items-start gap-1.5">
+            <c.icon aria-hidden className={cn("mt-0.5 size-3.5 shrink-0", iconClass)} strokeWidth={1.75} />
+            <span className={cn("break-words text-xs", wordClass)}>{c.word}</span>
+          </span>
           {c.mono && (
-            <Mono className={cn("min-w-0 break-words text-xs [overflow-wrap:anywhere]", c.monoMuted && "text-muted-foreground")} title={c.mono}>
+            <Mono className="min-w-0 break-words pl-5 text-xs text-muted-foreground [overflow-wrap:anywhere]" title={c.mono}>
               {wrapPath(c.mono)}
             </Mono>
           )}
-        </span>
-        <span className={cn("break-words text-xs", wordClass)} title={c.title}>
-          {c.word}
-        </span>
-      </div>
+        </div>
+      ) : (
+        // Icon and mono are one `items-start` pair (review round 1 item 3), so a long path wraps under the
+        // icon instead of truncating; the word wraps after them, on its own line when there's no room left.
+        <div className="flex min-w-0 flex-wrap items-start gap-x-1.5 gap-y-0.5">
+          <span className="flex min-w-0 items-start gap-1.5">
+            <c.icon aria-hidden className={cn("mt-0.5 size-3.5 shrink-0", iconClass)} strokeWidth={1.75} />
+            {c.mono && (
+              <Mono className={cn("min-w-0 break-words text-xs [overflow-wrap:anywhere]", c.monoMuted && "text-muted-foreground")} title={c.mono}>
+                {wrapPath(c.mono)}
+              </Mono>
+            )}
+          </span>
+          <span className={cn("break-words text-xs", wordClass)} title={c.title}>
+            {c.word}
+          </span>
+        </div>
+      )}
       <div className="flex justify-start @min-[415px]/events:justify-end">
         {row.state === "stale" && (
           <button

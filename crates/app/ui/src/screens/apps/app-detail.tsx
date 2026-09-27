@@ -138,7 +138,9 @@ export function AppDetail({ app, overview, activeProfile }: {
   if (!status.installed) {
     return (
       <div className="flex h-full p-4 @max-[640px]:p-3">
-        <EmptyState icon={AppWindow} title={`${status.name} is not installed on this computer.`} className="m-auto" />
+        <EmptyState icon={AppWindow} title={`${status.name} isn't installed on this computer.`} className="m-auto">
+          Install it, then press Refresh.
+        </EmptyState>
       </div>
     );
   }
@@ -196,7 +198,8 @@ export function AppDetail({ app, overview, activeProfile }: {
           {appRow.stale > 0 && (
             <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-warning-border bg-warning-tint px-3 py-2">
               <span className="text-sm text-warning">
-                {appRow.stale} {plural(appRow.stale, "event")} {plural(appRow.stale, "points", "point")} at scripts that no longer exist
+                {appRow.stale} {plural(appRow.stale, "event")} {plural(appRow.stale, "points", "point")} at{" "}
+                {appRow.stale === 1 ? "a missing file" : "missing files"}
               </span>
               <button
                 ref={clearAllButtonRef}
@@ -226,12 +229,15 @@ export function AppDetail({ app, overview, activeProfile }: {
               tableRef={eventsTableRef}
             />
           )}
+
+          {/* Ruling (Task 12): a muted line under the table, not a separate footer band — this is a note
+              about the screen, not an action bar, so it scrolls with the rest of the content instead of
+              pinning a mostly-empty strip to the bottom. */}
+          <p className="text-xs text-muted-foreground">
+            Attaching and detaching happen from Scripts. This screen shows the app's side and cleans up leftovers.
+          </p>
         </div>
       </div>
-
-      <p className="shrink-0 border-t border-border px-4 py-2 text-xs text-muted-foreground @max-[640px]:px-3">
-        Attaching and detaching happen from Scripts. This screen shows the app's side and cleans up leftovers.
-      </p>
 
       <ChangePreviewDialog
         open={clearing !== null}
@@ -245,8 +251,8 @@ export function AppDetail({ app, overview, activeProfile }: {
         describe={(p: ClearStaleAttachmentOutput) => ({
           summary: (
             <>
-              Clear <Mono className="text-foreground">{clearing!.event}</Mono>: it points at{" "}
-              <Mono className="text-foreground">{wrapPath(clearing!.path)}</Mono>, which no longer exists.
+              Clear <span className="text-foreground">{clearing!.event}</span>: it points at{" "}
+              <Mono className="text-foreground">{wrapPath(clearing!.path)}</Mono>, which is missing.
             </>
           ),
           changes: describeActions(p.actions),
@@ -297,7 +303,6 @@ export function AppDetail({ app, overview, activeProfile }: {
           // skip what already succeeded (review round 3 ruling: no remount, so this ref is the only thing
           // guarding against re-clearing — and re-failing "not stale" on — those events).
           let note: string | undefined;
-          let clearedThisRun = 0;
           let stoppedEarly = false;
           try {
             for (const event of plannedRef.current) {
@@ -305,7 +310,6 @@ export function AppDetail({ app, overview, activeProfile }: {
               try {
                 const r = await callTool("clear_stale_attachment", { app, event });
                 clearedRef.current.add(event);
-                clearedThisRun++;
                 note = r.note ?? note;
                 setClearAllRemaining((n) => Math.max(0, n - 1));
               } catch (e) {
@@ -327,7 +331,9 @@ export function AppDetail({ app, overview, activeProfile }: {
             // a retry (review round 3, R2: this must not depend on the dialog still being around afterwards).
             invalidateHedgeState();
           }
-          return { count: clearedThisRun, note, stoppedEarly };
+          // Task 12 ruling: toast the whole run's total, including whatever a busy interruption already
+          // cleared before Try again continued it — not just this particular `apply()` call's own count.
+          return { count: clearedRef.current.size, note, stoppedEarly };
         }}
         onApplied={(result) => {
           // The number actually cleared *in this run* (review round 1, item 9), not the plan's original size —

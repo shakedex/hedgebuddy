@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { FileCode } from "lucide-react";
 import { useLocation } from "wouter";
 import { useAppsOverview, useProfiles, useScriptsOverview } from "@/api/queries";
@@ -24,8 +24,25 @@ export function ScriptsScreen({ name }: { name?: string }) {
   const activeProfile = profiles.data?.active ?? null;
   const noProfile = profiles.isSuccess && activeProfile === null;
   const { filtered } = filterScripts(overview.data, filterText);
-  const hasRows = filtered.length > 0;
+  // Gated on the overview genuinely belonging to the active profile (Task 12 ruling), matching `VariablesScreen`.
+  const hasRows = !noProfile && overview.data?.profile === activeProfile && filtered.length > 0;
   const selected = Boolean(name) && activeProfile !== null;
+
+  // Ruling: when the active profile changes and the open script isn't in the *new* profile's overview, the
+  // screen returns to the bare list, matching `VariablesScreen`'s own effect — see its comment for why this
+  // only fires on a genuine switch, once the new profile's overview has actually loaded.
+  const checkedProfileRef = useRef<string | null>(activeProfile);
+  useEffect(() => {
+    if (!name || !activeProfile) {
+      checkedProfileRef.current = activeProfile;
+      return;
+    }
+    if (!overview.data || overview.data.profile !== activeProfile) return;
+    if (checkedProfileRef.current === activeProfile) return;
+    checkedProfileRef.current = activeProfile;
+    const exists = overview.data.scripts.some((s) => s.name === name);
+    if (!exists) navigate("/scripts", { replace: true });
+  }, [activeProfile, overview.data, name, navigate]);
 
   return (
     <ListDetail
@@ -56,7 +73,7 @@ export function ScriptsScreen({ name }: { name?: string }) {
           <ScriptDetail key={`${activeProfile}:${name}`} name={name} profile={activeProfile} overview={overview} appsOverview={appsOverview} />
         ) : hasRows ? (
           <EmptyState icon={FileCode} title="Pick a script" className="m-auto">
-            Choose a script on the left to see and edit it.
+            Choose a script on the left to see it.
           </EmptyState>
         ) : null
       }

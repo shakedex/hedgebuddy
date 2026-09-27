@@ -3,27 +3,23 @@ import { useHomeSummary } from "@/api/queries";
 import type { PythonStatus } from "@/api/tools.gen";
 import { EmptyState } from "@/components/app/empty-state";
 import { Mono } from "@/components/app/mono";
-import { appName } from "@/lib/format";
 import { NAV_ICONS } from "@/lib/status";
 
-/** The screens not yet built. */
-type Screen = "scripts" | "apps" | "connect" | "settings";
+/** The screens not yet built. Scripts and Hedge apps are real screens now — nothing routes here for them. */
+type Screen = "connect" | "settings";
 
 /**
  * What each screen will do (the toolbar already names the screen, so this never repeats it) and what to do
  * until then.
  */
 const COPY: Record<Screen, { title: string; next: string }> = {
-  scripts: { title: "Managing scripts arrives in the next update", next: "Until then, ask Claude to write and attach them." },
-  apps: { title: "Checking each Hedge app arrives in the next update", next: "Home already flags stale entries and version warnings." },
   connect: { title: "Setting up Claude Desktop here arrives in a later update", next: "Until then, follow the README's “Use it from Claude” steps." },
   settings: { title: "The Python check arrives in a later update", next: "Home already flags a missing or outdated hedgebuddy package." },
 };
 
 /**
- * One designed screen for the routes not yet built. When the route carries a name (`/variables/CLIENT_EMAIL`),
- * it names the item first, so a needs-attention link still lands somewhere meaningful: in mono for a variable
- * or script, by its display name for a Hedge app.
+ * One designed screen for the routes not yet built. When the route carries a name, it names the item first,
+ * in mono, so a needs-attention link still lands somewhere meaningful.
  */
 export function Placeholder({ screen, name }: { screen: Screen; name?: string }) {
   const { title, next } = COPY[screen];
@@ -35,7 +31,7 @@ export function Placeholder({ screen, name }: { screen: Screen; name?: string })
         <EmptyState icon={NAV_ICONS[screen]} title={title} className="max-w-md">
           {name && (
             <p className="text-foreground">
-              You followed a link to {screen === "apps" ? <span className="text-foreground-strong">{appName(name)}</span> : <Mono>{name}</Mono>}.
+              You followed a link to <Mono>{name}</Mono>.
             </p>
           )}
           <p className={name ? "mt-1" : undefined}>{next}</p>

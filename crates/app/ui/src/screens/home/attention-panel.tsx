@@ -56,8 +56,9 @@ function rowFor(item: AttentionItem, activeProfile: string): { status: StatusKey
     case "stale_entries":
       return {
         status: "stale",
+        // Stale vocabulary is "missing file" everywhere (Task 12 ruling).
         text: `${item.count} ${item.app_name} ${plural(item.count, "event")} ${
-          item.count === 1 ? "points at a deleted script" : "point at deleted scripts"
+          item.count === 1 ? "points at a missing file" : "point at missing files"
         }`,
         href: `/apps/${encodeURIComponent(item.app)}`,
         label: "Hedge apps",

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   Ban, FileCog, FilePen, KeyRound, KeySquare, Link, LoaderCircle, Trash2, TriangleAlert, Unlink, type LucideIcon,
 } from "lucide-react";
+import { toast } from "sonner";
 import { ErrorPanel } from "@/components/app/error-panel";
 import { Mono } from "@/components/app/mono";
 import { Button } from "@/components/ui/button";
@@ -97,6 +98,10 @@ export function ChangePreviewDialog<P, R>({
   const requestId = useRef(0);
   // True while a real apply() is in flight, so a busy toast's "Try again" can never overlap the button.
   const applyInFlightRef = useRef(false);
+  // The id of the toast a failed apply() last showed (from `showError`), so a retry that then succeeds can
+  // dismiss it explicitly — otherwise a busy toast's "Try again" a moment ago stays on screen even once the
+  // thing it was about has gone through (Task 12 ruling).
+  const errorToastRef = useRef<string | number | null>(null);
   // The latest `open`, read from a toast's "Try again" callback: it must do nothing once this dialog has
   // closed, since no fresh dry run has happened since.
   const openRef = useRef(open);
@@ -142,6 +147,7 @@ export function ChangePreviewDialog<P, R>({
   const runPlan = () => {
     const id = ++requestId.current;
     applyInFlightRef.current = false;
+    errorToastRef.current = null;
     setPhase("planning");
     setPlanError(null);
     setRetrying(false);
@@ -193,6 +199,10 @@ export function ChangePreviewDialog<P, R>({
       (result) => {
         applyInFlightRef.current = false;
         if (requestId.current !== id) return;
+        if (errorToastRef.current !== null) {
+          toast.dismiss(errorToastRef.current);
+          errorToastRef.current = null;
+        }
         onOpenChange(false);
         try {
           onApplied?.(result);
@@ -204,7 +214,7 @@ export function ChangePreviewDialog<P, R>({
         applyInFlightRef.current = false;
         if (requestId.current !== id) return;
         setPhase("ready");
-        showError(e, doApply);
+        errorToastRef.current = showError(e, doApply);
       },
     );
   };
@@ -398,6 +408,7 @@ export function renderWords(words: Words): React.ReactNode {
     <>
       {words.text}
       <span className="font-mono">{wrapPath(words.path)}</span>
+      {words.after}
     </>
   );
 }

@@ -18,7 +18,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useImportProfile } from "@/hooks/use-import-profile";
 import { useListKeyboard } from "@/hooks/use-list-keyboard";
-import { describeActions, describeState, type ChangeRow } from "@/lib/actions";
+import { describeActions, describeSkipReason, describeState, type ChangeRow } from "@/lib/actions";
 import { appName } from "@/lib/format";
 import type { StatusKey } from "@/lib/status";
 import { cn } from "@/lib/utils";
@@ -96,9 +96,21 @@ function rowSubtitleParts(row: ScriptRow): { base: string; unmet: string | null 
 export function rowStatusKey(row: ScriptRow): StatusKey {
   if (row.manifest_error || row.catalog_error) return "alert";
   if (row.unmet.length > 0) return "varMissing";
-  if (row.attachment.state === "staged") return "staged";
-  if (row.attachment.state === "attached") return "attached";
-  return "detached";
+  switch (row.attachment.state) {
+    case "staged":
+      return "staged";
+    case "attached":
+      return "attached";
+    // Matches the detail chip's own mapping (`chipStatusKey` in script-detail.tsx) for these three states.
+    case "other_script":
+      return "otherScript";
+    case "manual":
+      return "manual";
+    case "unsupported":
+      return "unsupported";
+    default:
+      return "detached";
+  }
 }
 
 function ScriptRowView({ row, selected }: { row: ScriptRow; selected: boolean }) {
@@ -215,10 +227,10 @@ export function ScriptList({
                 </Button>
               )}
               <Button ref={newProfileRef} variant={hasOtherProfiles ? "outline" : "default"} size="sm" onClick={() => setCreateOpen(true)}>
-                New profile
+                New profile…
               </Button>
               <Button variant="outline" size="sm" disabled={importProfile.picking} onClick={importProfile.start}>
-                Import a profile…
+                Import profile…
               </Button>
             </div>
           }
@@ -249,7 +261,7 @@ export function ScriptList({
 
   const toolbar = (
     <div className="flex shrink-0 flex-col gap-1.5 border-b border-border px-2 py-1.5">
-      <div className="flex items-center gap-2">
+      <div className="flex h-11 items-center gap-2">
         <div className="relative min-w-0 flex-1">
           <Search aria-hidden className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground" strokeWidth={1.75} />
           <Input
@@ -263,7 +275,7 @@ export function ScriptList({
         </div>
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button ref={newButtonRef} size="sm" disabled={!dataReady} onClick={() => setNewOpen(true)}>
+            <Button ref={newButtonRef} variant="outline" size="sm" disabled={!dataReady} onClick={() => setNewOpen(true)}>
               <Plus aria-hidden strokeWidth={1.75} /> New
             </Button>
           </TooltipTrigger>
@@ -299,6 +311,7 @@ export function ScriptList({
   } else {
     body = (
       <div
+        id="scripts-listbox"
         role="listbox"
         aria-label="Scripts"
         tabIndex={0}
@@ -359,12 +372,12 @@ export function ScriptList({
                 )),
               ...p.conflicts.map((c) => (
                 <>
-                  {c.scripts.join(", ")} all target {appName(c.app)} · {c.event}; none was attached.
+                  <Mono className="text-warning">{c.scripts.join(", ")}</Mono> all target {appName(c.app)} · {c.event}; none was attached.
                 </>
               )),
               ...p.skipped.map((s) => (
                 <>
-                  {s.script}: {s.reason}
+                  <Mono className="text-warning">{s.script}</Mono>: {describeSkipReason(s.reason)}
                 </>
               )),
             ];

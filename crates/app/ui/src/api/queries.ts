@@ -42,6 +42,7 @@ const SCRIPTS: Name[] = [
   "home_summary",
   "scripts_overview",
   "variables_overview",
+  "apps_overview",
 ];
 
 /** Hedge app state (registry, workspace files): no `data-changed` covers it, so every attach, detach, sync

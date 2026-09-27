@@ -1,7 +1,7 @@
 import { Fragment } from "react";
 import { toast } from "sonner";
 import { callTool } from "@/api/bridge";
-import { invalidateFor } from "@/api/queries";
+import { invalidateFor, invalidateHedgeState } from "@/api/queries";
 import { ChangePreviewDialog } from "@/components/app/change-preview-dialog";
 import { Mono } from "@/components/app/mono";
 import { appName, plural } from "@/lib/format";
@@ -43,12 +43,14 @@ export function DeleteProfileDialog({ open, onOpenChange, name, returnFocus }: {
           changes: [{ kind: "delete", target: `profiles/${name}`, detail: { text: "removed" } }],
           warnings:
             p.attached_to.length > 0
-              ? p.attached_to.map((a, i) => (
-                  <Fragment key={i}>
-                    {appName(a.app)} · {a.event} runs <Mono className="text-warning">{a.script}</Mono> from this profile. After deleting,
-                    it points at a missing file. Sync another profile or detach it first.
-                  </Fragment>
-                ))
+              ? [
+                  ...p.attached_to.map((a, i) => (
+                    <Fragment key={i}>
+                      {appName(a.app)} · {a.event} runs <Mono className="text-warning">{a.script}</Mono>.
+                    </Fragment>
+                  )),
+                  "After deleting, they point at missing files. Sync another profile or detach them first.",
+                ]
               : undefined,
         };
       }}
@@ -58,6 +60,10 @@ export function DeleteProfileDialog({ open, onOpenChange, name, returnFocus }: {
         // shows its choose-a-profile step"). Every screen reacts to that on its own — Variables already shows
         // "No profile yet" — so this doesn't force a navigation of its own.
         await invalidateFor(["index"]);
+        // Hedge app state (registry, workspace files) isn't covered by any `data-changed` category, and a
+        // deleted profile can leave attachments pointing at missing files — Hedge apps' counts and stale
+        // rows must reflect that immediately, same as any other action that changes what's attached.
+        invalidateHedgeState();
         toast(`Deleted ${name}`);
         // This dialog's own close animation (`returnFocus` above) races the profile pill actually unmounting
         // once `active` goes to `null` — the animation usually wins, refocusing the pill for a moment before

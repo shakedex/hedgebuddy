@@ -42,7 +42,7 @@ export function UnsavedDialog() {
           <Button type="button" variant="outline" autoFocus onClick={() => pending?.decide(false)}>
             Keep editing
           </Button>
-          <Button type="button" onClick={() => pending?.decide(true)}>
+          <Button type="button" variant="destructive" onClick={() => pending?.decide(true)}>
             Discard
           </Button>
         </DialogFooter>

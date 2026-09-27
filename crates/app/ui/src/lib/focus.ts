@@ -6,3 +6,12 @@
 export function focusMainHeading() {
   document.getElementById("screen-heading")?.focus();
 }
+
+/**
+ * A screen's own list pane (its `role="listbox"`, by DOM id), for after deleting the item that had it open —
+ * so keyboard arrow-key navigation keeps working right where the list is, rather than landing on the
+ * now-removed row's own detail or a heading with nothing left to point at.
+ */
+export function focusListbox(id: string) {
+  document.getElementById(id)?.focus();
+}

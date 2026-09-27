@@ -44,7 +44,7 @@ function ChooseProfile({ profiles }: { profiles: string[] }) {
           New profile…
         </Button>
         <Button variant="ghost" size="sm" className="w-fit" disabled={importProfile.picking} onClick={importProfile.start}>
-          Import a profile…
+          Import profile…
         </Button>
       </div>
       <CreateProfileDialog open={createOpen} onOpenChange={setCreateOpen} activate onCloseFocus={() => newProfileRef.current?.focus()} />
@@ -64,7 +64,7 @@ function CreateFirstProfile() {
           Create profile
         </Button>
         <Button variant="outline" size="sm" className="w-fit" disabled={importProfile.picking} onClick={importProfile.start}>
-          Import a profile…
+          Import profile…
         </Button>
       </div>
       <CreateProfileDialog open={open} onOpenChange={setOpen} activate onCloseFocus={() => triggerRef.current?.focus()} />

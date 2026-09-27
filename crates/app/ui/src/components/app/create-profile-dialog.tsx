@@ -28,6 +28,9 @@ export function CreateProfileDialog({ open, onOpenChange, activate, onCloseFocus
   const openRef = useRef(open);
   openRef.current = open;
   const inFlightRef = useRef(false);
+  // The id of a busy-toast `showError` last showed, so a retry that then succeeds can dismiss it (Task 12
+  // ruling: a busy toast must not linger once the thing it was about has gone through).
+  const errorToastRef = useRef<string | number | null>(null);
 
   /** Closing (Create, Cancel, Escape or an overlay click) always clears the fields for next time, and the
    *  create-retry memory with them (ruling 16): a later create starts clean rather than reusing this round's. */
@@ -37,6 +40,7 @@ export function CreateProfileDialog({ open, onOpenChange, activate, onCloseFocus
       setName("");
       setDescription("");
       create.forgetRetry();
+      errorToastRef.current = null;
     }
   };
 
@@ -48,12 +52,16 @@ export function CreateProfileDialog({ open, onOpenChange, activate, onCloseFocus
       {
         onSuccess: () => {
           inFlightRef.current = false;
-          toast(`Profile ${name} created`);
+          if (errorToastRef.current !== null) {
+            toast.dismiss(errorToastRef.current);
+            errorToastRef.current = null;
+          }
+          toast(`Created profile ${name}`);
           close(false);
         },
         onError: (e) => {
           inFlightRef.current = false;
-          showError(e, submit);
+          errorToastRef.current = showError(e, submit);
         },
       },
     );
@@ -111,7 +119,7 @@ export function CreateProfileDialog({ open, onOpenChange, activate, onCloseFocus
             <Input id="profile-description" placeholder="Client X, single-day commercial" value={description} onChange={(e) => setDescription(e.target.value)} />
           </div>
           <DialogFooter>
-            <Button type="button" variant="ghost" onClick={() => close(false)}>Cancel</Button>
+            <Button type="button" variant="outline" onClick={() => close(false)}>Cancel</Button>
             <Button type="submit" disabled={!SLUG.test(name) || create.isPending}>Create profile</Button>
           </DialogFooter>
         </form>

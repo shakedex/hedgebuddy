@@ -69,6 +69,9 @@ export function NewScriptDialog({ open, onOpenChange, profile, appsOverview, exi
 
   const create = useCreateScript();
   const inFlightRef = useRef(false);
+  // The id of a busy-toast `showError` last showed, so a retry that then succeeds can dismiss it (Task 12
+  // ruling: a busy toast must not linger once the thing it was about has gone through).
+  const errorToastRef = useRef<string | number | null>(null);
   // Bumped on every open *and* every close (the effect below), so a closure from an earlier open/close cycle
   // — a busy toast's "Try again", bound to a `submit` from before the operator cancelled and reopened this
   // same (never-unmounted) dialog — can tell it no longer belongs to the current one and bail before it ever
@@ -136,6 +139,7 @@ export function NewScriptDialog({ open, onOpenChange, profile, appsOverview, exi
     setTemplateError(null);
     templateRequestId.current++;
     create.forgetRetry();
+    errorToastRef.current = null;
   };
 
   const close = (next: boolean) => {
@@ -163,6 +167,10 @@ export function NewScriptDialog({ open, onOpenChange, profile, appsOverview, exi
         onSuccess: (result) => {
           inFlightRef.current = false;
           if (session !== sessionRef.current) return;
+          if (errorToastRef.current !== null) {
+            toast.dismiss(errorToastRef.current);
+            errorToastRef.current = null;
+          }
           toast(`Created ${result.name}`);
           close(false);
           onCreated(result.name);
@@ -170,7 +178,7 @@ export function NewScriptDialog({ open, onOpenChange, profile, appsOverview, exi
         onError: (e) => {
           inFlightRef.current = false;
           if (session !== sessionRef.current) return;
-          showError(e, submit);
+          errorToastRef.current = showError(e, submit);
         },
       },
     );
@@ -238,15 +246,13 @@ export function NewScriptDialog({ open, onOpenChange, profile, appsOverview, exi
                 <SelectTrigger id="new-script-event">
                   {/* Overrides Radix's default mirroring of the selected item's rich (two-line) content, so
                       the closed trigger stays one line. */}
-                  <SelectValue placeholder="Choose an event">
-                    {eventId ? <span className="font-mono">{eventId}</span> : undefined}
-                  </SelectValue>
+                  <SelectValue placeholder="Choose an event">{eventId}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {selectedApp.events.map((e) => (
                     <SelectItem key={e.id} value={e.id}>
                       <div className="flex min-w-0 flex-col">
-                        <span className="font-mono text-foreground-strong">{e.id}</span>
+                        <span className="text-foreground-strong">{e.id}</span>
                         <span className="text-xs text-muted-foreground">{e.description}</span>
                       </div>
                     </SelectItem>
@@ -281,7 +287,7 @@ export function NewScriptDialog({ open, onOpenChange, profile, appsOverview, exi
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="ghost" onClick={() => close(false)}>
+            <Button type="button" variant="outline" onClick={() => close(false)}>
               Cancel
             </Button>
             <Button type="submit" disabled={!canCreate || create.isPending} aria-busy={create.isPending}>
