@@ -191,8 +191,8 @@ pub struct AppRow {
     /// Events attached to a profile script, running or staged (0 when its
     /// attachments cannot be read).
     pub attached: usize,
-    /// Events that run the operator's own file, outside any profile (0 when
-    /// its attachments cannot be read).
+    /// Events that run the operator's own file, outside any profile, or
+    /// have it staged (0 when its attachments cannot be read).
     pub external: usize,
     /// Events that point at a file that no longer exists (0 when its
     /// attachments cannot be read).
@@ -413,8 +413,17 @@ pub fn apps_overview(ctx: &Context, _: NoParams) -> Result<AppsOverview, ToolErr
         let (mut attached, mut external, mut stale) = (0, 0, 0);
         if let Ok(list) = ctx.hedge.attachments(&status.id, &ctx.store) {
             for a in &list {
-                match a.state {
-                    AttachState::Attached { .. } | AttachState::Staged { .. } => attached += 1,
+                match &a.state {
+                    AttachState::Attached { .. } => attached += 1,
+                    // As `scripts_overview` reads it: staged is attached
+                    // only when it is a profile script.
+                    AttachState::Staged { path, .. } => {
+                        if managed_script(&ctx.store, path).is_some() {
+                            attached += 1;
+                        } else {
+                            external += 1;
+                        }
+                    }
                     AttachState::External { .. } => external += 1,
                     AttachState::Stale { .. } => stale += 1,
                     _ => {}
@@ -694,6 +703,66 @@ mod tests {
         assert_eq!(
             (offshoot.attached, offshoot.external, offshoot.stale),
             (0, 0, 0)
+        );
+    }
+
+    #[test]
+    fn apps_count_a_staged_own_file_as_external_not_attached() {
+        let home = tempfile::tempdir().unwrap();
+        let (_d, _f, ctx) = test_ctx(FakeHost::new(Os::Macos).with_home(home.path()));
+        call(&ctx, "create_profile", json!({"name": "p"})).unwrap();
+        let source = targeting("FileCopyCompleted");
+        call(
+            &ctx,
+            "write_script",
+            json!({"name": "copy.py", "source": source}),
+        )
+        .unwrap();
+        call(&ctx, "attach_script", json!({"name": "copy.py"})).unwrap();
+        // The operator stages their own file for the same event in OffShoot
+        // Helper's workspace.
+        let workspace = home
+            .path()
+            .join("Library/Preferences/Hedge/Workspaces/HedgeBuddy.json");
+        let mut doc: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&workspace).unwrap()).unwrap();
+        let prefs = doc
+            .as_array_mut()
+            .unwrap()
+            .iter_mut()
+            .find_map(|v| v.get_mut("setPreferences"))
+            .and_then(serde_json::Value::as_object_mut)
+            .unwrap();
+        let key = prefs
+            .iter()
+            .find(|(_, v)| v.as_str().is_some_and(|s| s.ends_with("copy.py")))
+            .map(|(k, _)| k.clone())
+            .unwrap();
+        prefs.insert(key, json!("/Users/op/own.py"));
+        std::fs::write(&workspace, serde_json::to_string(&doc).unwrap()).unwrap();
+
+        let o = checked(
+            "scripts_overview",
+            scripts_overview(&ctx, ProfileArgs::default()).unwrap(),
+        );
+        assert_eq!(
+            o.scripts[0].attachment,
+            TargetAttachment::External {
+                path: PathBuf::from("/Users/op/own.py")
+            }
+        );
+        let apps = checked(
+            "apps_overview",
+            apps_overview(&ctx, crate::NoParams {}).unwrap(),
+        );
+        let offshoot = apps
+            .apps
+            .iter()
+            .find(|a| a.status.id == "offshoot")
+            .unwrap();
+        assert_eq!(
+            (offshoot.attached, offshoot.external, offshoot.stale),
+            (0, 1, 0)
         );
     }
 

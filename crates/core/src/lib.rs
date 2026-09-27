@@ -45,6 +45,7 @@ pub use clock::now_rfc3339;
 pub use error::{CoreError, Result};
 pub use export::{
     read_profile_export, write_profile_export, ImportSummary, ProfileExport, EXPORT_MAX_BYTES,
+    IMPORT_MAX_ITEMS,
 };
 pub use hedge::Hedge;
 pub use host::{FakeHost, Host, Os, RealHost};

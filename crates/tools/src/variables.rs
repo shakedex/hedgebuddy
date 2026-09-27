@@ -48,7 +48,7 @@ pub struct SetVar {
     /// One of: string, secret, int, float, bool, path, url, string[], path[].
     #[serde(rename = "type")]
     pub ty: String,
-    /// The value, as JSON matching the type (secret and url are strings; string[] and path[] are arrays of strings). Omit it to keep the current value of an existing variable of the same type, for example to change only the description.
+    /// The value, as JSON matching the type (secret and url are strings; string[] and path[] are arrays of strings). Omit it (null counts as omitted) to keep the current value of an existing variable of the same type, for example to change only the description.
     #[serde(default)]
     pub value: Option<Value>,
     /// What the variable is for. Omit it to keep the existing variable's description.
@@ -189,7 +189,7 @@ pub fn tools() -> Vec<ToolDef> {
         ),
         tool!(
             "set_var",
-            "Create or replace a variable. type is string, secret, int, float, bool, path, url, string[] or path[]; value must match it; omit value to keep the current one (for example to change only the description). Secret values are stored separately and never returned by this tool.",
+            "Create or replace a variable. type is string, secret, int, float, bool, path, url, string[] or path[]; value must match it; omit value (or pass null) to keep the current one (for example to change only the description). Secret values are stored separately and never returned by this tool.",
             WRITE,
             SetVar,
             SetVarResult,
@@ -475,6 +475,59 @@ mod tests {
         .unwrap();
         let retyped = call(&ctx, "set_var", json!({"name": "N", "type": "string"})).unwrap_err();
         assert!(retyped.0.contains("pass a value"), "{retyped}");
+    }
+
+    #[test]
+    fn keeping_a_secret_with_no_stored_value_asks_for_one() {
+        let (_d, ctx) = ctx_with_profile();
+        call(
+            &ctx,
+            "set_var",
+            json!({"name": "HOOK", "type": "secret", "value": "https://hook"}),
+        )
+        .unwrap();
+        // An import without secrets leaves the secret variable with no value.
+        let export = ctx.store.export_profile("p", false).unwrap();
+        ctx.store.import_profile(&export, "q").unwrap();
+        assert_eq!(
+            call(&ctx, "get_var", json!({"name": "HOOK", "profile": "q"})).unwrap()["missing"],
+            true
+        );
+        for args in [
+            json!({"name": "HOOK", "type": "secret", "profile": "q", "description": "Webhook"}),
+            json!({"name": "HOOK", "type": "secret", "profile": "q", "value": null}),
+        ] {
+            let err = call(&ctx, "set_var", args).unwrap_err();
+            assert_eq!(
+                err.0,
+                "variable 'HOOK' has no secret value to keep; pass a value"
+            );
+        }
+        let v = call(&ctx, "get_var", json!({"name": "HOOK", "profile": "q"})).unwrap();
+        assert_eq!(
+            (v["missing"].clone(), v["description"].clone()),
+            (json!(true), json!(""))
+        );
+    }
+
+    #[test]
+    fn a_null_value_counts_as_omitted() {
+        let (_d, ctx) = ctx_with_profile();
+        call(
+            &ctx,
+            "set_var",
+            json!({"name": "A", "type": "string", "value": "x"}),
+        )
+        .unwrap();
+        call(
+            &ctx,
+            "set_var",
+            json!({"name": "A", "type": "string", "value": null, "description": "What A is"}),
+        )
+        .unwrap();
+        let v = call(&ctx, "get_var", json!({"name": "A"})).unwrap();
+        assert_eq!(v["value"], "x");
+        assert_eq!(v["description"], "What A is");
     }
 
     #[test]

@@ -49,13 +49,19 @@ pub struct PathStatusList {
 pub struct PathState {
     /// The path as given.
     pub path: String,
-    /// Whether the path exists (false for a Windows device path such as
-    /// `\\.\pipe\x`, which is never looked at).
+    /// Whether the path exists (false when it was not checked).
     pub exists: bool,
     /// Whether its drive, network share or `/Volumes` volume is present
-    /// (true for a relative, empty or device path, which has no drive to be
-    /// missing).
+    /// (true for a relative path, which has no drive to be missing, and
+    /// when the path was not checked, so nothing reads as missing).
     pub mounted: bool,
+    /// Whether HedgeBuddy looked for the path. False for an empty path, a
+    /// Windows device path such as `\\.\pipe\x`, and a share on a server
+    /// named by a dotted name or an IP address (`\\files.example.com\x`,
+    /// `\\10.0.0.5\x`), which could be anywhere: looking would send it the
+    /// operator's Windows sign-in. A one-word server such as `\\nas\x` is
+    /// checked.
+    pub checked: bool,
 }
 
 /// Whether each path exists and whether its drive is mounted, so a path
@@ -65,7 +71,9 @@ pub struct PathState {
 /// is looked at before its paths: when it is missing, its paths read
 /// `exists: false, mounted: false` without a look (each would otherwise wait
 /// out the network on its own). Windows device paths (`\\.\…`,
-/// `\\?\GLOBALROOT…`) are never looked at.
+/// `\\?\GLOBALROOT…`) and shares on a server that may be outside the local
+/// network (see [`is_remote_host`]) are never looked at: they read
+/// `checked: false`.
 pub fn path_status(_ctx: &Context, args: PathStatusArgs) -> Result<PathStatusList, ToolError> {
     if args.paths.len() > PATH_STATUS_MAX {
         return Err(ToolError::new(format!(
@@ -84,7 +92,8 @@ fn path_states(paths: Vec<String>, exists: &mut dyn FnMut(&Path) -> bool) -> Vec
     let mut states = Vec::with_capacity(paths.len());
     for path in paths {
         let p = Path::new(&path);
-        let (found, mounted) = if path.is_empty() || is_device_path(p) {
+        let checked = !(path.is_empty() || is_device_path(p) || is_remote_host_path(&path));
+        let (found, mounted) = if !checked {
             (false, true)
         } else {
             match volume_of(p) {
@@ -113,9 +122,68 @@ fn path_states(paths: Vec<String>, exists: &mut dyn FnMut(&Path) -> bool) -> Vec
             path,
             exists: found,
             mounted,
+            checked,
         });
     }
     states
+}
+
+/// Whether `path` is a network path whose server [`is_remote_host`] names,
+/// by its text or by the prefix Windows parses from it.
+fn is_remote_host_path(path: &str) -> bool {
+    let parsed = match Path::new(path).components().next() {
+        Some(Component::Prefix(prefix)) => match prefix.kind() {
+            Prefix::UNC(server, _) | Prefix::VerbatimUNC(server, _) => {
+                Some(server.to_string_lossy())
+            }
+            _ => None,
+        },
+        _ => None,
+    };
+    unc_server(path).is_some_and(is_remote_host) || parsed.is_some_and(|s| is_remote_host(&s))
+}
+
+/// The server a network path names, read from its text the way Windows
+/// reads it: `server` in `\\server\share`, `//server/share` (either
+/// separator, also with no share after it) and `\\?\UNC\server\share`
+/// (where only `\` separates, so the server runs to the next `\`). `None`
+/// for any other path; device paths (`\\.\…`, `\\?\…`, `//?/…`) are
+/// [`is_device_path`]'s.
+fn unc_server(path: &str) -> Option<&str> {
+    let is_sep = |c: char| c == '\\' || c == '/';
+    if path
+        .get(..7)
+        .is_some_and(|p| p.eq_ignore_ascii_case(r"\\?\UNC"))
+        && path[7..].starts_with(is_sep)
+    {
+        return path[8..].split('\\').next();
+    }
+    let mut chars = path.chars();
+    if !(chars.next().is_some_and(is_sep) && chars.next().is_some_and(is_sep)) {
+        return None;
+    }
+    let server = path[2..].split(is_sep).next()?;
+    (server != "?" && server != ".").then_some(server)
+}
+
+/// Whether a network path's server may be outside the local network, so
+/// looking at the path could send the operator's Windows sign-in (NTLM) to a
+/// stranger: a path variable can come from an imported profile or an agent.
+/// That is a server named with a dot (`files.example.com`, `nas.`, `10.0.0.5`,
+/// also with an ideographic or full-width dot), an IPv6 address (`fe80::1`,
+/// `[::1]`), or a one-number address Windows also accepts (`167772165`,
+/// `0x0a000005`). The host of a WebDAV name (`host@SSL@443`) is the part
+/// before `@`. A one-word name such as `nas` is found on the local network
+/// only, and is looked at.
+fn is_remote_host(server: &str) -> bool {
+    let host = server.split('@').next().unwrap_or(server);
+    let b = host.as_bytes();
+    let decimal = !b.is_empty() && b.iter().all(u8::is_ascii_digit);
+    let hex = b.len() > 2
+        && b[0] == b'0'
+        && b[1].eq_ignore_ascii_case(&b'x')
+        && b[2..].iter().all(u8::is_ascii_hexdigit);
+    decimal || hex || host.contains(['.', ':', '[', ']', '\u{3002}', '\u{ff0e}', '\u{ff61}'])
 }
 
 /// Whether each volume root seen in one `path_status` call is present, by
@@ -662,7 +730,7 @@ pub struct ExportArgs {
     /// owner-only on Unix.
     pub include_secrets: bool,
     /// The absolute path of the file to write (replaced if it exists),
-    /// outside the data folder.
+    /// outside the data folder, with no `.` or `..` part.
     pub dest: String,
 }
 
@@ -705,7 +773,8 @@ pub fn export_profile(ctx: &Context, args: ExportArgs) -> Result<ExportResult, T
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ImportArgs {
-    /// The absolute path of the export file to read.
+    /// The absolute path of the export file to read, with no `.` or `..`
+    /// part.
     pub path: String,
     /// The new profile's name.
     pub name: String,
@@ -721,9 +790,9 @@ pub fn import_profile(ctx: &Context, args: ImportArgs) -> Result<ImportSummary, 
     Ok(ctx.store.import_profile(&export, &args.name)?)
 }
 
-/// Whether writing absolute `dest` would land inside the data folder: by
-/// its text (`..` resolved, case ignored), or through a link on the way to
-/// its nearest folder that exists. The export creates missing folders and
+/// Whether writing absolute `dest` (which [`absolute`] has kept free of `.`
+/// and `..`) would land inside the data folder: by its text (case
+/// ignored), or through a link on the way to its nearest folder that exists. The export creates missing folders and
 /// replaces `dest` itself rather than writing through it, so the file's own
 /// target does not matter.
 fn lands_in_data_folder(ctx: &Context, dest: &Path) -> bool {
@@ -742,19 +811,29 @@ fn lands_in_data_folder(ctx: &Context, dest: &Path) -> bool {
 
 /// `path` when it is absolute: a relative one would resolve against the
 /// app's working directory, which the operator never chose. A Windows
-/// device path is not a file path and is refused too.
+/// device path is not a file path and is refused too, and so is a path
+/// with a `.` or `..` part: on Unix the system resolves `..` after
+/// following the link before it, so `<x>/missing/../link/p.json` can land
+/// wherever `link` leads while its text says `<x>/link/p.json`.
 fn absolute<'a>(path: &'a str, what: &str) -> Result<&'a Path, ToolError> {
     let p = Path::new(path);
     if is_device_path(p) {
         Err(ToolError::new(format!(
             "the {what} must be a file path, not '{path}'"
         )))
-    } else if p.is_absolute() {
-        Ok(p)
-    } else {
+    } else if !p.is_absolute() {
         Err(ToolError::new(format!(
             "the {what} must be an absolute path, not '{path}'"
         )))
+    } else if path
+        .split(std::path::is_separator)
+        .any(|part| part == "." || part == "..")
+    {
+        Err(ToolError::new(format!(
+            "Choose a full path without '.' or '..' for the {what}, not '{path}'"
+        )))
+    } else {
+        Ok(p)
     }
 }
 
@@ -864,7 +943,8 @@ mod tests {
             PathState {
                 path: here,
                 exists: true,
-                mounted: true
+                mounted: true,
+                checked: true
             }
         );
         assert_eq!(
@@ -872,10 +952,11 @@ mod tests {
             PathState {
                 path: gone,
                 exists: false,
-                mounted: true
+                mounted: true,
+                checked: true
             }
         );
-        assert!(!out.paths[2].exists);
+        assert!(!out.paths[2].exists && !out.paths[2].checked);
         #[cfg(windows)]
         {
             let absent = (b'D'..=b'Z')
@@ -1434,7 +1515,6 @@ mod tests {
 
     /// `path_states` with a file system in which only `present` exist,
     /// and the paths it looked at, in order.
-    #[cfg(any(windows, target_os = "macos"))]
     fn probed(paths: &[&str], present: &[&str]) -> (Vec<PathState>, Vec<String>) {
         let mut seen = Vec::new();
         let states = path_states(
@@ -1455,6 +1535,59 @@ mod tests {
             path: path.into(),
             exists,
             mounted,
+            checked: true,
+        }
+    }
+
+    #[test]
+    fn path_status_never_contacts_a_server_that_may_be_outside_the_network() {
+        let remote = [
+            r"\\files.example.com\share\x",
+            "//files.example.com/share/x",
+            r"\/files.example.com\share/x",
+            r"\\files.example.com",
+            r"\\files.example.com\",
+            r"\\nas.\share\x",
+            r"\\?\UNC\files.example.com\share\x",
+            r"\\?\unc\files.example.com\share\x",
+            r"\\?\UNC\nas/evil.example\share\x",
+            r"\\10.0.0.5\share\x",
+            r"\\127.0.0.1\c$\x",
+            r"\\[fe80::1]\share\x",
+            r"\\fe80::1\share\x",
+            r"\\167772165\share\x",
+            r"\\0x0A000005\share\x",
+            r"\\files.example.com@SSL@443\DavWWWRoot\x",
+            r"\\134744072@80\share\x",
+            "\\\\files\u{3002}example\\share\\x",
+            "\\\\files\u{ff0e}example\\share\\x",
+        ];
+        let (states, seen) = probed(&remote, &[]);
+        assert!(seen.is_empty(), "{seen:?}");
+        for (p, s) in remote.iter().zip(&states) {
+            let expected = PathState {
+                path: (*p).into(),
+                exists: false,
+                mounted: true,
+                checked: false,
+            };
+            assert_eq!(s, &expected, "{p}");
+        }
+        // A one-word server is found on the local network only: looked at.
+        for p in [r"\\nas\share\x", "//nas/share/x", r"\\?\UNC\nas\share\x"] {
+            let (states, seen) = probed(&[p], &[]);
+            assert!(states[0].checked, "{p}");
+            assert!(!seen.is_empty(), "{p}");
+        }
+        assert_eq!(unc_server(r"\\nas\share"), Some("nas"));
+        assert_eq!(unc_server("//nas/share"), Some("nas"));
+        assert_eq!(unc_server(r"\\?\UNC\nas/x\share"), Some("nas/x"));
+        assert_eq!(unc_server(r"\\.\pipe\x"), None);
+        assert_eq!(unc_server(r"\\?\C:\x"), None);
+        assert_eq!(unc_server(r"C:\x"), None);
+        assert_eq!(unc_server("/Volumes/x.y/z"), None);
+        for name in ["nas", "NAS-01", "0xnas", "0x", ""] {
+            assert!(!is_remote_host(name), "{name}");
         }
     }
 
@@ -1696,7 +1829,7 @@ mod tests {
 
     #[test]
     fn export_refuses_a_destination_in_the_data_folder() {
-        let (dir, _f, ctx) = test_ctx(FakeHost::new(Os::Windows));
+        let (_dir, _f, ctx) = test_ctx(FakeHost::new(Os::Windows));
         call(&ctx, "create_profile", json!({"name": "p"})).unwrap();
         let profile_json = ctx
             .store
@@ -1710,11 +1843,6 @@ mod tests {
             profile_json.clone(),
             root.join("p.json"),
             root.join("new").join("p.json"),
-            dir.path()
-                .join("elsewhere")
-                .join("..")
-                .join("HedgeBuddy")
-                .join("p.json"),
         ] {
             let err = export_profile(
                 &ctx,
@@ -1741,6 +1869,124 @@ mod tests {
             assert!(export_profile(&ctx, args).is_err());
             assert!(!root.join("p.json").exists());
         }
+    }
+
+    #[test]
+    fn export_and_import_refuse_dot_and_dot_dot_parts() {
+        let (dir, _f, ctx) = test_ctx(FakeHost::new(Os::Windows));
+        call(&ctx, "create_profile", json!({"name": "p"})).unwrap();
+        let good = dir.path().join("p.json");
+        let export = |dest: String| {
+            export_profile(
+                &ctx,
+                ExportArgs {
+                    name: "p".into(),
+                    include_secrets: false,
+                    dest,
+                },
+            )
+        };
+        export(good.display().to_string()).unwrap();
+        let base = dir.path().display().to_string();
+        let dotted = [
+            dir.path().join("x").join("..").join("p2.json"),
+            dir.path().join(".").join("p2.json"),
+            dir.path()
+                .join("elsewhere")
+                .join("..")
+                .join("HedgeBuddy")
+                .join("p.json"),
+            PathBuf::from(format!("{base}/x/../p2.json")),
+            PathBuf::from(format!("{base}/./p2.json")),
+            PathBuf::from(format!("{base}/x/..")),
+        ];
+        for dest in &dotted {
+            let err = export(dest.display().to_string()).unwrap_err();
+            assert!(err.0.contains("without '.' or '..'"), "{dest:?}: {err}");
+        }
+        assert!(!dir.path().join("x").exists());
+        assert!(!dir.path().join("elsewhere").exists());
+        assert!(!dir.path().join("p2.json").exists());
+        assert!(!ctx.store.root().join("p.json").exists());
+        // A name that merely contains dots is fine.
+        export(dir.path().join("..p..json").display().to_string()).unwrap();
+        let import = |path: PathBuf| {
+            import_profile(
+                &ctx,
+                ImportArgs {
+                    path: path.display().to_string(),
+                    name: "q".into(),
+                },
+            )
+        };
+        for path in [
+            dir.path().join("x").join("..").join("p.json"),
+            dir.path().join(".").join("p.json"),
+        ] {
+            let err = import(path.clone()).unwrap_err();
+            assert!(err.0.contains("without '.' or '..'"), "{path:?}: {err}");
+        }
+        assert!(!ctx.store.profile_exists("q"));
+        import(good).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn export_refuses_a_link_into_the_data_folder_however_it_is_spelled() {
+        let (dir, _f, ctx) = test_ctx(FakeHost::new(Os::Windows));
+        call(&ctx, "create_profile", json!({"name": "p"})).unwrap();
+        let profile_dir = ctx.store.root().join("profiles").join("p");
+        let profile_json = profile_dir.join("profile.json");
+        let before = std::fs::read(&profile_json).unwrap();
+        let link = dir.path().join("link");
+        std::os::unix::fs::symlink(&profile_dir, &link).unwrap();
+        let export = |dest: String| {
+            export_profile(
+                &ctx,
+                ExportArgs {
+                    name: "p".into(),
+                    include_secrets: false,
+                    dest,
+                },
+            )
+        };
+        let through_link = link.join("profile.json").display().to_string();
+        let err = export(through_link).unwrap_err();
+        assert!(err.0.contains("data folder"), "{err}");
+        let deeper = link.join("new").join("profile.json").display().to_string();
+        let err = export(deeper).unwrap_err();
+        assert!(err.0.contains("data folder"), "{err}");
+        // The text of `<dir>/missing/../link/…` resolves to `<dir>/link/…`,
+        // but the system would follow `link` first: refused for its `..`.
+        let sneaky = format!("{}/missing/../link/profile.json", dir.path().display());
+        let err = export(sneaky).unwrap_err();
+        assert!(err.0.contains("without '.' or '..'"), "{err}");
+        assert!(!dir.path().join("missing").exists());
+        assert!(!profile_dir.join("new").exists());
+        assert_eq!(std::fs::read(&profile_json).unwrap(), before);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn reveal_refuses_a_link_from_the_data_folder_to_outside_it() {
+        let (dir, _f, ctx) = test_ctx(FakeHost::new(Os::Windows));
+        call(&ctx, "create_profile", json!({"name": "p"})).unwrap();
+        let outside = dir.path().join("outside");
+        std::fs::create_dir_all(&outside).unwrap();
+        std::fs::write(outside.join("x.txt"), "x").unwrap();
+        let root = ctx.store.root().to_path_buf();
+        std::os::unix::fs::symlink(outside.join("x.txt"), root.join("file-link")).unwrap();
+        std::os::unix::fs::symlink(&outside, root.join("dir-link")).unwrap();
+        for p in [
+            root.join("file-link"),
+            root.join("dir-link"),
+            root.join("dir-link").join("x.txt"),
+        ] {
+            let err = reveal_target(&ctx, &p.display().to_string()).unwrap_err();
+            assert_eq!(err.0, REVEAL_REFUSED, "{p:?}");
+        }
+        // The data folder itself is still shown.
+        assert!(reveal_target(&ctx, &root.display().to_string()).is_ok());
     }
 
     #[test]

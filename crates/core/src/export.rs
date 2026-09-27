@@ -22,6 +22,9 @@ use crate::variable::{validate_slug, VarType};
 /// The largest export file `read_profile_export` accepts by default.
 pub const EXPORT_MAX_BYTES: u64 = 16 * 1024 * 1024;
 
+/// The most scripts, and separately the most variables, an import accepts.
+pub const IMPORT_MAX_ITEMS: usize = 1000;
+
 /// A profile as one file.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -111,14 +114,25 @@ impl Store {
 
     /// Create profile `name` from `export`. Everything is checked before
     /// anything is written, and a profile half-created by a failed write is
-    /// removed. The first profile becomes active. The caller holds the write
-    /// lock.
+    /// removed. A file with more than [`IMPORT_MAX_ITEMS`] scripts or
+    /// variables is refused. The first profile becomes active. The caller
+    /// holds the write lock.
     pub fn import_profile(&self, export: &ProfileExport, name: &str) -> Result<ImportSummary> {
         if export.hedgebuddy_profile_export != 1 {
             return Err(CoreError::Validation(format!(
                 "unsupported profile export version {} (expected 1)",
                 export.hedgebuddy_profile_export
             )));
+        }
+        for (count, what) in [
+            (export.scripts.len(), "scripts"),
+            (export.profile.variables.len(), "variables"),
+        ] {
+            if count > IMPORT_MAX_ITEMS {
+                return Err(CoreError::Validation(format!(
+                    "the file has {count} {what}; a profile can import at most {IMPORT_MAX_ITEMS}"
+                )));
+            }
         }
         validate_slug(name)?;
         if self.profile_dir(name).exists() {
@@ -409,6 +423,47 @@ mod tests {
             CoreError::Validation(msg) => assert!(msg.contains("broken.py"), "{msg}"),
             other => panic!("expected Validation, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn import_refuses_more_than_the_most_scripts_or_variables() {
+        let (_d, store) = store_with_profile();
+        let good = store.export_profile("a", false).unwrap();
+
+        let mut many_scripts = good.clone();
+        for i in many_scripts.scripts.len()..=IMPORT_MAX_ITEMS {
+            many_scripts
+                .scripts
+                .insert(format!("s{i}.py"), "print(1)\n".into());
+        }
+        assert_eq!(many_scripts.scripts.len(), IMPORT_MAX_ITEMS + 1);
+        match store.import_profile(&many_scripts, "c").unwrap_err() {
+            CoreError::Validation(msg) => {
+                assert!(msg.contains("1001 scripts"), "{msg}");
+                assert!(msg.contains("at most 1000"), "{msg}");
+            }
+            other => panic!("expected Validation, got {other:?}"),
+        }
+
+        let mut many_vars = good.clone();
+        let template = many_vars.profile.variables["PROJECT_NAME"].clone();
+        for i in many_vars.profile.variables.len()..=IMPORT_MAX_ITEMS {
+            many_vars
+                .profile
+                .variables
+                .insert(format!("VAR_{i}"), template.clone());
+        }
+        assert_eq!(many_vars.profile.variables.len(), IMPORT_MAX_ITEMS + 1);
+        match store.import_profile(&many_vars, "c").unwrap_err() {
+            CoreError::Validation(msg) => assert!(msg.contains("1001 variables"), "{msg}"),
+            other => panic!("expected Validation, got {other:?}"),
+        }
+        assert!(!store.profile_dir("c").exists(), "nothing was written");
+
+        // Exactly the most is fine (variables: one file, so this stays fast).
+        many_vars.profile.variables.remove("VAR_1000");
+        let summary = store.import_profile(&many_vars, "d").unwrap();
+        assert_eq!(summary.variables, IMPORT_MAX_ITEMS);
     }
 
     #[test]

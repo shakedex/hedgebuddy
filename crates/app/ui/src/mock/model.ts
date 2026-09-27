@@ -33,6 +33,17 @@ function offline(path: string): boolean {
   return /^[Xx]:/.test(path) || path === "/Volumes/Offline" || path.startsWith("/Volumes/Offline/");
 }
 
+/** A share whose server is named with a dot, or is an IP address, which `path_status` never contacts
+ *  (files.rs `is_remote_host_path`): `\\files.example.com\x`, `//10.0.0.5/x`, `\\?\UNC\[::1]\x`, `\\167772165\x`. */
+function remoteShare(path: string): boolean {
+  const verbatim = /^\\\\\?\\UNC[\\/]([^\\]*)/i.exec(path);
+  const plain = /^[\\/]{2}([^\\/]*)/.exec(path);
+  const server = verbatim ? verbatim[1] : plain && plain[1] !== "?" && plain[1] !== "." ? plain[1] : null;
+  if (server === null) return false;
+  const host = server.split("@")[0];
+  return /^\d+$/.test(host) || /^0x[0-9a-f]+$/i.test(host) || /[.:[\]\u3002\uff0e\uff61]/.test(host);
+}
+
 function isAbsolute(path: string): boolean {
   return /^[A-Za-z]:[\\/]/.test(path) || path.startsWith("\\\\") || path.startsWith("/");
 }
@@ -352,14 +363,15 @@ export class Model {
 
   // ---- files, pickers and opening (files.rs, the app's commands.rs) -------------------------------
 
-  /** Drive `X:` and `/Volumes/Offline` are unplugged; an empty path does not exist; everything else does. */
+  /** Drive `X:` and `/Volumes/Offline` are unplugged; an empty path, and a share on a server that may be outside
+   *  the network, are not checked; everything else exists. */
   pathStatus(args: AppIn<"path_status">): AppOut<"path_status"> {
     if (args.paths.length > PATH_STATUS_MAX) throw new ToolError(`path_status checks at most ${PATH_STATUS_MAX} paths at a time`);
     return {
       paths: args.paths.map((path) => {
-        if (path === "") return { path, exists: false, mounted: true };
-        if (offline(path)) return { path, exists: false, mounted: false };
-        return { path, exists: true, mounted: true };
+        if (path === "" || remoteShare(path)) return { path, exists: false, mounted: true, checked: false };
+        if (offline(path)) return { path, exists: false, mounted: false, checked: true };
+        return { path, exists: true, mounted: true, checked: true };
       }),
     };
   }

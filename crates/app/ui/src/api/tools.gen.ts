@@ -549,7 +549,7 @@ export type SetVarInput = {
   profile?: string | null;
   /** One of: string, secret, int, float, bool, path, url, string[], path[]. */
   type: string;
-  /** The value, as JSON matching the type (secret and url are strings; string[] and path[] are arrays of strings). Omit it to keep the current value of an existing variable of the same type, for example to change only the description. */
+  /** The value, as JSON matching the type (secret and url are strings; string[] and path[] are arrays of strings). Omit it (null counts as omitted) to keep the current value of an existing variable of the same type, for example to change only the description. */
   value?: unknown;
 };
 
@@ -741,7 +741,7 @@ export type AppsOverviewOutput = {
 
 /** Arguments of `export_profile`. */
 export type ExportProfileInput = {
-  /** The absolute path of the file to write (replaced if it exists), outside the data folder. */
+  /** The absolute path of the file to write (replaced if it exists), outside the data folder, with no `.` or `..` part. */
   dest: string;
   /** Whether to include secret values; the file is then created owner-only on Unix. */
   include_secrets: boolean;
@@ -790,7 +790,7 @@ export type HomeSummaryOutput = {
 export type ImportProfileInput = {
   /** The new profile's name. */
   name: string;
-  /** The absolute path of the export file to read. */
+  /** The absolute path of the export file to read, with no `.` or `..` part. */
   path: string;
 };
 
@@ -1105,7 +1105,7 @@ export type AppRow = {
   docs: string;
   /** Its scripting events, in catalog order. */
   events: Array<AppEventInfo>;
-  /** Events that run the operator's own file, outside any profile (0 when its attachments cannot be read). */
+  /** Events that run the operator's own file, outside any profile, or have it staged (0 when its attachments cannot be read). */
   external: number;
   /** Events that point at a file that no longer exists (0 when its attachments cannot be read). */
   stale: number;
@@ -1370,9 +1370,11 @@ export type Os = "windows" | "macos";
 
 /** Whether a path exists, and whether the drive it lives on is there. */
 export type PathState = {
-  /** Whether the path exists (false for a Windows device path such as `\\.\pipe\x`, which is never looked at). */
+  /** Whether HedgeBuddy looked for the path. False for an empty path, a Windows device path such as `\\.\pipe\x`, and a share on a server named by a dotted name or an IP address (`\\files.example.com\x`, `\\10.0.0.5\x`), which could be anywhere: looking would send it the operator's Windows sign-in. A one-word server such as `\\nas\x` is checked. */
+  checked: boolean;
+  /** Whether the path exists (false when it was not checked). */
   exists: boolean;
-  /** Whether its drive, network share or `/Volumes` volume is present (true for a relative, empty or device path, which has no drive to be missing). */
+  /** Whether its drive, network share or `/Volumes` volume is present (true for a relative path, which has no drive to be missing, and when the path was not checked, so nothing reads as missing). */
   mounted: boolean;
   /** The path as given. */
   path: string;

@@ -242,8 +242,8 @@ export function scriptsOverview(store: Store, hedge: Hedge, profile: string): Sc
 }
 
 /** Every catalog app with its status, whether it can exist here, and how many events run or miss a file.
- *  `attached` counts only a profile script (attached or staged); the operator's own file counts separately,
- *  in `external` (crates/tools/src/app/overview.rs `apps_overview`). */
+ *  `attached` counts only a profile script (attached or staged); the operator's own file, running or staged,
+ *  counts separately in `external` (crates/tools/src/app/overview.rs `apps_overview`). */
 export function appsOverview(hedge: Hedge): AppsOverviewOutput {
   return {
     os: hedge.os,
@@ -252,8 +252,11 @@ export function appsOverview(hedge: Hedge): AppsOverviewOutput {
       let external = 0;
       let stale = 0;
       for (const a of hedge.attachments(m.app.id)) {
-        if (a.state === "attached" || a.state === "staged") attached++;
-        else if (a.state === "external") external++;
+        if (a.state === "attached") attached++;
+        else if (a.state === "staged") {
+          if (hedge.managedScript(a.path)) attached++;
+          else external++;
+        } else if (a.state === "external") external++;
         else if (a.state === "stale") stale++;
       }
       return {
