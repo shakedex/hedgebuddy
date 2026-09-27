@@ -235,24 +235,26 @@ export function ChangePreviewDialog<P, R>({
 
         {phase === "blocked" && model?.blocked && <BlockedPanel reason={model.blocked} />}
 
+        {/* Warnings show whenever there's something to look at, including "nothing to do" — a sync that only
+            skipped scripts or found conflicts still has a `reason` worth explaining, even though there's no
+            ledger of actual changes and no Apply. */}
+        {(phase === "ready" || phase === "applying" || phase === "nothing-to-do") && model?.warnings && model.warnings.length > 0 && (
+          <ul className="flex flex-col gap-1.5">
+            {model.warnings.map((w, i) => (
+              <li key={i} className="flex items-start gap-2 text-xs text-warning">
+                <TriangleAlert aria-hidden className="mt-0.5 size-3.5 shrink-0" strokeWidth={1.75} />
+                <span className="min-w-0 flex-1">{w}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+
         {(phase === "ready" || phase === "applying") && model && (
-          <>
-            {model.warnings && model.warnings.length > 0 && (
-              <ul className="flex flex-col gap-1.5">
-                {model.warnings.map((w, i) => (
-                  <li key={i} className="flex items-start gap-2 text-xs text-warning">
-                    <TriangleAlert aria-hidden className="mt-0.5 size-3.5 shrink-0" strokeWidth={1.75} />
-                    <span className="min-w-0 flex-1">{w}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-            <ul aria-label="Changes" className="well flex max-h-[45vh] flex-col divide-y divide-border overflow-y-auto">
-              {model.changes.map((row, i) => (
-                <LedgerRow key={i} row={row} />
-              ))}
-            </ul>
-          </>
+          <ul aria-label="Changes" className="well flex max-h-[45vh] flex-col divide-y divide-border overflow-y-auto">
+            {model.changes.map((row, i) => (
+              <LedgerRow key={i} row={row} />
+            ))}
+          </ul>
         )}
 
         <DialogFooter>

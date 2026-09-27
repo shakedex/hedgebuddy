@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { UseQueryResult } from "@tanstack/react-query";
 import { FileCode, Link as LinkIcon, Plus, Search, SearchX } from "lucide-react";
 import { toast } from "sonner";
@@ -7,6 +7,7 @@ import { callTool } from "@/api/bridge";
 import { invalidateHedgeState } from "@/api/queries";
 import type { AppsOverviewOutput, ScriptRow, ScriptsOverviewOutput, SyncAttachmentsOutput } from "@/api/tools.gen";
 import { ChangePreviewDialog, renderWords } from "@/components/app/change-preview-dialog";
+import { CreateProfileDialog } from "@/components/app/create-profile-dialog";
 import { EmptyState } from "@/components/app/empty-state";
 import { ErrorPanel } from "@/components/app/error-panel";
 import { Mono } from "@/components/app/mono";
@@ -15,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { useImportProfile } from "@/hooks/use-import-profile";
 import { useListKeyboard } from "@/hooks/use-list-keyboard";
 import { describeActions, describeState, type ChangeRow } from "@/lib/actions";
 import { appName } from "@/lib/format";
@@ -80,10 +82,13 @@ function attachmentWord(row: ScriptRow): string {
   }
 }
 
-function rowSubtitle(row: ScriptRow): string {
+/** The row's second line, split so the "· N unmet" count (the one part that must never silently disappear)
+ *  is never what gets clipped: the app·event·word part truncates on its own, the count is a separate,
+ *  non-shrinking segment after it. */
+function rowSubtitleParts(row: ScriptRow): { base: string; unmet: string | null } {
   const word = attachmentWord(row);
   const base = row.target ? `${row.target.app_name} · ${row.target.event} · ${word}` : word;
-  return row.unmet.length > 0 ? `${base} · ${row.unmet.length} unmet` : base;
+  return { base, unmet: row.unmet.length > 0 ? `${row.unmet.length} unmet` : null };
 }
 
 /** The row's right-hand status icon, by priority (design direction, Task 12 step 1): a manifest/catalog
@@ -97,6 +102,7 @@ export function rowStatusKey(row: ScriptRow): StatusKey {
 }
 
 function ScriptRowView({ row, selected }: { row: ScriptRow; selected: boolean }) {
+  const { base, unmet } = rowSubtitleParts(row);
   return (
     <Link
       href={`/scripts/${encodeURIComponent(row.name)}`}
@@ -105,7 +111,7 @@ function ScriptRowView({ row, selected }: { row: ScriptRow; selected: boolean })
       aria-selected={selected}
       tabIndex={-1}
       className={cn(
-        "flex flex-col gap-0.5 border-l-2 px-2.5 py-1.5 transition-colors duration-120",
+        "flex flex-col gap-0.5 border-l-2 px-2.5 py-1 transition-colors duration-120",
         selected ? "border-l-primary bg-accent" : "border-l-transparent hover:bg-accent/50",
       )}
     >
@@ -115,7 +121,10 @@ function ScriptRowView({ row, selected }: { row: ScriptRow; selected: boolean })
         </Mono>
         <StatusIcon status={rowStatusKey(row)} className="shrink-0" />
       </span>
-      <span className="truncate text-xs text-muted-foreground">{rowSubtitle(row)}</span>
+      <span className="flex min-w-0 items-baseline gap-1 text-xs text-muted-foreground">
+        <span className="min-w-0 truncate">{base}</span>
+        {unmet && <span className="shrink-0">· {unmet}</span>}
+      </span>
     </Link>
   );
 }
@@ -134,33 +143,100 @@ function ScriptListSkeleton() {
  * The Scripts list (spec §6.4): a filter and New toolbar, a full-width Sync button, one flat listbox. Sync
  * (profile-wide) and New (a modal, not a route) both live here rather than the detail pane.
  */
-export function ScriptList({ overview, appsOverview, selectedName, filterText, onFilterTextChange, onSelect }: {
+export function ScriptList({
+  overview, appsOverview, selectedName, filterText, onFilterTextChange, onSelect, noProfile, allProfiles, activeProfile,
+}: {
   overview: UseQueryResult<ScriptsOverviewOutput>;
   appsOverview: UseQueryResult<AppsOverviewOutput>;
   selectedName: string | null;
   filterText: string;
   onFilterTextChange: (text: string) => void;
   onSelect: (name: string) => void;
+  noProfile: boolean;
+  /** Every profile name, active or not — tells the no-profile empty state "nobody has made one yet" from
+   *  "one exists, just none is active" (mirrors `VariableList`). */
+  allProfiles: string[];
+  /** The currently active profile, so New and Sync stay disabled until `overview.data.profile` genuinely
+   *  matches it (the same race `ScriptDetail` guards against), not just until *some* overview has loaded. */
+  activeProfile: string | null;
 }) {
   // See VariableList: keeps the *last* error across the "pending" flicker a retry causes.
   const lastError = useRef<unknown>(null);
   if (overview.isError) lastError.current = overview.error;
   else if (overview.isSuccess) lastError.current = null;
 
+  const [createOpen, setCreateOpen] = useState(false);
   const [newOpen, setNewOpen] = useState(false);
   const [syncOpen, setSyncOpen] = useState(false);
+  const newProfileRef = useRef<HTMLButtonElement>(null);
   const newButtonRef = useRef<HTMLButtonElement>(null);
   const filterInputRef = useRef<HTMLInputElement>(null);
+  const importProfile = useImportProfile();
+
+  // Creating a profile from the empty state below unmounts that whole branch (and `newProfileRef` with it)
+  // once `noProfile` goes false, so the dialog's own close-focus restore has nothing left to land on. This
+  // reacts to that exact transition instead, once the toolbar (and its filter input) actually exists.
+  const wasNoProfile = useRef(noProfile);
+  useEffect(() => {
+    if (wasNoProfile.current && !noProfile) filterInputRef.current?.focus();
+    wasNoProfile.current = noProfile;
+  }, [noProfile]);
 
   const data = overview.data;
   const { scripts, filtered } = filterScripts(data, filterText);
-  const profile = data?.profile;
+  // Pinned to the active profile, not just "some overview has loaded": right after a profile switch,
+  // `overview.data` can still be one refetch behind (same race `ScriptDetail` guards against), and New/Sync
+  // must not act on the profile the operator just switched away from.
+  const dataReady = Boolean(data) && data?.profile === activeProfile;
+  const profile = dataReady ? data!.profile : undefined;
+  const existingNames = scripts.map((s) => s.name);
 
   const rowIds = filtered.map((r) => rowId(r.name));
   const selectedRowId = selectedName !== null && filtered.some((r) => r.name === selectedName) ? rowId(selectedName) : null;
   const onRowSelect = (id: string) => onSelect(id.slice("script-".length));
   const onKeyDown = useListKeyboard(rowIds, selectedRowId, onRowSelect, (id) => id);
 
+  // No profile and a failed load each replace the whole pane (see VariableList): neither the filter nor New
+  // would do anything useful yet. "No profile yet" (nobody has made one) and "No active profile" (one
+  // exists, just not this one) are different situations with different fixes.
+  if (noProfile) {
+    const hasOtherProfiles = allProfiles.length > 0;
+    return (
+      <div className="flex h-full flex-col">
+        <EmptyState
+          icon={FileCode}
+          title={hasOtherProfiles ? "No active profile" : "No profile yet"}
+          className="px-3 py-6"
+          action={
+            <div className="flex flex-wrap gap-2">
+              {hasOtherProfiles && (
+                <Button asChild size="sm">
+                  <Link href="/">Choose a profile</Link>
+                </Button>
+              )}
+              <Button ref={newProfileRef} variant={hasOtherProfiles ? "outline" : "default"} size="sm" onClick={() => setCreateOpen(true)}>
+                New profile
+              </Button>
+              <Button variant="outline" size="sm" disabled={importProfile.picking} onClick={importProfile.start}>
+                Import a profile…
+              </Button>
+            </div>
+          }
+        >
+          {hasOtherProfiles
+            ? "Pick a profile on Home to make it active, or add another."
+            : "Scripts belong to a profile — create one to start adding them."}
+        </EmptyState>
+        <CreateProfileDialog
+          open={createOpen}
+          onOpenChange={setCreateOpen}
+          activate
+          onCloseFocus={() => newProfileRef.current?.focus()}
+        />
+        {importProfile.dialog}
+      </div>
+    );
+  }
   if (lastError.current !== null && !overview.isSuccess) {
     return (
       <div className="flex h-full flex-col">
@@ -187,14 +263,14 @@ export function ScriptList({ overview, appsOverview, selectedName, filterText, o
         </div>
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button ref={newButtonRef} size="sm" disabled={!data} onClick={() => setNewOpen(true)}>
+            <Button ref={newButtonRef} size="sm" disabled={!dataReady} onClick={() => setNewOpen(true)}>
               <Plus aria-hidden strokeWidth={1.75} /> New
             </Button>
           </TooltipTrigger>
           <TooltipContent>New script from a template</TooltipContent>
         </Tooltip>
       </div>
-      <Button variant="outline" size="sm" className="w-full" disabled={!data} onClick={() => setSyncOpen(true)}>
+      <Button variant="outline" size="sm" className="w-full" disabled={!dataReady} onClick={() => setSyncOpen(true)}>
         <LinkIcon aria-hidden strokeWidth={1.75} /> Sync attachments to this profile
       </Button>
     </div>
@@ -210,7 +286,7 @@ export function ScriptList({ overview, appsOverview, selectedName, filterText, o
         title="No scripts yet"
         className="px-3 py-6"
         action={
-          <Button size="sm" disabled={!data} onClick={() => setNewOpen(true)}>
+          <Button size="sm" disabled={!dataReady} onClick={() => setNewOpen(true)}>
             New script
           </Button>
         }
@@ -241,12 +317,13 @@ export function ScriptList({ overview, appsOverview, selectedName, filterText, o
     <div className="flex h-full min-h-0 flex-col">
       {toolbar}
       <div className="relative min-h-0 flex-1 overflow-y-auto">{body}</div>
-      {data && (
+      {profile && (
         <NewScriptDialog
           open={newOpen}
           onOpenChange={setNewOpen}
-          profile={data.profile}
+          profile={profile}
           appsOverview={appsOverview}
+          existingNames={existingNames}
           onCloseFocus={() => newButtonRef.current?.focus()}
           onCreated={onSelect}
         />
@@ -291,10 +368,11 @@ export function ScriptList({ overview, appsOverview, selectedName, filterText, o
                 </>
               )),
             ];
+            // "Nothing to do" is about *actions*, not about whether the run was otherwise uneventful: a sync
+            // that only skipped scripts or found conflicts still has nothing to attach or detach, but the
+            // warnings above (which the dialog now shows in this phase too) are the point of running it.
             const nothingToDo =
-              p.attach.length === 0 && p.detach.length === 0 && p.conflicts.length === 0 && p.skipped.length === 0
-                ? "The Hedge apps already run this profile's scripts."
-                : undefined;
+              p.attach.length === 0 && p.detach.length === 0 ? "The Hedge apps already run this profile's scripts." : undefined;
             return {
               summary: (
                 <>

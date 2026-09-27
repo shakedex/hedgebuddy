@@ -18,9 +18,11 @@ export function ScriptsScreen({ name }: { name?: string }) {
   const [filterText, setFilterText] = useState("");
   const [, navigate] = useLocation();
 
-  // `list_profiles` is the active-profile signal — not `scripts_overview` itself, whose own `profile` field
-  // can still be one refetch behind right after a profile switch (see `ScriptDetail`'s own guard).
+  // `list_profiles` (not `scripts_overview`, which only ever errors with no active profile) is what tells
+  // the list to show "No profile yet" instead of a load failure, and is also the source of the profile name
+  // the detail pane pins itself to — matching `VariablesScreen`.
   const activeProfile = profiles.data?.active ?? null;
+  const noProfile = profiles.isSuccess && activeProfile === null;
   const { filtered } = filterScripts(overview.data, filterText);
   const hasRows = filtered.length > 0;
   const selected = Boolean(name) && activeProfile !== null;
@@ -39,9 +41,15 @@ export function ScriptsScreen({ name }: { name?: string }) {
           filterText={filterText}
           onFilterTextChange={setFilterText}
           onSelect={(n) => navigate(`/scripts/${encodeURIComponent(n)}`, { replace: Boolean(name) })}
+          noProfile={noProfile}
+          allProfiles={profiles.data?.profiles ?? []}
+          activeProfile={activeProfile}
         />
       }
       detail={
+        // With no active profile (or it isn't known yet), the detail pane shows nothing rather than the raw
+        // "no active profile" error `scripts_overview` would otherwise surface — the list's own empty state
+        // already says what to do.
         name && activeProfile ? (
           // Keyed on profile *and* name: switching profiles remounts this rather than risking a stale read
           // (or a Detach/Attach/Delete) landing against the wrong profile's script of the same name.

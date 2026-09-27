@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import type { UseQueryResult } from "@tanstack/react-query";
-import { CircleCheck, CircleX, FileCode, FolderOpen, Package, SquarePen, TriangleAlert, type LucideIcon } from "lucide-react";
+import { CircleCheck, CircleX, FileCode, FolderOpen, Package, RefreshCw, SquarePen, TriangleAlert, type LucideIcon } from "lucide-react";
 import { toast } from "sonner";
 import { Link, useLocation } from "wouter";
 import { callApp, callTool } from "@/api/bridge";
-import { invalidateFor, invalidateHedgeState, useScriptCheck } from "@/api/queries";
+import { invalidateFor, invalidateHedgeState, useHomeSummary, useScriptCheck } from "@/api/queries";
 import type {
   AppsOverviewOutput,
   AttachScriptOutput,
@@ -58,14 +58,16 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 /** The detail chip's STATUS key, from the attachment state alone (unlike the list row's icon, this is not
  *  weighted by manifest/catalog errors or unmet requirements — those already get their own dedicated amber
  *  panel and NEEDS rows, so folding them in here too would just repeat "needs a look" over the actual
- *  attachment word). STATUS has no entry of its own for `other_script`, `unknown` or `no_target`, so those
- *  borrow the closest fit: something else is attached (`attached`), it needs a look (`alert`), or nothing
- *  can be attached at all (`detached`). */
+ *  attachment word). STATUS has no entry of its own for `unknown` or `no_target`, so those borrow the
+ *  closest fit: it needs a look (`alert`), or nothing can be attached at all (`detached`). `other_script`
+ *  gets its own entry (`otherScript`) — this script itself is *not* attached, so reusing `attached` would say
+ *  the opposite of what's true; the sentence below names the other script. */
 function chipStatusKey(state: TargetAttachment["state"]): StatusKey {
   switch (state) {
     case "attached":
-    case "other_script":
       return "attached";
+    case "other_script":
+      return "otherScript";
     case "staged":
       return "staged";
     case "external":
@@ -106,13 +108,18 @@ function StatusChip({ status }: { status: StatusKey }) {
 
 /** The sentence explaining what the target event runs right now, in plain words (spec §7's `describeState`,
  *  adapted from `TargetAttachment` — a script's own view of "what's there" — to the `AttachState` shape
- *  `describeState` speaks). `null` when there is no target to describe at all (`no_target`). */
-function targetSentence(row: ScriptRow): React.ReactNode | null {
+ *  `describeState` speaks). */
+function targetSentence(row: ScriptRow): React.ReactNode {
   const a = row.attachment;
   const evt = row.target?.event;
   switch (a.state) {
+    // Matches the list row's own words for `no_target` (script-list.tsx's `noTargetWord`): a manifest-less
+    // script was never going to target anything, but one whose manifest simply doesn't name an app and
+    // event is a step short of it, not a dead end.
     case "no_target":
-      return null;
+      return row.manifest
+        ? "Its manifest names no app event."
+        : "No manifest, so HedgeBuddy doesn't know which event runs it.";
     case "attached":
       return `${evt} runs this script.`;
     case "staged":
@@ -162,7 +169,12 @@ function CheckRow({ icon: Icon, tone, children }: { icon: LucideIcon; tone: Tone
   return (
     <div className="flex items-start gap-1.5 text-sm">
       <Icon aria-hidden className={cn("mt-0.5 size-3.5 shrink-0", TONE_TEXT[tone])} strokeWidth={1.75} />
-      <span className={cn("min-w-0 flex-1", tone === "destructive" ? "text-destructive" : tone === "warning" ? "text-warning" : "text-foreground")}>
+      <span
+        className={cn(
+          "min-w-0 flex-1 break-all",
+          tone === "destructive" ? "text-destructive" : tone === "warning" ? "text-warning" : tone === "muted" ? "text-muted-foreground" : "text-foreground",
+        )}
+      >
         {children}
       </span>
     </div>
@@ -170,9 +182,13 @@ function CheckRow({ icon: Icon, tone, children }: { icon: LucideIcon; tone: Tone
 }
 
 /** CHECK (spec §6.4 step 2): Python, compiles (or the compile error), and the `hedgebuddy` package, loaded
- *  when the detail opens, with its own "Check again". */
+ *  when the detail opens, with its own "Check again". `check_script` itself carries no version numbers (only
+ *  an executable path, and — when there's a problem — a sentence that already names the offending version);
+ *  `home_summary.python` is where the actual Python and installed-package versions live, and the sidebar
+ *  already fetches it, so this reads the same cached query rather than inventing another source of truth. */
 function CheckSection({ name, profile }: { name: string; profile: string }) {
   const check = useScriptCheck(name, profile);
+  const home = useHomeSummary();
 
   if (check.isPending) {
     return (
@@ -188,19 +204,23 @@ function CheckSection({ name, profile }: { name: string; profile: string }) {
   }
   if (!check.data) return null;
   const data = check.data;
+  const python = home.data?.python;
+  const installedVersion = python?.installed ?? null;
 
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center justify-between gap-2">
         <span className="micro-label">Check</span>
-        <button
-          type="button"
-          className="text-xs font-medium text-link disabled:opacity-60 hover:underline"
+        <Button
+          variant="ghost"
+          size="sm"
+          className="text-muted-foreground hover:text-foreground-strong"
           disabled={check.isFetching}
           onClick={() => void check.refetch()}
         >
+          <RefreshCw aria-hidden strokeWidth={1.75} className={cn(check.isFetching && "animate-spin")} />
           {check.isFetching ? "Checking…" : "Check again"}
-        </button>
+        </Button>
       </div>
       {data.python === null ? (
         <CheckRow icon={TriangleAlert} tone="warning">
@@ -209,7 +229,7 @@ function CheckSection({ name, profile }: { name: string; profile: string }) {
       ) : (
         <>
           <CheckRow icon={CircleCheck} tone="neutral">
-            Python <Mono className="text-foreground">{data.python}</Mono>
+            {python?.version ? `Python ${python.version}` : <>Python <Mono className="text-foreground break-all">{data.python}</Mono></>}
           </CheckRow>
           {data.syntax_error ? (
             <CheckRow icon={CircleX} tone="destructive">
@@ -224,9 +244,13 @@ function CheckSection({ name, profile }: { name: string; profile: string }) {
             <CheckRow icon={Package} tone="warning">
               {data.package_problem}
             </CheckRow>
-          ) : (
+          ) : installedVersion ? (
             <CheckRow icon={CircleCheck} tone="neutral">
-              hedgebuddy package ok
+              hedgebuddy {installedVersion}
+            </CheckRow>
+          ) : (
+            <CheckRow icon={Package} tone="muted">
+              hedgebuddy not installed
             </CheckRow>
           )}
         </>
@@ -254,7 +278,10 @@ function NeedsSection({ manifest, unmet }: { manifest: Manifest | null; unmet: R
                 <CircleCheck aria-hidden className="size-3.5" strokeWidth={1.75} /> set
               </span>
             ) : (
-              <Link href={`/variables/${encodeURIComponent(varName)}`} className="shrink-0 text-sm font-medium text-warning hover:underline">
+              <Link
+                href={`/variables/${encodeURIComponent(varName)}`}
+                className="inline-flex min-h-7 shrink-0 items-center gap-1.5 text-sm font-medium text-warning hover:underline"
+              >
                 {issue.kind === "missing" ? "missing · Add" : `should be ${issue.expected} · Fix`}
               </Link>
             )}
@@ -387,11 +414,13 @@ export function ScriptDetail({ name, profile, overview, appsOverview }: {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex h-11 shrink-0 items-center justify-between gap-2 border-b border-border px-4 @max-[640px]:px-3">
-        <Mono className="min-w-0 truncate text-base font-medium" title={name}>
+      <div className="flex min-h-11 shrink-0 flex-wrap items-center justify-between gap-x-2 gap-y-1 border-b border-border px-4 py-2 @max-[640px]:px-3">
+        {/* `break-all`, not `truncate`: script names can run long, and a cut-off name is worse here than a
+            name that wraps to a second line (design direction rule 5). */}
+        <Mono className="min-w-0 flex-1 break-all text-base font-medium" title={name}>
           {name}
         </Mono>
-        <div className="flex shrink-0 items-center gap-1">
+        <div className="flex shrink-0 flex-wrap items-center gap-1">
           <Button variant="ghost" size="sm" disabled={openingEditor} onClick={handleOpenEditor}>
             <SquarePen aria-hidden strokeWidth={1.75} /> Open in editor
           </Button>
@@ -432,13 +461,16 @@ export function ScriptDetail({ name, profile, overview, appsOverview }: {
         </div>
       </div>
 
-      <div className="flex h-11 shrink-0 items-center justify-between gap-2 border-t border-border px-4 @max-[640px]:px-3">
+      <div className="flex min-h-11 shrink-0 flex-wrap items-center justify-between gap-x-2 gap-y-1 border-t border-border px-4 py-2 @max-[640px]:px-3">
         <Button variant="destructive" size="sm" onClick={() => setDeleteOpen(true)}>
           Delete
         </Button>
-        <div className="flex min-w-0 items-center justify-end gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {/* The reason a disabled Attach can't run stays neutral: the unmet requirement itself is already
+              amber in NEEDS above, and it must wrap rather than clip, since it can name more than one
+              variable (design direction rule 7b). */}
           {canAttach && attachDisabled && (
-            <span id={`script-attach-reason-${name}`} className="truncate text-xs text-warning">
+            <span id={`script-attach-reason-${name}`} className="max-w-[24rem] text-xs text-muted-foreground">
               Set {unmetNames.join(", ")} first
             </span>
           )}
@@ -508,9 +540,12 @@ export function ScriptDetail({ name, profile, overview, appsOverview }: {
           changes: describeActions(p.actions),
         })}
         apply={() => callTool("detach_script", { name, profile })}
-        onApplied={() => {
+        onApplied={(result) => {
           invalidateHedgeState();
           toast(`Detached ${name}`);
+          // Ruling reversed on review: the real tool adds this note on detach too, so it belongs here exactly
+          // as it does after Attach and Sync.
+          if (appsOverview.data?.os === "macos" && result.note) toast(result.note, { duration: 8000 });
           pendingRefocusRef.current = true;
         }}
       />
@@ -547,10 +582,18 @@ export function ScriptDetail({ name, profile, overview, appsOverview }: {
         }}
         apply={() => callTool("delete_script", { name, profile })}
         onApplied={async () => {
-          await invalidateFor([`scripts:${profile}`]);
-          invalidateHedgeState();
           toast(`Deleted ${name}`);
+          // Navigate *before* awaiting the invalidation, not after: awaiting first would let the refetch land
+          // (removing this row from `overview.data`) while this route is still showing it, flashing "This
+          // script is gone" for a frame before the navigate below finally ran.
           navigate("/scripts", { replace: true });
+          // Radix's own close-focus restore lands on the Delete button — still connected at that instant,
+          // since the navigate above hasn't unmounted this pane yet — and once it does, `ListDetail`'s own
+          // effect moves focus again on its way to the bare list. Neither is where focus belongs once the
+          // dust settles, so this reasserts it a frame later, after both of those have already happened.
+          requestAnimationFrame(() => focusMainHeading());
+          invalidateHedgeState();
+          await invalidateFor([`scripts:${profile}`]);
         }}
       />
     </div>

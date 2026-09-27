@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { UseQueryResult } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { callApp } from "@/api/bridge";
@@ -14,13 +14,17 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { showError } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 
-/** Script-name rule (Task 12 step 4): ends in `.py`, no path characters. The real check (`write_script`) is
- *  the authority; this is only a quick, honest pre-flight so the operator sees a mistake before submitting. */
-function nameError(name: string): string | null {
+/** Script-name rule (Task 12 step 4): ends in `.py`, no path characters, and not already the name of a
+ *  script in this profile — `write_script` is create-or-replace, so an unchecked collision would silently
+ *  overwrite (and could detach) an existing, possibly-attached script. Windows and macOS file systems are
+ *  both case-insensitive, so the collision check is too. The real check (`write_script`) stays the authority
+ *  for everything else; this is only a quick, honest pre-flight. */
+function nameError(name: string, existingNamesLower: ReadonlySet<string>): string | null {
   const trimmed = name.trim();
   if (trimmed === "") return "Name the script.";
   if (!trimmed.endsWith(".py")) return "Must end in .py.";
   if (/[\\/]/.test(trimmed)) return "No path characters.";
+  if (existingNamesLower.has(trimmed.toLowerCase())) return "A script with this name already exists.";
   return null;
 }
 
@@ -37,17 +41,21 @@ function eligibleApps(data: AppsOverviewOutput | undefined): AppRow[] {
  * caller navigates). This is a plain modal, not a route, and needs no `confirmLeave` — closing it just
  * discards an unstarted pick.
  */
-export function NewScriptDialog({ open, onOpenChange, profile, appsOverview, onCloseFocus, onCreated }: {
+export function NewScriptDialog({ open, onOpenChange, profile, appsOverview, existingNames, onCloseFocus, onCreated }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   profile: string;
   appsOverview: UseQueryResult<AppsOverviewOutput>;
+  /** The profile's current script names (any case), so a new name that collides can be caught before
+   *  `write_script` silently overwrites it. */
+  existingNames: readonly string[];
   /** Where to send focus once this closes — there is no `DialogTrigger` here. */
   onCloseFocus?: () => void;
   /** Called with the new script's name once it exists; the caller navigates to it. */
   onCreated: (name: string) => void;
 }) {
   const apps = eligibleApps(appsOverview.data);
+  const existingNamesLower = useMemo(() => new Set(existingNames.map((n) => n.toLowerCase())), [existingNames]);
 
   const [appId, setAppId] = useState<string | null>(null);
   const [eventId, setEventId] = useState<string | null>(null);
@@ -60,9 +68,15 @@ export function NewScriptDialog({ open, onOpenChange, profile, appsOverview, onC
   const templateRequestId = useRef(0);
 
   const create = useCreateScript();
-  const openRef = useRef(open);
-  openRef.current = open;
   const inFlightRef = useRef(false);
+  // Bumped on every open *and* every close (the effect below), so a closure from an earlier open/close cycle
+  // — a busy toast's "Try again", bound to a `submit` from before the operator cancelled and reopened this
+  // same (never-unmounted) dialog — can tell it no longer belongs to the current one and bail before it ever
+  // calls `create.mutate` again, instead of silently re-running (and possibly re-writing) a stale attempt.
+  const sessionRef = useRef(0);
+  useEffect(() => {
+    sessionRef.current++;
+  }, [open]);
 
   // Picks a default app (installed first) once the catalog loads, if nothing has been picked yet. Guarded
   // on `open`: this dialog stays mounted between opens (so its Cancel/close reset has something to reset),
@@ -122,11 +136,17 @@ export function NewScriptDialog({ open, onOpenChange, profile, appsOverview, onC
   };
 
   const trimmedName = nameField.trim();
-  const nameErr = nameError(nameField);
+  const nameErr = nameError(nameField, existingNamesLower);
   const canCreate = template !== null && nameErr === null && !templateLoading;
 
+  // Captured once per render (a plain local, not read from the ref at call time), so a `submit` closure from
+  // an earlier open/close cycle keeps *its own* session number even though `sessionRef.current` has since
+  // moved on — that's exactly what lets the guard below tell old from current.
+  const session = sessionRef.current;
+
   const submit = () => {
-    if (inFlightRef.current || !openRef.current) return;
+    if (inFlightRef.current) return;
+    if (session !== sessionRef.current) return; // This dialog has closed and/or reopened since; not ours to run.
     if (!template || nameErr) return;
     inFlightRef.current = true;
     create.mutate(
@@ -134,12 +154,14 @@ export function NewScriptDialog({ open, onOpenChange, profile, appsOverview, onC
       {
         onSuccess: (result) => {
           inFlightRef.current = false;
+          if (session !== sessionRef.current) return;
           toast(`Created ${result.name}`);
           close(false);
           onCreated(result.name);
         },
         onError: (e) => {
           inFlightRef.current = false;
+          if (session !== sessionRef.current) return;
           showError(e, submit);
         },
       },

@@ -55,7 +55,7 @@ export function ScriptPreview({ name, profile }: { name: string; profile: string
         <tbody>
           {ls.map((line, i) => (
             <tr key={i} className={cn(inDocstring(i) && "opacity-60")}>
-              <td className="readout w-10 shrink-0 py-px pr-3 pl-2 text-right align-top text-xs text-muted-foreground/70 select-none">{i + 1}</td>
+              <td className="readout w-10 shrink-0 py-px pr-3 pl-2 text-right align-top font-mono text-xs text-muted-foreground select-none">{i + 1}</td>
               <td className="py-px pr-3 align-top font-mono text-xs whitespace-pre text-foreground">{line.length > 0 ? line : " "}</td>
             </tr>
           ))}
