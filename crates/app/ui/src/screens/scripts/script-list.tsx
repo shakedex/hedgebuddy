@@ -370,9 +370,15 @@ export function ScriptList({
             ];
             // "Nothing to do" is about *actions*, not about whether the run was otherwise uneventful: a sync
             // that only skipped scripts or found conflicts still has nothing to attach or detach, but the
-            // warnings above (which the dialog now shows in this phase too) are the point of running it.
+            // warnings above (which the dialog now shows in this phase too) are the point of running it. The
+            // wording says so: claiming the apps "already run this profile's scripts" would contradict a
+            // warning right below it about a script that was just skipped or conflicted.
             const nothingToDo =
-              p.attach.length === 0 && p.detach.length === 0 ? "The Hedge apps already run this profile's scripts." : undefined;
+              p.attach.length === 0 && p.detach.length === 0
+                ? p.conflicts.length > 0 || p.skipped.length > 0
+                  ? "Nothing to attach or detach."
+                  : "The Hedge apps already run this profile's scripts."
+                : undefined;
             return {
               summary: (
                 <>

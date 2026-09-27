@@ -171,7 +171,10 @@ function CheckRow({ icon: Icon, tone, children }: { icon: LucideIcon; tone: Tone
       <Icon aria-hidden className={cn("mt-0.5 size-3.5 shrink-0", TONE_TEXT[tone])} strokeWidth={1.75} />
       <span
         className={cn(
-          "min-w-0 flex-1 break-all",
+          // `break-words`, not `break-all`: this row's text is ordinary prose (a package-problem sentence,
+          // "Compiles", ...) that should only wrap at word boundaries. The Python-path fallback below keeps
+          // its own `break-all` on the Mono around the raw path, which has no word boundaries to wrap at.
+          "min-w-0 flex-1 break-words",
           tone === "destructive" ? "text-destructive" : tone === "warning" ? "text-warning" : tone === "muted" ? "text-muted-foreground" : "text-foreground",
         )}
       >
@@ -416,8 +419,11 @@ export function ScriptDetail({ name, profile, overview, appsOverview }: {
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex min-h-11 shrink-0 flex-wrap items-center justify-between gap-x-2 gap-y-1 border-b border-border px-4 py-2 @max-[640px]:px-3">
         {/* `break-all`, not `truncate`: script names can run long, and a cut-off name is worse here than a
-            name that wraps to a second line (design direction rule 5). */}
-        <Mono className="min-w-0 flex-1 break-all text-base font-medium" title={name}>
+            name that wraps to a second line (design direction rule 5). `flex-auto` (not `flex-1`, which gives
+            a zero flex-basis): the name should claim its own natural width first, so on a short name the two
+            buttons wrap to their own line below it, and a mid-word break only happens once the name itself is
+            longer than the whole row. */}
+        <Mono className="min-w-0 flex-auto break-all text-base font-medium" title={name}>
           {name}
         </Mono>
         <div className="flex shrink-0 flex-wrap items-center gap-1">

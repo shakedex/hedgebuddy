@@ -73,9 +73,17 @@ export function NewScriptDialog({ open, onOpenChange, profile, appsOverview, exi
   // — a busy toast's "Try again", bound to a `submit` from before the operator cancelled and reopened this
   // same (never-unmounted) dialog — can tell it no longer belongs to the current one and bail before it ever
   // calls `create.mutate` again, instead of silently re-running (and possibly re-writing) a stale attempt.
+  // The cleanup also bumps it once more on a true unmount (not just an `open` toggle): an external profile
+  // switch can remove this whole dialog from the tree while a create was in flight, and without this, a
+  // stale "Try again" from that torn-down instance would still see its captured `session` match
+  // `sessionRef.current` (nothing left to bump it) and go on to write into the profile just switched away
+  // from.
   const sessionRef = useRef(0);
   useEffect(() => {
     sessionRef.current++;
+    return () => {
+      sessionRef.current++;
+    };
   }, [open]);
 
   // Picks a default app (installed first) once the catalog loads, if nothing has been picked yet. Guarded

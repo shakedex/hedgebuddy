@@ -162,6 +162,19 @@ export function ChangePreviewDialog<P, R>({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
+  // A true unmount (the caller removed this dialog from the tree entirely — e.g. an external profile switch
+  // remounting the screen mid-apply) is not the same as `open` turning false: nothing re-renders afterward to
+  // let the `openRef.current = open` assignment above catch up, so it would otherwise keep whatever value it
+  // last had. A busy toast's "Try again" (bound to this instance's own `doApply`/`retry`) would then still
+  // see a live `openRef` and a `requestId` nothing has bumped, and go on to plan or apply for real against a
+  // dialog that is already gone. Clearing both here, once, on unmount closes that hole for every caller.
+  useEffect(() => {
+    return () => {
+      openRef.current = false;
+      requestId.current++;
+    };
+  }, []);
+
   // Apply once ready (Cancel for destructive dialogs), including after Apply fails and returns here.
   useEffect(() => {
     if (phase !== "ready") return;
