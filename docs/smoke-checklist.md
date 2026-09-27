@@ -1,4 +1,4 @@
-# Manual smoke checklist (phases 3, 4 and 5A)
+# Manual smoke checklist (phases 3, 4, 5A and 5B)
 
 These steps change real Hedge app settings and need a machine with OffShoot Pro (and optionally FoolCat Pro). Run them from Claude Desktop or Claude Code with the HedgeBuddy MCP server connected, or with `hedgebuddy call`. Record results in the boxes.
 
@@ -44,3 +44,18 @@ Run on Windows and macOS.
 
 ## 7. Typed tool results (MCP clients)
 - [ ] With Claude Desktop or Claude Code connected, run a tool call. It still works, and the client shows no schema error for the new `outputSchema` / `structuredContent` (JSON Schema 2020-12). Result:
+
+## 8. Desktop app editing (phase 5B)
+Run on Windows and macOS. These steps change real Hedge app settings; wait for the go-ahead before running this section.
+- [ ] Variables: add, edit and delete one variable of each type; Reveal a secret; a path on an unplugged drive shows "not connected" and still saves; leaving with an unsaved edit asks first. Result:
+- [ ] A secret's description can be changed without re-typing the secret; the stored value is kept and never leaves Rust. Result:
+- [ ] New script refuses a name that already exists in the profile, compared case-insensitively. Result:
+- [ ] Scripts: New from template opens the file in the editor (with and without an editor command in preferences.json; without one, Notepad on Windows or the default text editor on macOS — never the script's own .py default app). Result:
+- [ ] Attach, Detach and Sync each show the preview (registry rows on Windows; the OffShoot Helper workspace and the apply note on macOS) and change the app's setting as shown. Result:
+- [ ] The scripts CHECK section shows the Python version, whether the script compiles, and the hedgebuddy package version or its problem. Result:
+- [ ] Hedge apps: Clear one stale entry and Clear all; if Clear all fails partway, it stops, names the event that failed, and a retry skips the ones already cleared; the table updates after Refresh and on returning to the window. Result:
+- [ ] Delete a script, a variable and a profile: each preview names what stays attached. Result:
+- [ ] Export a profile without and with secrets (on macOS the file with secrets is owner-only: `ls -l`), then import it under a new name on the same or another machine. Result:
+- [ ] Import a profile from Home's first step on a machine (or a fresh profile folder) with no active profile. Result:
+- [ ] Show in folder and Docs open the right places. Result:
+- [ ] Edit a catalog override in `<data>/catalog/` while the app is open: Hedge apps and Scripts reflect it without a restart. Result:
