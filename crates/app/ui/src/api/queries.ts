@@ -232,9 +232,14 @@ export function usePathStatus(paths: string[]) {
   });
 }
 
-/** A script's source, for the read-only preview. `null` while no script is selected. */
-export function useScriptSource(name: string | null) {
-  const args: ToolTypes["read_script"]["input"] = { name: name ?? "" };
+/**
+ * A script's source, for the read-only preview. `null` while no script is selected. `profile` pins the
+ * overview's own profile explicitly (Lesson 1: an action or read must never land in a profile the operator
+ * switched to meanwhile) and is folded into the query key itself, so a profile switch is a genuinely
+ * different cache entry rather than a stale one keyed only on the script name.
+ */
+export function useScriptSource(name: string | null, profile?: string) {
+  const args: ToolTypes["read_script"]["input"] = { name: name ?? "", ...(profile ? { profile } : {}) };
   return useQuery({
     queryKey: queryKey.tool("read_script", args),
     queryFn: () => callTool("read_script", args),
@@ -242,13 +247,48 @@ export function useScriptSource(name: string | null) {
   });
 }
 
-/** A script's manifest and requirement check. Starts Python, so it is cached longer than the default. */
-export function useScriptCheck(name: string | null) {
-  const args: ToolTypes["check_script"]["input"] = { name: name ?? "" };
+/** A script's manifest and requirement check. Starts Python, so it is cached longer than the default.
+ *  `profile` pins the overview's own profile explicitly, as `useScriptSource` does. */
+export function useScriptCheck(name: string | null, profile?: string) {
+  const args: ToolTypes["check_script"]["input"] = { name: name ?? "", ...(profile ? { profile } : {}) };
   return useQuery({
     queryKey: queryKey.tool("check_script", args),
     queryFn: () => callTool("check_script", args),
     enabled: name !== null,
     staleTime: 30_000,
   });
+}
+
+/**
+ * The New-script create chain (spec §6.4 step 4): `write_script` then `open_in_editor`. Mirrors
+ * `useCreateProfile`'s retry memory: if `write_script` already succeeded and a later step (`open_in_editor`)
+ * fails, Try again must not write again. Unlike `useCreateProfile`'s ruling 16, the memory is *not* dropped
+ * on a non-busy failure — the file really is on disk by then, and re-running `write_script` would only
+ * rewrite it with identical content, so there is nothing to protect against by forgetting; the caller clears
+ * it explicitly (`forgetRetry`) once the dialog closes.
+ */
+export function useCreateScript() {
+  const written = useRef<{ name: string; profile: string } | null>(null);
+  const mutation = useMutation({
+    mutationFn: async (v: { name: string; source: string; profile: string }) => {
+      const already = written.current;
+      if (!already || already.name !== v.name || already.profile !== v.profile) {
+        await callTool("write_script", { name: v.name, source: v.source, profile: v.profile });
+        written.current = { name: v.name, profile: v.profile };
+      }
+      const opened = await callApp("open_in_editor", { profile: v.profile, script: v.name });
+      written.current = null;
+      // Awaited, like `VariableForm`'s own save: the caller navigates to this script's own page right after,
+      // which reads it back out of the `scripts_overview` cache — that has to already show the new row.
+      await invalidateFor([`scripts:${v.profile}`]);
+      return { name: v.name, opened };
+    },
+  });
+  return {
+    ...mutation,
+    /** Clears the retry memory; call when the create dialog closes so the next create starts clean. */
+    forgetRetry: () => {
+      written.current = null;
+    },
+  };
 }

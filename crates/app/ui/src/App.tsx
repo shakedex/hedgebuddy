@@ -7,6 +7,7 @@ import { DesignGallery } from "@/screens/design/design-gallery";
 import { HomeScreen } from "@/screens/home/home-screen";
 import { Placeholder } from "@/screens/placeholder";
 import { RunsScreen } from "@/screens/runs/runs-screen";
+import { ScriptsScreen } from "@/screens/scripts/scripts-screen";
 import { VariablesScreen } from "@/screens/variables/variables-screen";
 
 export default function App() {
@@ -22,8 +23,9 @@ export default function App() {
           <Route path="/variables"><VariablesScreen /></Route>
           {/* wouter already decodes route params; decoding again breaks on names containing "%25". */}
           <Route path="/variables/:name">{(p) => <VariablesScreen name={p.name} />}</Route>
-          <Route path="/scripts">{() => <Placeholder screen="scripts" />}</Route>
-          <Route path="/scripts/:name">{(p) => <Placeholder screen="scripts" name={p.name} />}</Route>
+          <Route path="/scripts"><ScriptsScreen /></Route>
+          {/* wouter already decodes route params; decoding again breaks on names containing "%25". */}
+          <Route path="/scripts/:name">{(p) => <ScriptsScreen name={p.name} />}</Route>
           <Route path="/apps">{() => <Placeholder screen="apps" />}</Route>
           <Route path="/apps/:id">{(p) => <Placeholder screen="apps" name={p.id} />}</Route>
           <Route path="/connect">{() => <Placeholder screen="connect" />}</Route>
