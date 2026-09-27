@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { showError } from "@/lib/toast";
+import { confirmLeave } from "@/lib/unsaved";
 import { cn } from "@/lib/utils";
 
 /** Main spec §5: a profile name is a slug. */
@@ -22,16 +23,18 @@ export function CreateProfileDialog({ open, onOpenChange, activate, onCloseFocus
   const create = useCreateProfile();
   const invalid = name.length > 0 && !SLUG.test(name);
 
-  /** Closing (Create, Cancel, Escape or an overlay click) always clears the fields for next time. */
+  /** Closing (Create, Cancel, Escape or an overlay click) always clears the fields for next time, and the
+   *  create-retry memory with them (ruling 16): a later create starts clean rather than reusing this round's. */
   const close = (next: boolean) => {
     onOpenChange(next);
     if (!next) {
       setName("");
       setDescription("");
+      create.forgetRetry();
     }
   };
 
-  const submit = () =>
+  const go = () =>
     create.mutate(
       { name, description, activate },
       {
@@ -42,6 +45,13 @@ export function CreateProfileDialog({ open, onOpenChange, activate, onCloseFocus
         onError: (e) => showError(e, submit),
       },
     );
+
+  // Rule for this task: creating a profile that activates changes the active profile, so it asks first,
+  // exactly like switching profiles does. Declining leaves the dialog open with nothing done.
+  const submit = () => {
+    if (activate) void confirmLeave().then((ok) => { if (ok) go(); });
+    else go();
+  };
 
   return (
     <Dialog open={open} onOpenChange={close}>

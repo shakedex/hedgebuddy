@@ -121,7 +121,7 @@ export function useActivateProfile() {
  */
 export function useCreateProfile() {
   const createdNotActivated = useRef<{ name: string; created: CreateProfileOutput } | null>(null);
-  return useMutation({
+  const mutation = useMutation({
     mutationFn: async (v: { name: string; description: string; activate: boolean }) => {
       const earlier = createdNotActivated.current;
       let created: CreateProfileOutput;
@@ -137,12 +137,27 @@ export function useCreateProfile() {
     },
     // Settled, not only succeeded: when activation fails, the profile was still created.
     onSettled: () => invalidateFor(["index"]),
+    // Ruling 16: only a busy failure keeps the "created but not activated" memory (so Try again just retries
+    // the activation); any other failure drops it, since a stale memory could otherwise resurrect a profile
+    // the operator no longer even recognises.
+    onError: (e) => {
+      if (!(e instanceof BridgeError && e.kind === "busy")) createdNotActivated.current = null;
+    },
   });
+  return {
+    ...mutation,
+    /** Clears the retry memory; call when the create dialog closes so the next create starts clean. */
+    forgetRetry: () => {
+      createdNotActivated.current = null;
+    },
+  };
 }
 
-/** The Variables screen (§6.3): the active profile's variables plus what its scripts require. */
-export function useVariablesOverview() {
-  return useQuery({ queryKey: queryKey.app("variables_overview", {}), queryFn: () => callApp("variables_overview", {}) });
+/** The Variables screen (§6.3): the active profile's variables plus what its scripts require. `enabled`
+ *  (default true) lets a caller that only needs this occasionally — the export dialog's secret names note —
+ *  hold off fetching until it actually matters. */
+export function useVariablesOverview(enabled = true) {
+  return useQuery({ queryKey: queryKey.app("variables_overview", {}), queryFn: () => callApp("variables_overview", {}), enabled });
 }
 
 /**
