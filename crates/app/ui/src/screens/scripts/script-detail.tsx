@@ -246,7 +246,7 @@ function CheckSection({ name, profile }: { name: string; profile: string }) {
                   hedgebuddy==X` command `package_problem`'s own text would otherwise show — PyPI isn't
                   published yet, so that command doesn't actually work. */}
               {splitProblem(data.package_problem).sentence}.{" "}
-              <Link href="/settings" className="text-link hover:underline">
+              <Link href="/settings" className="relative text-link after:absolute after:-inset-x-1 after:-inset-y-1.5 hover:underline">
                 Install in Settings
               </Link>
             </CheckRow>

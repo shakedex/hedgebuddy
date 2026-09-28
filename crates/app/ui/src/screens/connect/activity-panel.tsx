@@ -30,7 +30,7 @@ function ActivityRow({ record }: { record: ActivityRecord }) {
     // of a fixed 13rem (`minmax(0,10rem)`) so it yields room to the target first at a narrow width, rather
     // than the target losing all its space to a tool name that no longer needs 13rem; the outcome
     // (`StatusIcon label`) never wraps ("waited for your OK" is two words).
-    <div className="grid h-8 grid-cols-[44px_minmax(0,10rem)_1fr_auto] items-center gap-2 px-1">
+    <div className="grid h-8 grid-cols-[44px_minmax(0,10rem)_1fr_auto] items-center gap-2 px-1 max-sm:grid-cols-[40px_minmax(0,7rem)_1fr_auto]">
       <span className="readout text-xs text-muted-foreground">{clock(record.ts)}</span>
       <Mono className="min-w-0 truncate text-xs" title={record.tool}>
         {record.tool}

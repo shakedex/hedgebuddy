@@ -277,7 +277,7 @@ export function ClaudeDesktopPanel() {
           toast(lastActionRef.current === "update" ? "Updated Claude Desktop" : "Set up Claude Desktop", {
             description: applied.backup_path ? (
               <>
-                Restart Claude Desktop to use it. <Mono>{basename(applied.backup_path)}</Mono>
+                Restart Claude Desktop to use it. Backup: <Mono>{basename(applied.backup_path)}</Mono>
               </>
             ) : (
               "Restart Claude Desktop to use it."
