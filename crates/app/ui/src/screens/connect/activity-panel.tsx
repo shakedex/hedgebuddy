@@ -25,12 +25,12 @@ function groupByDay(records: ActivityRecord[]): DayGroup[] {
 
 function ActivityRow({ record }: { record: ActivityRecord }) {
   return (
-    <div className="flex h-8 items-center gap-2 px-1">
-      <span className="readout w-11 shrink-0 text-xs text-muted-foreground">{clock(record.ts)}</span>
-      <Mono className="shrink-0 text-xs" title={record.tool}>
+    <div className="grid h-8 grid-cols-[44px_9rem_1fr_auto] items-center gap-2 px-1">
+      <span className="readout text-xs text-muted-foreground">{clock(record.ts)}</span>
+      <Mono className="min-w-0 truncate text-xs" title={record.tool}>
         {record.tool}
       </Mono>
-      <Mono className="min-w-0 flex-1 truncate text-xs text-muted-foreground" title={record.target ?? undefined}>
+      <Mono className="min-w-0 truncate text-xs text-muted-foreground" title={record.target ?? undefined}>
         {record.target ?? "—"}
       </Mono>
       <StatusIcon status={outcomeKey(record.outcome)} label className="shrink-0" />
@@ -58,7 +58,10 @@ export function ActivityPanel() {
 
   return (
     <section className="surface flex flex-col gap-3 p-3">
-      <h2 className="micro-label">RECENT CLAUDE ACTIVITY · tool names only, never values</h2>
+      <h2 className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+        <span className="micro-label">Recent Claude activity</span>
+        <span className="text-xs text-muted-foreground">tool names only, never values</span>
+      </h2>
 
       {query.isPending ? (
         <ActivitySkeleton />

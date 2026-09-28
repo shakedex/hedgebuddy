@@ -1,8 +1,8 @@
 import type { Action, AttachState, RegValue } from "@/api/tools.gen";
 
 /** What a ledger row is about; each maps to one Lucide icon in the change-preview dialog (Design direction,
- *  5B; `backup` and `new_file` added in 5C for Connect's Claude Desktop preview, spec §6.6/§7). */
-export type ChangeKind = "registry" | "registry_delete" | "workspace" | "file" | "delete" | "attach" | "detach" | "backup" | "new_file";
+ *  5B; `backup` added in 5C for Connect's Claude Desktop preview, spec §6.6/§7). */
+export type ChangeKind = "registry" | "registry_delete" | "workspace" | "file" | "delete" | "attach" | "detach" | "backup";
 
 /**
  * Plain words with an optional embedded path or registry value, so the change-preview dialog can show that

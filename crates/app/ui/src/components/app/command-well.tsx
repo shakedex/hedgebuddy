@@ -49,14 +49,16 @@ export function CommandWell({ label = "Copy", text, copyText }: {
       setCopied(true);
       clearTimeout(timeoutRef.current);
       timeoutRef.current = setTimeout(() => setCopied(false), COPIED_MS);
-    } catch (e) {
-      showError(e);
+    } catch {
+      // The raw DOMException text ("Write permission denied", say) means nothing to the operator; tell them
+      // what to do instead of repeating the browser's own words.
+      showError(new Error("Couldn't copy. Select the text and copy it yourself."));
     }
   };
 
   return (
     <div className="well flex items-start gap-2 p-2">
-      <code className="min-w-0 flex-1 overflow-x-auto py-0.5 font-mono text-xs text-foreground-strong select-text">
+      <code className="min-w-0 flex-1 overflow-x-auto py-0.5 font-mono text-xs whitespace-pre-wrap text-foreground-strong select-text">
         {wrapCommand(text)}
       </code>
       <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={() => void handleCopy()}>

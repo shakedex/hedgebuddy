@@ -2,8 +2,8 @@ import { useClaudeDesktopStatus } from "@/api/queries";
 import { wrapPath } from "@/components/app/change-preview-dialog";
 import { CommandWell } from "@/components/app/command-well";
 import { ErrorPanel } from "@/components/app/error-panel";
+import { Readout } from "@/components/app/readout";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ConnectReadout } from "./connect-screen";
 
 function PanelSkeleton() {
   return (
@@ -60,7 +60,7 @@ export function ClientsPanel() {
       <section className="surface @container flex flex-col gap-3 p-3">
         <h2 className="micro-label">Other MCP clients</h2>
         <div className="flex flex-col gap-1.5">
-          <ConnectReadout label="COMMAND">
+          <Readout label="COMMAND">
             {data.binary ? (
               <>
                 {wrapPath(data.binary)} mcp
@@ -68,8 +68,8 @@ export function ClientsPanel() {
             ) : (
               "hedgebuddy mcp"
             )}
-          </ConnectReadout>
-          <ConnectReadout label="TRANSPORT">stdio</ConnectReadout>
+          </Readout>
+          <Readout label="TRANSPORT">stdio</Readout>
         </div>
         <CommandWell label="Copy JSON" text={data.client_json} />
         {noBinary && (
