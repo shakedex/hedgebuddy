@@ -176,8 +176,9 @@ fn unc_server(path: &str) -> Option<&str> {
 /// `[::1]`), or a one-number address Windows also accepts (`167772165`,
 /// `0x0a000005`) — except a strictly parsed IPv4 or IPv6 literal that stays
 /// on the local network ([`is_local_ip_literal`]: private/[RFC 1918],
-/// loopback or link-local), or a `*.local` name (mDNS), both of which are
-/// looked at instead. A decimal or hex address is never such a literal (it
+/// loopback or link-local), or a strictly DNS-shaped `*.local` name (mDNS,
+/// [`is_dot_local`]), both of which are looked at instead. A decimal or hex
+/// address is never such a literal (it
 /// parses as neither dotted-quad IPv4 nor colon-separated IPv6), so it stays
 /// unchecked along with every other dotted, numeric or hex host. The host of
 /// a WebDAV name (`host@SSL@443`) is the part before `@`. A one-word name
@@ -186,7 +187,7 @@ fn unc_server(path: &str) -> Option<&str> {
 /// [RFC 1918]: https://www.rfc-editor.org/rfc/rfc1918
 fn is_remote_host(server: &str) -> bool {
     let host = server.split('@').next().unwrap_or(server);
-    if is_local_ip_literal(host) || host.to_ascii_lowercase().ends_with(".local") {
+    if is_local_ip_literal(host) || is_dot_local(host) {
         return false;
     }
     let b = host.as_bytes();
@@ -196,6 +197,26 @@ fn is_remote_host(server: &str) -> bool {
         && b[1].eq_ignore_ascii_case(&b'x')
         && b[2..].iter().all(u8::is_ascii_hexdigit);
     decimal || hex || host.contains(['.', ':', '[', ']', '\u{3002}', '\u{ff0e}', '\u{ff61}'])
+}
+
+/// Whether `host` is a DNS-shaped `*.local` name (mDNS): one or more labels
+/// of ASCII letters, digits and hyphens, joined by single dots, the last of
+/// which is `local` (case-insensitive). This is stricter than "ends with
+/// `.local`": a UNC server text smuggled through [`unc_server`]'s
+/// backslash-only split can carry a slash, as in
+/// `evil.example.com/x.local`, which ends with `.local` but is not a bare
+/// mDNS name — that `/` fails a label's alnum-or-hyphen check here, so the
+/// whole host is rejected and falls through to the ordinary "any dot"
+/// remote check below.
+fn is_dot_local(host: &str) -> bool {
+    let is_label =
+        |s: &str| !s.is_empty() && s.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-');
+    let labels: Vec<&str> = host.split('.').collect();
+    labels.len() >= 2
+        && labels
+            .last()
+            .is_some_and(|l| l.eq_ignore_ascii_case("local"))
+        && labels.iter().all(|l| is_label(l))
 }
 
 /// Whether `host` (optionally bracketed, `[::1]`) is a strictly parsed IPv4
@@ -1596,6 +1617,18 @@ mod tests {
             // A public IPv4/IPv6 literal is not on the local network either.
             r"\\8.8.8.8\share\x",
             r"\\[2001:4860:4860::8888]\share\x",
+            // A UNC server smuggled through `unc_server`'s backslash-only split can carry a slash: the text
+            // up to the first backslash is "evil.example.com/x.local", which *ends with* ".local" but is not
+            // a bare mDNS name (`is_dot_local` requires every label to be alnum-or-hyphen only), so it stays
+            // remote rather than being let through as a `*.local` host.
+            r"\\?\UNC\evil.example.com/x.local\share\x",
+            // Pinned so a future, looser numeric-host parser can't silently widen the "looked at" set: none
+            // of these is a strictly parsed IPv4 literal (leading zero, short dotted form, or hex octet), so
+            // each stays remote like any other dotted or hex host.
+            r"\\010.0.0.5\s",
+            r"\\10.1\s",
+            r"\\127.1\s",
+            r"\\0x7f.0.0.1\s",
         ];
         let (states, seen) = probed(&remote, &[]);
         assert!(seen.is_empty(), "{seen:?}");
