@@ -113,18 +113,21 @@ pub(crate) fn script_template_source(
         } else {
             ""
         };
-        fields.push_str(&format!("#   event.{attr:<28} <- {key}{json}\n"));
+        fields.push_str(&format!("    #   event.{attr:<28} <- {key}{json}\n"));
     }
     if fields.is_empty() {
-        fields.push_str("#   (this event has no payload)\n");
+        fields.push_str("    #   (this event has no payload)\n");
     }
+    // The body lines are indented in the string itself, not by the source layout: a `\` line continuation
+    // drops the next line's leading spaces, which once left `hb.log` outside `main` (an IndentationError).
     Ok(format!(
         "\"\"\"\n{{\"hedgebuddy\": 1, \"app\": \"{app}\", \"event\": \"{event}\", \"requires\": {{}}}}\n---\n\
 Describe what this script does.\n\"\"\"\nimport hedgebuddy as hb\n\n\n@hb.script\ndef main(event, vars):\n\
-    # Payload fields for {name} {event}:\n{fields}\
-    # Variables declared in \"requires\" are available as vars.NAME, typed.\n\
-    hb.log(\"started\")\n    return 0\n",
+{indent}# Payload fields for {name} {event}:\n{fields}\
+{indent}# Variables declared in \"requires\" are available as vars.NAME, typed.\n\
+{indent}hb.log(\"started\")\n{indent}return 0\n",
         name = m.app.name,
+        indent = "    ",
     ))
 }
 
@@ -190,6 +193,23 @@ mod tests {
             .unwrap()
             .contains(&source));
         assert!(script_template_source(&ctx, "offshoot", "Nope").is_err());
+    }
+
+    #[test]
+    fn the_template_body_is_indented_under_main() {
+        let (_d, _f, ctx) = test_ctx(FakeHost::new(Os::Windows));
+        for event in ["FileCopyCompleted", "OffShootStarted"] {
+            let source = script_template_source(&ctx, "offshoot", event).unwrap();
+            let (_, body) = source.split_once("def main(event, vars):\n").unwrap();
+            let lines: Vec<&str> = body.lines().collect();
+            assert!(lines.iter().any(|l| l.trim() == "hb.log(\"started\")"));
+            for line in lines {
+                assert!(
+                    line.starts_with("    "),
+                    "{event}: not indented under main: {line:?}"
+                );
+            }
+        }
     }
 
     #[test]

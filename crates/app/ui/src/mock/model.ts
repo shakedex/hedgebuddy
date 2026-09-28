@@ -108,10 +108,10 @@ function templateSource(app: string, event: string): string {
     .map((key) => {
       const attr = key.startsWith(prefix) ? key.slice(prefix.length) : key;
       const json = e.json_fields.includes(key) ? "  (JSON, decoded for you)" : "";
-      return `#   event.${attr.padEnd(28)} <- ${key}${json}\n`;
+      return `    #   event.${attr.padEnd(28)} <- ${key}${json}\n`;
     })
     .join("");
-  if (fields === "") fields = "#   (this event has no payload)\n";
+  if (fields === "") fields = "    #   (this event has no payload)\n";
   return (
     `"""\n{"hedgebuddy": 1, "app": "${app}", "event": "${event}", "requires": {}}\n---\n` +
     `Describe what this script does.\n"""\nimport hedgebuddy as hb\n\n\n@hb.script\ndef main(event, vars):\n` +
