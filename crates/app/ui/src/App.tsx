@@ -4,6 +4,7 @@ import { useDataChanged } from "@/api/events";
 import { AppShell } from "@/components/app/app-shell";
 import { useGuardedHashLocation } from "@/lib/guarded-location";
 import { AppsScreen } from "@/screens/apps/apps-screen";
+import { ConnectScreen } from "@/screens/connect/connect-screen";
 import { DesignGallery } from "@/screens/design/design-gallery";
 import { HomeScreen } from "@/screens/home/home-screen";
 import { Placeholder } from "@/screens/placeholder";
@@ -30,8 +31,8 @@ export default function App() {
           <Route path="/apps"><AppsScreen /></Route>
           {/* wouter already decodes route params; decoding again breaks on ids containing "%25". */}
           <Route path="/apps/:id">{(p) => <AppsScreen id={p.id} />}</Route>
-          <Route path="/connect">{() => <Placeholder screen="connect" />}</Route>
-          <Route path="/settings">{() => <Placeholder screen="settings" />}</Route>
+          <Route path="/connect"><ConnectScreen /></Route>
+          <Route path="/settings"><Placeholder /></Route>
           {isPreview && <Route path="/_design"><DesignGallery /></Route>}
           {/* An unknown path (a stale link, or `/_design` outside the preview) goes Home rather than to a blank screen. */}
           <Route><Redirect to="/" replace /></Route>

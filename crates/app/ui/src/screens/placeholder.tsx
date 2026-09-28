@@ -2,41 +2,26 @@ import { Package } from "lucide-react";
 import { useHomeSummary } from "@/api/queries";
 import type { PythonStatus } from "@/api/tools.gen";
 import { EmptyState } from "@/components/app/empty-state";
-import { Mono } from "@/components/app/mono";
 import { NAV_ICONS } from "@/lib/status";
 
-/** The screens not yet built. Scripts and Hedge apps are real screens now — nothing routes here for them. */
-type Screen = "connect" | "settings";
+/** The screens not yet built. Connect is a real screen now (Task 5) — nothing routes here for it any more;
+ *  Scripts and Hedge apps were already real screens before this. Task 6 removes this file once Settings
+ *  lands and nothing routes here at all. */
+type Screen = "settings";
 
 /**
  * What each screen will do (the toolbar already names the screen, so this never repeats it) and what to do
  * until then.
  */
 const COPY: Record<Screen, { title: string; next: string }> = {
-  connect: { title: "Setting up Claude Desktop here arrives in a later update", next: "Until then, follow the README's “Use it from Claude” steps." },
   settings: { title: "The Python check arrives in a later update", next: "Home already flags a missing or outdated hedgebuddy package." },
 };
 
-/**
- * One designed screen for the routes not yet built. When the route carries a name, it names the item first,
- * in mono, so a needs-attention link still lands somewhere meaningful.
- */
-export function Placeholder({ screen, name }: { screen: Screen; name?: string }) {
-  const { title, next } = COPY[screen];
+/** The one designed screen not yet built. */
+export function Placeholder() {
   return (
     <div className="h-full overflow-y-auto p-4 max-[640px]:p-3">
-      {screen === "settings" ? (
-        <SettingsPlaceholder />
-      ) : (
-        <EmptyState icon={NAV_ICONS[screen]} title={title} className="max-w-md">
-          {name && (
-            <p className="text-foreground">
-              You followed a link to <Mono>{name}</Mono>.
-            </p>
-          )}
-          <p className={name ? "mt-1" : undefined}>{next}</p>
-        </EmptyState>
-      )}
+      <SettingsPlaceholder />
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  Ban, FileCog, FilePen, KeyRound, KeySquare, Link, LoaderCircle, Trash2, TriangleAlert, Unlink, type LucideIcon,
+  Ban, Copy, FileCog, FilePen, FolderPlus, KeyRound, KeySquare, Link, LoaderCircle, Trash2, TriangleAlert, Unlink, type LucideIcon,
 } from "lucide-react";
 import { ErrorPanel } from "@/components/app/error-panel";
 import { Mono } from "@/components/app/mono";
@@ -10,7 +10,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import type { ChangeKind, ChangeRow, Words } from "@/lib/actions";
 import { clearBusyToast, showError } from "@/lib/toast";
 
-/** One Lucide icon per ledger row kind (Design direction, 5B: "The change-preview dialog"). */
+/** One Lucide icon per ledger row kind (Design direction, 5B: "The change-preview dialog"; `backup` and
+ *  `new_file` added in 5C for Connect's Claude Desktop preview). */
 const KIND_ICON: Record<ChangeKind, LucideIcon> = {
   registry: KeyRound,
   registry_delete: KeySquare,
@@ -19,6 +20,8 @@ const KIND_ICON: Record<ChangeKind, LucideIcon> = {
   delete: Trash2,
   attach: Link,
   detach: Unlink,
+  backup: Copy,
+  new_file: FolderPlus,
 };
 
 /** The sr-only word read before each row's target and detail: colour and the icon alone don't reach a
@@ -31,6 +34,8 @@ const KIND_WORD: Record<ChangeKind, string> = {
   delete: "Delete",
   attach: "Attach",
   detach: "Detach",
+  backup: "Backup",
+  new_file: "New file",
 };
 
 /** What `describe` turns a dry run's result into (spec §7). */
