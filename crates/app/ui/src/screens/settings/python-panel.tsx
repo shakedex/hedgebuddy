@@ -1,16 +1,14 @@
 import { useRef } from "react";
 import { CircleCheck, CircleX } from "lucide-react";
 import { queryClient, queryKey, usePipInstall, useRecheckPython, useSettingsOverview } from "@/api/queries";
-import type { BundleInfo, Os, PipInstallOutput, PythonStatus } from "@/api/tools.gen";
+import type { Os, PipInstallOutput, PythonStatus } from "@/api/tools.gen";
 import { wrapPath } from "@/components/app/change-preview-dialog";
 import { CheckAgainButton } from "@/components/app/check-again-button";
-import { CommandWell } from "@/components/app/command-well";
 import { Mono } from "@/components/app/mono";
 import { Readout } from "@/components/app/readout";
 import { StatusIcon } from "@/components/app/status-icon";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { basename, splitProblem } from "@/lib/format";
 import type { StatusKey } from "@/lib/status";
 import { showError } from "@/lib/toast";
 
@@ -60,27 +58,20 @@ function PackageValue({ python }: { python: PythonStatus }) {
 }
 
 /**
- * The action row (brief step 1): "Install hedgebuddy <version>" when the package needs it, a wheel is
- * bundled and Python was found; a disabled button when it can't run (the reason sits beside it — a muted
- * span here, or, for the no-wheel case, a shared block the caller renders full-width below the row: review
- * round 2, minor); a quiet "Reinstall" once everything is already up to date. Which branch renders can
- * change out from under whatever had focus — the caller (`PythonPanel`) handles that once `onInstall`'s own
- * refetch has landed.
+ * The Update button: shown only when the package is missing or the wrong version. It installs the version
+ * this app needs (pip from PyPI, falling back to the copy bundled with the app). Without Python there is
+ * nothing to install into, so the button is disabled and says why.
  */
-function InstallAction({ python, bundle, onInstall, installing }: {
+function InstallAction({ python, onInstall, installing }: {
   python: PythonStatus;
-  bundle: BundleInfo;
   onInstall: () => void;
   installing: boolean;
 }) {
-  const hasProblem = python.problem !== null;
-  const busyClass = "aria-disabled:pointer-events-none aria-disabled:opacity-45";
-
   if (!python.found) {
     return (
       <div className="flex flex-col items-end gap-1">
         <Button size="sm" disabled aria-describedby="python-install-reason">
-          Install
+          Install hedgebuddy
         </Button>
         <span id="python-install-reason" className="text-xs text-muted-foreground">
           Install Python 3 first
@@ -88,41 +79,19 @@ function InstallAction({ python, bundle, onInstall, installing }: {
       </div>
     );
   }
-
-  // The reason and its CommandWell live in `PythonPanel`, full-width, below the action row — `#python-
-  // install-reason` there is what this describes (review round 2, minor: this used to carry its own
-  // right-aligned reason and well, which forced the whole action row to wrap).
-  if (hasProblem && bundle.wheel === null) {
-    return (
-      <Button size="sm" disabled aria-describedby="python-install-reason">
-        Install
-      </Button>
-    );
-  }
-
-  if (hasProblem) {
-    return (
-      <Button size="sm" className={busyClass} aria-disabled={installing} aria-busy={installing} onClick={onInstall}>
-        {installing ? "Installing…" : `Install hedgebuddy ${bundle.wheel_version ?? python.required}`}
-      </Button>
-    );
-  }
-
-  if (bundle.wheel !== null) {
-    return (
-      <button
-        type="button"
-        className={`inline-flex min-h-7 items-center px-1 text-sm font-medium text-foreground hover:underline ${busyClass} aria-disabled:no-underline`}
-        aria-disabled={installing}
-        aria-busy={installing}
-        onClick={onInstall}
-      >
-        {installing ? "Installing…" : "Reinstall"}
-      </button>
-    );
-  }
-
-  return null;
+  if (python.problem === null) return null;
+  const label = python.installed ? `Update hedgebuddy to ${python.required}` : `Install hedgebuddy ${python.required}`;
+  return (
+    <Button
+      size="sm"
+      className="aria-disabled:pointer-events-none aria-disabled:opacity-45"
+      aria-disabled={installing}
+      aria-busy={installing}
+      onClick={onInstall}
+    >
+      {installing ? "Installing…" : label}
+    </Button>
+  );
 }
 
 /** The pip output block (Design direction 5C: "pip output"): one outcome line, then the command and pip's
@@ -165,7 +134,7 @@ function PipOutput({ result, outcomeRef }: {
 
 /**
  * The Python panel (spec §6.7): the interpreter the Hedge apps use, the installed `hedgebuddy` package
- * against the one required, the bundled wheel, and Install/Reinstall from it. "Check again" re-probes
+ * against the one required, and the Update button. "Check again" re-probes
  * Python right now (`useRecheckPython`) instead of waiting out the 10-minute miss cache.
  */
 export function PythonPanel() {
@@ -185,9 +154,7 @@ export function PythonPanel() {
 
   const data = query.data;
   if (!data) return null;
-  const { python, bundle } = data;
-  const noWheelReason = python.found && python.problem !== null && bundle.wheel === null;
-  const noWheelCommand = noWheelReason ? splitProblem(python.problem!).command : null;
+  const { python } = data;
 
   const doRecheck = () => {
     if (recheck.isPending) return;
@@ -210,7 +177,7 @@ export function PythonPanel() {
       // and the redirect below would never run — `setTimeout` still fires in that case.
       await new Promise<void>((resolve) => setTimeout(resolve, 0));
       // If the Install button is gone now that the state flipped — up to date, so the primary button
-      // became the quiet "Reinstall" text button instead — the browser drops focus to <body> when a
+      // disappeared — the browser drops focus to <body> when a
       // focused element unmounts. Checking the *current* active element (rather than snapshotting it
       // before the call) also covers a webview that never focused the button on click at all (WebKit):
       // either way, landing on the outcome line beats leaving focus on <body>.
@@ -254,32 +221,14 @@ export function PythonPanel() {
         <Readout label="PACKAGE" mono={false}>
           <PackageValue python={python} />
         </Readout>
-        <Readout label="BUNDLED" mono={bundle.wheel !== null}>
-          {bundle.wheel ? basename(bundle.wheel) : "none in this build"}
-        </Readout>
       </div>
 
       {install.data && <PipOutput result={install.data} outcomeRef={outcomeRef} />}
 
-      {noWheelReason && (
-        <div className="flex flex-col gap-1.5">
-          <p id="python-install-reason" className="min-w-0 text-xs break-words text-muted-foreground">
-            This build has no bundled package. Run:
-          </p>
-          {noWheelCommand && <CommandWell text={noWheelCommand} />}
-        </div>
-      )}
-
       <div className="flex flex-wrap items-start justify-end gap-3 border-t border-border pt-2">
         <CheckAgainButton pending={recheck.isPending} onClick={doRecheck} className="shrink-0" />
-        <InstallAction python={python} bundle={bundle} onInstall={doInstall} installing={install.isPending} />
+        <InstallAction python={python} onInstall={doInstall} installing={install.isPending} />
       </div>
-
-      {data.install_command && (
-        <p className="text-xs text-muted-foreground">
-          Runs <Mono className="text-muted-foreground break-words">{wrapPath(data.install_command)}</Mono>
-        </p>
-      )}
     </section>
   );
 }

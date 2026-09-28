@@ -10,7 +10,7 @@ import { ClaudeDesktop, HEDGEBUDDY_BINARY, MSIX_CLAUDE_DESKTOP_PATH, type Claude
 import { commercialOneDay, IMPORT_FILE, REQUIRED_VERSION, scenarioSeed, type PythonSeed, type Scenario } from "./fixtures";
 import { APPLY_NOTE, DATA_DIR, Hedge } from "./hedge";
 import { importsHedgebuddy, parseManifest, parseVarType, snakeCase, ToolError, validateEditorCommand, validateScriptName } from "./rules";
-import { bundleInfo, NO_WHEEL, pipCommandLine, pipSuccessOutput, PIP_FAIL_OUTPUT, PREFS_ERROR } from "./settings";
+import { bundleInfo, pipSuccessOutput, PIP_FAIL_OUTPUT, PREFS_ERROR, pypiCommandLine } from "./settings";
 import { Store, type ProfileExport, type ResolvedVariable } from "./store";
 import { appsOverview, catalogError, homeSummary, scriptsOverview, variablesOverview, varView } from "./views";
 
@@ -150,7 +150,7 @@ export class Model {
   private readonly claudeDesktop: ClaudeDesktop;
   /** The bundled `hedgebuddy` command, or null (`?nobinary=1`: a build without one). */
   private readonly binary: string | null;
-  /** The bundled wheel, or null (`macos`, or `?nowheel=1`: either way Settings' Install is disabled). */
+  /** The bundled wheel, or null (`macos`, or `?nowheel=1`). */
   private readonly wheel: string | null;
   /** `?pipfail=1` forces `pip_install` to fail with a PEP 668-style message, in any scenario. */
   private readonly pipFail: boolean;
@@ -486,7 +486,6 @@ export class Model {
       catalog_overrides: this.catalogErrorForced ? [] : this.scenario === "problems" ? ["offshoot"] : [],
       catalog_error: this.catalogErrorForced ? CATALOG_ERROR : null,
       python: this.pythonStatus(),
-      install_command: this.python && this.wheel ? pipCommandLine(this.os, this.wheel) : null,
       bundle: bundleInfo(this.binary, this.wheel),
       editor_command: this.prefsBroken ? null : this.preferences.editor_command,
       preferences_error: this.prefsBroken ? PREFS_ERROR : null,
@@ -497,13 +496,12 @@ export class Model {
    *  or `settings_overview` (recheck or not) already shows it. `?pipfail=1` forces a PEP 668-style failure. */
   pipInstall(): AppOut<"pip_install"> {
     if (this.python === null) throw new ToolError("Python 3 was not found; the Hedge apps need it to run scripts");
-    if (this.wheel === null) throw new ToolError(NO_WHEEL);
-    const command = pipCommandLine(this.os, this.wheel);
+    const command = pypiCommandLine(this.os, REQUIRED_VERSION);
     if (this.pipFail) {
       return { ok: false, exit_code: 1, command, output: PIP_FAIL_OUTPUT, installed: this.python.installed };
     }
     this.python = { ...this.python, installed: REQUIRED_VERSION };
-    return { ok: true, exit_code: 0, command, output: pipSuccessOutput(this.wheel, REQUIRED_VERSION), installed: REQUIRED_VERSION };
+    return { ok: true, exit_code: 0, command, output: pipSuccessOutput(REQUIRED_VERSION), installed: REQUIRED_VERSION };
   }
 
   // ---- overviews (views.ts) -----------------------------------------------------------------------
