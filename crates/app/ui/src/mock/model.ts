@@ -24,6 +24,10 @@ const PATH_STATUS_MAX = 64;
 const REVEAL_REFUSED = "HedgeBuddy only reveals its data folder and Hedge app files";
 const FILE_MANAGER: Record<Os, string> = { windows: "File Explorer", macos: "Finder" };
 const TEXT_EDITOR: Record<Os, string> = { windows: "Notepad", macos: "the default text editor" };
+/** `?catalogerror=1`: a broken catalog override, in the shape `Catalog::load`'s own failures take (the
+ *  broken file's own name, per `crates/core/src/catalog.rs`'s `invalid_overrides_are_reported_with_the_file_
+ *  name` test), so Settings' amber catalog line can be checked. */
+const CATALOG_ERROR = "offshoot.toml: TOML parse error at line 1, column 20";
 
 /** The apply note, only on a change that was applied (attachments.rs `note`). */
 function note(applied: boolean): { note?: string } {
@@ -139,6 +143,10 @@ export class Model {
    *  and a null `editor_command`, and `preferences_set` refuses (Task 6 note: the mock had always returned
    *  `preferences_error: null`, since nothing forced the failing case). */
   private readonly prefsBroken: boolean;
+  /** `?catalogerror=1`: a catalog override is broken, so `settings_overview` reports `catalog_error` and no
+   *  overrides (a failed load falls back to the embedded catalog, which has none) (Task 6 review round 2,
+   *  minor: the mock had no way to force this, so the amber catalog line was never reachable). */
+  private readonly catalogErrorForced: boolean;
   private readonly claudeDesktop: ClaudeDesktop;
   /** The bundled `hedgebuddy` command, or null (`?nobinary=1`: a build without one). */
   private readonly binary: string | null;
@@ -151,9 +159,9 @@ export class Model {
 
   constructor(scenario: Scenario) {
     const seed = scenarioSeed(scenario);
-    // `?claude=invalid`, `?nobinary=1`, `?nowheel=1`, `?pipfail=1` and `?prefserror=1` each force an
-    // otherwise-unreachable state, in any scenario, so Connect and Settings can be checked visually against
-    // every state.
+    // `?claude=invalid`, `?nobinary=1`, `?nowheel=1`, `?pipfail=1`, `?prefserror=1` and `?catalogerror=1`
+    // each force an otherwise-unreachable state, in any scenario, so Connect and Settings can be checked
+    // visually against every state.
     const params = new URLSearchParams(window.location.search);
     this.scenario = scenario;
     this.os = seed.os;
@@ -173,6 +181,7 @@ export class Model {
     this.wheel = params.get("nowheel") === "1" ? null : seed.wheel;
     this.pipFail = params.get("pipfail") === "1";
     this.prefsBroken = params.get("prefserror") === "1";
+    this.catalogErrorForced = params.get("catalogerror") === "1";
     const source = new Store(DATA_DIR.windows, "\\", { profiles: { "commercial-one-day": commercialOneDay(false) }, active: null });
     this.exportFiles.set(this.hedge.pathKey(IMPORT_FILE), source.exportProfile("commercial-one-day", false));
   }
@@ -397,16 +406,21 @@ export class Model {
   }
 
   /** A non-empty `editor_command` must parse as a shell-like command (`validateEditorCommand`, a port of
-   *  `editor_argv`) before anything changes, mirroring `preferences_set`'s own order — a broken command is
-   *  never saved. `?prefserror=1` refuses outright, as the real tool would (it reads the file back before
-   *  writing, so a corrupt one fails the same way). */
+   *  `editor_argv`) *before* `?prefserror=1` refuses (review round 2, minor): the real tool validates first
+   *  and only reads the file back — where a corrupt one fails — once that passes (`preferences_set` in
+   *  `crates/tools/src/app/mod.rs` calls `editor_argv` ahead of `ctx.store.update_preferences`, which is
+   *  what does the read). Getting this backwards would report the wrong one of two simultaneous problems. */
   preferencesSet(args: AppIn<"preferences_set">): AppOut<"preferences_set"> {
-    if (this.prefsBroken) throw new ToolError(PREFS_ERROR);
+    let editorCommand: string | null | undefined; // undefined: the key was absent, leave it alone.
     if ("editor_command" in args) {
       const raw = args.editor_command ?? null;
       const trimmed = raw?.trim() ?? "";
       if (trimmed !== "") validateEditorCommand(raw!);
-      this.preferences = { ...this.preferences, editor_command: trimmed === "" ? null : trimmed };
+      editorCommand = trimmed === "" ? null : trimmed;
+    }
+    if (this.prefsBroken) throw new ToolError(PREFS_ERROR);
+    if (editorCommand !== undefined) {
+      this.preferences = { ...this.preferences, editor_command: editorCommand };
     }
     if ("last_opened" in args) {
       this.preferences = { ...this.preferences, last_opened: args.last_opened ?? null };
@@ -466,8 +480,8 @@ export class Model {
     return {
       os: this.os,
       data_dir: this.store.dataDir,
-      catalog_overrides: this.scenario === "problems" ? ["offshoot"] : [],
-      catalog_error: null,
+      catalog_overrides: this.catalogErrorForced ? [] : this.scenario === "problems" ? ["offshoot"] : [],
+      catalog_error: this.catalogErrorForced ? CATALOG_ERROR : null,
       python: this.pythonStatus(),
       install_command: this.python && this.wheel ? pipCommandLine(this.os, this.wheel) : null,
       bundle: bundleInfo(this.binary, this.wheel),

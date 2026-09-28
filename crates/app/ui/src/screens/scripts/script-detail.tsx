@@ -436,7 +436,17 @@ export function ScriptDetail({ name, profile, overview, appsOverview }: {
           <Button variant="ghost" size="sm" disabled={openingEditor} onClick={handleOpenEditor}>
             <SquarePen aria-hidden strokeWidth={1.75} /> Open in editor
           </Button>
-          <Button variant="ghost" size="sm" disabled={revealing} onClick={handleReveal}>
+          {/* aria-disabled (not disabled): a focused button that goes natively `disabled` mid-click drops
+              keyboard focus to <body> in some webviews (Task 6 review round 2, Important 2). `handleReveal`
+              itself ignores a click while already revealing. */}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="aria-disabled:pointer-events-none aria-disabled:opacity-45"
+            aria-disabled={revealing}
+            aria-busy={revealing}
+            onClick={handleReveal}
+          >
             <FolderOpen aria-hidden strokeWidth={1.75} /> Show in folder
           </Button>
         </div>

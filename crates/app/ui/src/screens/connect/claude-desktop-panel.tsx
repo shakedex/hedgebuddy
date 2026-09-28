@@ -4,7 +4,6 @@ import { callApp } from "@/api/bridge";
 import { queryClient, queryKey, useClaudeDesktopStatus } from "@/api/queries";
 import type { ClaudeDesktopApplyOutput, ClaudeDesktopPlanOutput, ClaudeDesktopStatusOutput } from "@/api/tools.gen";
 import { ChangePreviewDialog, type PreviewModel, wrapPath } from "@/components/app/change-preview-dialog";
-import { ErrorPanel } from "@/components/app/error-panel";
 import { Mono } from "@/components/app/mono";
 import { Readout } from "@/components/app/readout";
 import { StatusIcon } from "@/components/app/status-icon";
@@ -12,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { ChangeRow } from "@/lib/actions";
 import { focusMainHeading } from "@/lib/focus";
+import { basename } from "@/lib/format";
 import { claudeStateKey, type StatusKey } from "@/lib/status";
 
 /**
@@ -38,12 +38,6 @@ function useRestartPending(): boolean {
 }
 
 type SetupAction = "set_up" | "update";
-
-/** The file name at the end of a path (`\` or `/`), for a name worth quoting on its own — never the whole path. */
-function basename(path: string): string {
-  const idx = Math.max(path.lastIndexOf("\\"), path.lastIndexOf("/"));
-  return idx === -1 ? path : path.slice(idx + 1);
-}
 
 /** The folder a path sits in (everything before its last `\` or `/`), for "a backup goes beside it" without
  *  claiming the exact file name a later apply will actually pick (review round 1, Important 3). */
@@ -168,14 +162,9 @@ export function ClaudeDesktopPanel() {
   if (action !== null) lastActionRef.current = action;
 
   if (query.isPending) return <PanelSkeleton />;
-  if (query.isError && !query.isSuccess) {
-    return (
-      <section className="surface flex flex-col gap-3 p-3">
-        <h2 className="micro-label">Claude Desktop</h2>
-        <ErrorPanel error={query.error} onRetry={() => void query.refetch()} retrying={query.isFetching} />
-      </section>
-    );
-  }
+  // The shared `claude_desktop_status` failure is shown once, by `ConnectScreen` — this panel simply
+  // doesn't render while that's the case (review round 2, minor: "one ErrorPanel per failed query").
+  if (query.isError && !query.isSuccess) return null;
 
   const data = query.data;
   if (!data) return <PanelSkeleton />;

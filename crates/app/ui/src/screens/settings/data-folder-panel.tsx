@@ -3,7 +3,6 @@ import { FolderOpen, TriangleAlert } from "lucide-react";
 import { callApp } from "@/api/bridge";
 import { useSettingsOverview } from "@/api/queries";
 import { wrapPath } from "@/components/app/change-preview-dialog";
-import { ErrorPanel } from "@/components/app/error-panel";
 import { Mono } from "@/components/app/mono";
 import { Readout } from "@/components/app/readout";
 import { Button } from "@/components/ui/button";
@@ -21,8 +20,8 @@ function PanelSkeleton() {
   );
 }
 
-/** The CATALOG OVERRIDES readout's value (brief step 2): "none", or each overridden app's name (`appName`)
- *  with its own catalog file in mono — `OffShoot (`offshoot.toml`)`. */
+/** The OVERRIDES readout's value (brief step 2): "none", or each overridden app's name (`appName`) with its
+ *  own catalog file in mono — `OffShoot (`offshoot.toml`)`. */
 function CatalogOverrides({ ids }: { ids: string[] }) {
   if (ids.length === 0) return <>none</>;
   return (
@@ -46,14 +45,9 @@ export function DataFolderPanel() {
   const [revealing, setRevealing] = useState(false);
 
   if (query.isPending) return <PanelSkeleton />;
-  if (query.isError && !query.isSuccess) {
-    return (
-      <section className="surface flex flex-col gap-3 p-3">
-        <h2 className="micro-label">Data folder</h2>
-        <ErrorPanel error={query.error} onRetry={() => void query.refetch()} retrying={query.isFetching} />
-      </section>
-    );
-  }
+  // The shared `settings_overview` failure is shown once, by `SettingsScreen` — this panel simply doesn't
+  // render while that's the case (review round 2, minor: "one ErrorPanel per failed query").
+  if (query.isError && !query.isSuccess) return null;
 
   const data = query.data;
   if (!data) return null;
@@ -79,7 +73,7 @@ export function DataFolderPanel() {
 
       <div className="flex flex-col gap-1.5">
         <Readout label="FOLDER">{wrapPath(data.data_dir)}</Readout>
-        <Readout label="CATALOG OVERRIDES" mono={false}>
+        <Readout label="OVERRIDES" mono={false}>
           <CatalogOverrides ids={data.catalog_overrides} />
         </Readout>
       </div>
@@ -87,12 +81,22 @@ export function DataFolderPanel() {
       {data.catalog_error && (
         <p className="flex items-start gap-1.5 text-xs text-warning">
           <TriangleAlert aria-hidden className="mt-0.5 size-3.5 shrink-0" strokeWidth={1.75} />
-          <span>{data.catalog_error}. HedgeBuddy uses its built-in catalog until this is fixed.</span>
+          <span className="min-w-0 flex-1 break-words">{data.catalog_error}. HedgeBuddy uses its built-in catalog until this is fixed.</span>
         </p>
       )}
 
       <div className="flex justify-end border-t border-border pt-2">
-        <Button variant="ghost" size="sm" disabled={revealing} onClick={handleReveal}>
+        {/* aria-disabled (not disabled): a focused button that goes natively `disabled` mid-click drops
+            keyboard focus to <body> in some webviews (review round 2, Important 2 — the same fix Install
+            already has). `handleReveal` itself ignores a click while already revealing. */}
+        <Button
+          variant="ghost"
+          size="sm"
+          className="aria-disabled:pointer-events-none aria-disabled:opacity-45"
+          aria-disabled={revealing}
+          aria-busy={revealing}
+          onClick={handleReveal}
+        >
           <FolderOpen aria-hidden strokeWidth={1.75} /> Show in folder
         </Button>
       </div>

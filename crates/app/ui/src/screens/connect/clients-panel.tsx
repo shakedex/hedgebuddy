@@ -1,7 +1,6 @@
 import { useClaudeDesktopStatus } from "@/api/queries";
 import { wrapPath } from "@/components/app/change-preview-dialog";
 import { CommandWell } from "@/components/app/command-well";
-import { ErrorPanel } from "@/components/app/error-panel";
 import { Readout } from "@/components/app/readout";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -31,20 +30,9 @@ export function ClientsPanel() {
       </>
     );
   }
-  if (query.isError && !query.isSuccess) {
-    return (
-      <>
-        <section className="surface flex flex-col gap-3 p-3">
-          <h2 className="micro-label">Claude Code</h2>
-          <ErrorPanel error={query.error} onRetry={() => void query.refetch()} retrying={query.isFetching} />
-        </section>
-        <section className="surface flex flex-col gap-3 p-3">
-          <h2 className="micro-label">Other MCP clients</h2>
-          <ErrorPanel error={query.error} onRetry={() => void query.refetch()} retrying={query.isFetching} />
-        </section>
-      </>
-    );
-  }
+  // The shared `claude_desktop_status` failure is shown once, by `ConnectScreen` — these panels simply
+  // don't render while that's the case (review round 2, minor: "one ErrorPanel per failed query").
+  if (query.isError && !query.isSuccess) return null;
 
   const data = query.data;
   if (!data) return null;
