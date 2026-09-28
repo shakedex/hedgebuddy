@@ -1,16 +1,13 @@
 /**
- * The preview's Settings data: the bundled files, the pip command line, and pip's own transcript. A port of
- * `hedgebuddy-tools`' settings module (crates/tools/src/app/settings.rs): the same command line (offline,
- * quoted per platform) and the same wheel-name parsing.
+ * The preview's Settings data: the bundled files, the pip command lines, and pip's own transcript. A port of
+ * `hedgebuddy-tools`' settings module (crates/tools/src/app/settings.rs): PyPI first, the bundled wheel as
+ * the offline fallback, and the same wheel-name parsing.
  */
 import type { BundleInfo, Os } from "@/api/tools.gen";
-import { shellQuote } from "./claudeDesktop";
 
 const WHEEL_PREFIX = "hedgebuddy-";
 const WHEEL_SUFFIX = "-py3-none-any.whl";
 
-/** Why a build with no bundled wheel can't install it (settings.rs `NO_WHEEL`). */
-export const NO_WHEEL = "this build has no bundled package";
 
 /** `?prefserror=1`: `preferences.json` can't be read, in the shape `preferences.rs`'s own read failures take
  *  (a JSON syntax error), so Settings' Editor command panel can be checked with `preferences_error` set. */
@@ -33,24 +30,16 @@ export function bundleInfo(binary: string | null, wheel: string | null): BundleI
   return { binary, wheel, wheel_version: wheel === null ? null : parseWheelVersion(wheel) };
 }
 
-/** The argv `pip_install` runs: the platform's launcher, pip's own arguments (offline, without pip's version
- *  nag), then the wheel path (settings.rs `pip_argv`). */
-export function pipArgv(os: Os, wheel: string): string[] {
-  return [...LAUNCHER[os], "-m", "pip", "install", "--upgrade", "--no-index", "--disable-pip-version-check", wheel];
+/** The PyPI command `pip_install` runs first (settings.rs `pip_argv` with no extra flags). */
+export function pypiCommandLine(os: Os, version: string): string {
+  return [...LAUNCHER[os], "-m", "pip", "install", "--upgrade", "--disable-pip-version-check", `hedgebuddy==${version}`].join(" ");
 }
 
-/** `pipArgv`, as the operator would type it: the wheel path quoted for a shell on `os` (settings.rs
- *  `pip_command_line`) — only ever shown or copied, never run this way. */
-export function pipCommandLine(os: Os, wheel: string): string {
-  const argv = pipArgv(os, wheel);
-  argv[argv.length - 1] = shellQuote(os, wheel);
-  return argv.join(" ");
-}
-
-/** A realistic pip transcript for installing `wheel` as `version`. */
-export function pipSuccessOutput(wheel: string, version: string): string {
+/** A realistic pip transcript for installing `version` from PyPI. */
+export function pipSuccessOutput(version: string): string {
   return [
-    `Processing ${wheel}`,
+    `Collecting hedgebuddy==${version}`,
+    `  Downloading hedgebuddy-${version}-py3-none-any.whl (20 kB)`,
     "Installing collected packages: hedgebuddy",
     `Successfully installed hedgebuddy-${version}`,
   ].join("\n");

@@ -1060,8 +1060,6 @@ export type SettingsOverviewOutput = {
   data_dir: string;
   /** The operator's editor command, or null for the system default (also null when `preferences_error` is set). */
   editor_command: string | null;
-  /** The pip command Install runs, as the operator would type it, or null without Python or a bundled wheel. */
-  install_command: string | null;
   /** This machine's OS (for OS-specific wording such as the default editor). */
   os: Os;
   /** Why the preferences file could not be read, or null. Settings still loads in that case; only `editor_command` is affected. */
