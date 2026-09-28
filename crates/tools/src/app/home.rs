@@ -377,7 +377,7 @@ fn variable_issues(ctx: &Context, profile: &str) -> Result<Vec<AttentionItem>, T
         .collect())
 }
 
-fn python_status(info: Option<PythonInfo>) -> PythonStatus {
+pub(crate) fn python_status(info: Option<PythonInfo>) -> PythonStatus {
     let required = env!("CARGO_PKG_VERSION").to_owned();
     match info {
         None => PythonStatus {

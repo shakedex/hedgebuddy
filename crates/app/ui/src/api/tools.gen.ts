@@ -945,6 +945,23 @@ export type PickImportFileOutput = {
 };
 
 /** Parameters of tools that take none. */
+export type PipInstallInput = Record<string, never>;
+
+/** Result of `pip_install`. */
+export type PipInstallOutput = {
+  /** The command line that ran. */
+  command: string;
+  /** pip's exit code. */
+  exit_code: number;
+  /** The hedgebuddy version installed afterwards, if any. */
+  installed: string | null;
+  /** Whether pip exited 0. */
+  ok: boolean;
+  /** pip's stdout then stderr, the last 64 KiB. */
+  output: string;
+};
+
+/** Parameters of tools that take none. */
 export type PreferencesGetInput = Record<string, never>;
 
 /** Contents of `preferences.json`. */
@@ -1021,6 +1038,29 @@ export type ScriptsOverviewOutput = {
   scripts: Array<ScriptRow>;
 };
 
+/** Parameters of tools that take none. */
+export type SettingsOverviewInput = Record<string, never>;
+
+/** Result of `settings_overview`. */
+export type SettingsOverviewOutput = {
+  /** The bundled files this build ships with. */
+  bundle: BundleInfo;
+  /** Why the catalog overrides could not be loaded, or null. */
+  catalog_error: string | null;
+  /** Apps whose catalog entry comes from `<data>/catalog/`, by id. */
+  catalog_overrides: Array<string>;
+  /** The data folder. */
+  data_dir: string;
+  /** The operator's editor command, or null for the system default. */
+  editor_command: string | null;
+  /** The pip command Install runs, as the operator would type it, or null without Python or a bundled wheel. */
+  install_command: string | null;
+  /** This machine's OS (for OS-specific wording such as the default editor). */
+  os: Os;
+  /** The Python the Hedge apps use. */
+  python: PythonStatus;
+};
+
 /** Arguments of the overviews that read one profile. */
 export type VariablesOverviewInput = {
   /** Profile name; defaults to the active profile. */
@@ -1052,11 +1092,13 @@ export interface AppCommandTypes {
   pick_export_path: { input: PickExportPathInput; output: PickExportPathOutput };
   pick_folder: { input: PickFolderInput; output: PickFolderOutput };
   pick_import_file: { input: PickImportFileInput; output: PickImportFileOutput };
+  pip_install: { input: PipInstallInput; output: PipInstallOutput };
   preferences_get: { input: PreferencesGetInput; output: PreferencesGetOutput };
   preferences_set: { input: PreferencesSetInput; output: PreferencesSetOutput };
   reveal_path: { input: RevealPathInput; output: RevealPathOutput };
   script_template: { input: ScriptTemplateInput; output: ScriptTemplateOutput };
   scripts_overview: { input: ScriptsOverviewInput; output: ScriptsOverviewOutput };
+  settings_overview: { input: SettingsOverviewInput; output: SettingsOverviewOutput };
   variables_overview: { input: VariablesOverviewInput; output: VariablesOverviewOutput };
 }
 
@@ -1077,11 +1119,13 @@ export const app = {
   pickExportPath: (args: PickExportPathInput) => callApp("pick_export_path", args),
   pickFolder: (args: PickFolderInput = {}) => callApp("pick_folder", args),
   pickImportFile: (args: PickImportFileInput = {}) => callApp("pick_import_file", args),
+  pipInstall: (args: PipInstallInput = {}) => callApp("pip_install", args),
   preferencesGet: (args: PreferencesGetInput = {}) => callApp("preferences_get", args),
   preferencesSet: (args: PreferencesSetInput = {}) => callApp("preferences_set", args),
   revealPath: (args: RevealPathInput) => callApp("reveal_path", args),
   scriptTemplate: (args: ScriptTemplateInput) => callApp("script_template", args),
   scriptsOverview: (args: ScriptsOverviewInput = {}) => callApp("scripts_overview", args),
+  settingsOverview: (args: SettingsOverviewInput = {}) => callApp("settings_overview", args),
   variablesOverview: (args: VariablesOverviewInput = {}) => callApp("variables_overview", args),
 } as const;
 
@@ -1278,6 +1322,16 @@ export type AttentionItem = {
   /** How many of its events have a script attached. */
   events: number;
   kind: "scripting_off";
+};
+
+/** The bundled files [`settings_overview`] found on disk. */
+export type BundleInfo = {
+  /** The bundled hedgebuddy command, or null. */
+  binary: string | null;
+  /** The bundled wheel, or null. */
+  wheel: string | null;
+  /** The wheel's version (from its file name), or null. */
+  wheel_version: string | null;
 };
 
 /** Which kind of card a volume looks like, and the evidence. */
