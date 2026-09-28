@@ -2,6 +2,8 @@
 
 The `hedgebuddy` package on PyPI is published by the **Publish Python package** workflow. It runs only when started by hand.
 
+The desktop app doesn't wait for PyPI: its installer ships a wheel that `scripts/prepare_bundle.py` builds from `python/`, and Settings installs that one.
+
 ## One-time setup
 
 1. On pypi.org, open the `hedgebuddy` project, then Publishing, and add a GitHub trusted publisher: owner `shakedex`, repository `hedgebuddy`, workflow `publish-python.yml`, environment `pypi`.

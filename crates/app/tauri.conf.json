@@ -13,6 +13,7 @@
     "windows": [
       {
         "label": "main",
+        "create": false,
         "title": "HedgeBuddy",
         "width": 960,
         "height": 640,

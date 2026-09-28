@@ -6,9 +6,16 @@ mod commands;
 mod state;
 mod watcher;
 
-use tauri::Manager;
+use tauri::{Manager, WebviewWindowBuilder};
+use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 
 /// Open the data folder, start watching it, and run the window.
+///
+/// The main window is created here, after the state is managed, not by
+/// Tauri at start (`create: false` in `tauri.conf.json`). So when the data
+/// folder can't be opened, the error dialog shows with no window open: with
+/// a window, macOS attaches the dialog to it as a sheet, which needs the
+/// event loop that `blocking_show` holds up on the main thread.
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -23,7 +30,21 @@ pub fn run() {
                 .build(),
         )
         .setup(|app| {
-            let state = state::AppState::open()?;
+            let state = match state::AppState::open() {
+                Ok(state) => state,
+                Err(reason) => {
+                    // Without a window the error would only reach stderr,
+                    // which a double-clicked app has none of.
+                    app.dialog()
+                        .message(format!(
+                            "HedgeBuddy couldn't open its data folder: {reason}"
+                        ))
+                        .kind(MessageDialogKind::Error)
+                        .title("HedgeBuddy can't start")
+                        .blocking_show();
+                    return Err(reason.into());
+                }
+            };
             let root = state.ctx().store.root().to_path_buf();
             match watcher::start(app.handle().clone(), root) {
                 Ok(handle) => *state.watch.lock().unwrap_or_else(|e| e.into_inner()) = Some(handle),
@@ -31,6 +52,9 @@ pub fn run() {
                 Err(e) => eprintln!("hedgebuddy: live refresh is off: {e}"),
             }
             app.manage(state);
+            for config in app.config().app.windows.clone() {
+                WebviewWindowBuilder::from_config(app.handle(), &config)?.build()?;
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -52,6 +76,11 @@ pub fn run() {
             commands::pick_folder,
             commands::pick_export_path,
             commands::pick_import_file,
+            commands::claude_desktop_status,
+            commands::claude_desktop_plan,
+            commands::claude_desktop_apply,
+            commands::settings_overview,
+            commands::pip_install,
         ])
         .run(tauri::generate_context!())
         .expect("error while running HedgeBuddy");

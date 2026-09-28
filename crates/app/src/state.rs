@@ -5,6 +5,7 @@ use std::sync::{Arc, Mutex, RwLock};
 use hedgebuddy_core::WatchHandle;
 use hedgebuddy_tools::app::{start_session, PythonCache};
 use hedgebuddy_tools::Context;
+use tauri::async_runtime::Mutex as AsyncMutex;
 
 /// Managed Tauri state.
 pub struct AppState {
@@ -17,6 +18,8 @@ pub struct AppState {
     pub python: Arc<PythonCache>,
     /// Keeps the data-folder watcher alive.
     pub watch: Mutex<Option<WatchHandle>>,
+    /// Held while `pip_install` runs, so installs run one at a time.
+    pub installing: AsyncMutex<()>,
 }
 
 impl AppState {
@@ -32,6 +35,7 @@ impl AppState {
             since: session.since,
             python: Arc::new(PythonCache::default()),
             watch: Mutex::new(None),
+            installing: AsyncMutex::new(()),
         })
     }
 
