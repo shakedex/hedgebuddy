@@ -30,8 +30,8 @@ const RELOAD: Record<string, Name[]> = {
   index: ["list_profiles", "get_profile", "list_runs", "home_summary", "variables_overview", "scripts_overview"],
   runs: ["list_runs", "get_run", "home_summary"],
   activity: ["activity", "home_summary"],
-  preferences: ["preferences_get"],
-  catalog: ["list_apps", "describe_app", "list_attachments", "home_summary", "apps_overview", "scripts_overview"],
+  preferences: ["preferences_get", "settings_overview"],
+  catalog: ["list_apps", "describe_app", "list_attachments", "home_summary", "apps_overview", "scripts_overview", "settings_overview"],
 };
 const PROFILE: Name[] = ["list_profiles", "get_profile", "list_vars", "get_var", "home_summary", "variables_overview", "scripts_overview"];
 const SCRIPTS: Name[] = [
@@ -80,6 +80,46 @@ export function useHomeSummary() {
     queryKey: queryKey.app("home_summary", {}),
     queryFn: () => callApp("home_summary", {}),
     refetchOnWindowFocus: true,
+  });
+}
+
+/** Connect's Claude Desktop status (spec §6.6): the config file lives outside the data folder (the operator
+ *  may set it up, or restart Claude Desktop, without HedgeBuddy noticing), so this also reloads on window focus. */
+export function useClaudeDesktopStatus() {
+  return useQuery({
+    queryKey: queryKey.app("claude_desktop_status", {}),
+    queryFn: () => callApp("claude_desktop_status", {}),
+    refetchOnWindowFocus: true,
+  });
+}
+
+/** The Settings screen (spec §6.7): Python, the data folder, its catalog overrides, the bundled files and
+ *  the editor command. */
+export function useSettingsOverview() {
+  return useQuery({
+    queryKey: queryKey.app("settings_overview", {}),
+    queryFn: () => callApp("settings_overview", {}),
+  });
+}
+
+/** Connect's activity list (spec §6.6): the last 200 Claude calls. */
+export function useActivity() {
+  return useQuery({
+    queryKey: queryKey.app("activity", { limit: 200 }),
+    queryFn: () => callApp("activity", { limit: 200 }),
+  });
+}
+
+/** Settings' Install button (spec §6.7): installs the bundled wheel with pip, then reloads wherever the
+ *  installed version shows. `pip_install` itself is never busy (it takes no data-folder lock), so there is
+ *  no busy toast to clear here, unlike the other mutations in this file. */
+export function usePipInstall() {
+  return useMutation({
+    mutationFn: () => callApp("pip_install", {}),
+    onSettled: () => {
+      const names = new Set<string>(["settings_overview", "home_summary"]);
+      void queryClient.invalidateQueries({ predicate: (q) => names.has(String(q.queryKey[1])) });
+    },
   });
 }
 

@@ -6,9 +6,11 @@
  */
 import type { ActivityRecord, AppCommandTypes, Os, PythonStatus, Run, ToolTypes } from "@/api/tools.gen";
 import { catalogApp, catalogEvent } from "./catalog";
+import { ClaudeDesktop, HEDGEBUDDY_BINARY } from "./claudeDesktop";
 import { commercialOneDay, IMPORT_FILE, REQUIRED_VERSION, scenarioSeed, type PythonSeed, type Scenario } from "./fixtures";
 import { APPLY_NOTE, DATA_DIR, Hedge } from "./hedge";
 import { importsHedgebuddy, parseManifest, parseVarType, snakeCase, ToolError, validateScriptName } from "./rules";
+import { bundleInfo, NO_WHEEL, pipCommandLine, pipSuccessOutput, PIP_FAIL_OUTPUT } from "./settings";
 import { Store, type ProfileExport, type ResolvedVariable } from "./store";
 import { appsOverview, catalogError, homeSummary, scriptsOverview, variablesOverview, varView } from "./views";
 
@@ -126,11 +128,17 @@ export class Model {
   readonly os: Os;
   private readonly store: Store;
   private readonly hedge: Hedge;
-  private readonly python: PythonSeed | null;
+  /** Not `readonly`: a successful `pip_install` updates `installed` in place. */
+  private python: PythonSeed | null;
   private readonly runs: Run[];
   private readonly activityLog: ActivityRecord[];
   private readonly since: string | null;
   private readonly preferences: AppOut<"preferences_get">;
+  private readonly claudeDesktop: ClaudeDesktop;
+  /** The bundled wheel, or null (`macos`: Settings' Install is disabled). */
+  private readonly wheel: string | null;
+  /** `?pipfail=1` forces `pip_install` to fail with a PEP 668-style message, in any scenario. */
+  private readonly pipFail: boolean;
   /** Export files by path: the fixed import file, plus whatever `export_profile` writes. */
   private readonly exportFiles = new Map<string, ProfileExport>();
 
@@ -145,6 +153,9 @@ export class Model {
     this.activityLog = seed.activity;
     this.since = seed.since;
     this.preferences = seed.preferences;
+    this.claudeDesktop = new ClaudeDesktop(seed.os, HEDGEBUDDY_BINARY[seed.os], seed.claudeDesktop);
+    this.wheel = seed.wheel;
+    this.pipFail = new URLSearchParams(window.location.search).get("pipfail") === "1";
     const source = new Store(DATA_DIR.windows, "\\", { profiles: { "commercial-one-day": commercialOneDay(false) }, active: null });
     this.exportFiles.set(this.hedge.pathKey(IMPORT_FILE), source.exportProfile("commercial-one-day", false));
   }
@@ -396,6 +407,51 @@ export class Model {
 
   homeSummary(): AppOut<"home_summary"> {
     return homeSummary(this.store, this.hedge, this.pythonStatus(), { runs: this.runs, activity: this.activityLog, since: this.since });
+  }
+
+  // ---- Claude Desktop (spec §6.6, §10) ------------------------------------------------------------
+
+  claudeDesktopStatus(): AppOut<"claude_desktop_status"> {
+    return this.claudeDesktop.status();
+  }
+
+  claudeDesktopPlan(): AppOut<"claude_desktop_plan"> {
+    return this.claudeDesktop.plan();
+  }
+
+  claudeDesktopApply(): AppOut<"claude_desktop_apply"> {
+    return this.claudeDesktop.apply();
+  }
+
+  // ---- Settings (spec §6.7) ------------------------------------------------------------------------
+
+  /** `args.recheck` has nothing to do here: the preview keeps no Python cache to invalidate, so every call
+   *  already reads the current (possibly just-installed) value. */
+  settingsOverview(_args: AppIn<"settings_overview">): AppOut<"settings_overview"> {
+    return {
+      os: this.os,
+      data_dir: this.store.dataDir,
+      catalog_overrides: this.scenario === "problems" ? ["offshoot"] : [],
+      catalog_error: null,
+      python: this.pythonStatus(),
+      install_command: this.python && this.wheel ? pipCommandLine(this.os, this.wheel) : null,
+      bundle: bundleInfo(HEDGEBUDDY_BINARY[this.os], this.wheel),
+      editor_command: this.preferences.editor_command,
+      preferences_error: null,
+    };
+  }
+
+  /** Installs the bundled wheel offline; a success updates `installed` in place, so a later `home_summary`
+   *  or `settings_overview` (recheck or not) already shows it. `?pipfail=1` forces a PEP 668-style failure. */
+  pipInstall(): AppOut<"pip_install"> {
+    if (this.python === null) throw new ToolError("Python 3 was not found; the Hedge apps need it to run scripts");
+    if (this.wheel === null) throw new ToolError(NO_WHEEL);
+    const command = pipCommandLine(this.os, this.wheel);
+    if (this.pipFail) {
+      return { ok: false, exit_code: 1, command, output: PIP_FAIL_OUTPUT, installed: this.python.installed };
+    }
+    this.python = { ...this.python, installed: REQUIRED_VERSION };
+    return { ok: true, exit_code: 0, command, output: pipSuccessOutput(this.wheel, REQUIRED_VERSION), installed: REQUIRED_VERSION };
   }
 
   // ---- overviews (views.ts) -----------------------------------------------------------------------

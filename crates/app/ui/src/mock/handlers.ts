@@ -56,9 +56,17 @@ const appHandlers: AppHandlers = {
   pick_folder: () => model.pickFolder(),
   pick_export_path: (args) => model.pickExportPath(args),
   pick_import_file: () => model.pickImportFile(),
+  claude_desktop_status: () => model.claudeDesktopStatus(),
+  claude_desktop_plan: () => model.claudeDesktopPlan(),
+  claude_desktop_apply: () => model.claudeDesktopApply(),
+  settings_overview: (args) => model.settingsOverview(args),
+  pip_install: () => model.pipInstall(),
 };
 
-/** What takes the data folder's write lock, as in the real app: every non-read tool (dry runs too), import, preferences. */
+/** What takes the data folder's write lock, as in the real app: every non-read tool (dry runs too), import,
+ *  preferences, and `claude_desktop_apply` (it writes outside the data folder, but takes the same lock so it
+ *  never races another HedgeBuddy). `claude_desktop_plan` and `pip_install` take no lock, so neither is here:
+ *  the former only reads, the latter has its own one-at-a-time guard below instead. */
 const WRITES = new Set<string>([
   "create_profile",
   "set_active_profile",
@@ -73,6 +81,7 @@ const WRITES = new Set<string>([
   "clear_stale_attachment",
   "import_profile",
   "preferences_set",
+  "claude_desktop_apply",
 ]);
 
 /** In `busy`, the writes that report busy: every write unless narrowed with `window.__hb.busy([...])`. */
@@ -104,10 +113,26 @@ export async function callTool<N extends ToolName>(name: N, args: ToolTypes[N]["
   return run(toolHandlers[name] as ((a: ToolTypes[N]["input"]) => ToolTypes[N]["output"]) | undefined, name, args);
 }
 
+/** `pip_install` takes no data-folder lock, but only one runs at a time (commands.rs `install_slot`): a
+ *  second call while one is in flight is refused outright, ahead of the scenario's own error/busy checks. */
+let pipInstalling = false;
+
 export async function callApp<C extends AppCommandName>(name: C, args: AppCommandTypes[C]["input"]): Promise<AppCommandTypes[C]["output"]> {
+  const handler = appHandlers[name] as ((a: AppCommandTypes[C]["input"]) => AppCommandTypes[C]["output"]) | undefined;
+  if (name === "pip_install") {
+    if (pipInstalling) throw new BridgeError("error", "An install is already running");
+    pipInstalling = true;
+    try {
+      await pause();
+      check(name);
+      return run(handler, name, args);
+    } finally {
+      pipInstalling = false;
+    }
+  }
   await pause();
   check(name);
-  return run(appHandlers[name] as ((a: AppCommandTypes[C]["input"]) => AppCommandTypes[C]["output"]) | undefined, name, args);
+  return run(handler, name, args);
 }
 
 /** Fire a fake `data-changed`, as the app does when files in the data folder change. */
