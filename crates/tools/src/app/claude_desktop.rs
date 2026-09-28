@@ -391,8 +391,9 @@ fn claude_code_command(os: Os, bundle: &Bundle) -> String {
 
 /// `path` quoted for a shell on `os`: in double quotes on Windows (where a
 /// path can't contain `"`); in POSIX single quotes on macOS, each `'`
-/// written `'\''`, so `"`, `$` and backticks stay literal.
-fn shell_quote(os: Os, path: &str) -> String {
+/// written `'\''`, so `"`, `$` and backticks stay literal. `pub(crate)`
+/// because `settings.rs` reuses it for the pip command line it shows.
+pub(crate) fn shell_quote(os: Os, path: &str) -> String {
     match os {
         Os::Windows => format!("\"{path}\""),
         Os::Macos => format!("'{}'", path.replace('\'', r"'\''")),

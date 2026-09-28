@@ -1038,8 +1038,11 @@ export type ScriptsOverviewOutput = {
   scripts: Array<ScriptRow>;
 };
 
-/** Parameters of tools that take none. */
-export type SettingsOverviewInput = Record<string, never>;
+/** Arguments of `settings_overview`. */
+export type SettingsOverviewInput = {
+  /** Ignore the cached Python probe and check again now, rather than reusing a result up to [`super::PYTHON_CACHE_TTL`] old (or, after a miss, up to [`super::PYTHON_MISSING_TTL`] old). This is what Settings' "Check again" does after the operator installs Python or the package. */
+  recheck?: boolean;
+};
 
 /** Result of `settings_overview`. */
 export type SettingsOverviewOutput = {
@@ -1051,12 +1054,14 @@ export type SettingsOverviewOutput = {
   catalog_overrides: Array<string>;
   /** The data folder. */
   data_dir: string;
-  /** The operator's editor command, or null for the system default. */
+  /** The operator's editor command, or null for the system default (also null when `preferences_error` is set). */
   editor_command: string | null;
   /** The pip command Install runs, as the operator would type it, or null without Python or a bundled wheel. */
   install_command: string | null;
   /** This machine's OS (for OS-specific wording such as the default editor). */
   os: Os;
+  /** Why the preferences file could not be read, or null. Settings still loads in that case; only `editor_command` is affected. */
+  preferences_error: string | null;
   /** The Python the Hedge apps use. */
   python: PythonStatus;
 };

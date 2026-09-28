@@ -43,7 +43,7 @@ pub use overview::{
     TargetAttachment, TargetEvent, VariablesOverview,
 };
 pub use settings::{
-    pip_install, settings_overview, BundleInfo, PipInstallResult, SettingsOverview,
+    pip_install, settings_overview, BundleInfo, PipInstallResult, SettingsArgs, SettingsOverview,
 };
 
 pub use hedgebuddy_core::ImportSummary;
@@ -94,7 +94,7 @@ pub fn commands() -> Vec<AppCommandDef> {
         app_command!("claude_desktop_status", NoParams, ClaudeDesktopStatus),
         app_command!("claude_desktop_plan", NoParams, ClaudeDesktopPlan),
         app_command!("claude_desktop_apply", NoParams, ClaudeDesktopApplied),
-        app_command!("settings_overview", NoParams, SettingsOverview),
+        app_command!("settings_overview", SettingsArgs, SettingsOverview),
         app_command!("pip_install", NoParams, PipInstallResult),
     ]
 }
@@ -418,13 +418,24 @@ mod tests {
     #[test]
     fn preferences_set_rejects_an_unparsable_editor_command() {
         let (_d, _f, ctx) = test_ctx(FakeHost::new(Os::Windows));
+        let set_code = |ctx: &Context| {
+            let patch: PreferencesPatch =
+                serde_json::from_str(r#"{"editor_command": "code"}"#).unwrap();
+            preferences_set(ctx, patch).unwrap();
+        };
+        set_code(&ctx);
+
         let bad: PreferencesPatch =
             serde_json::from_str(r#"{"editor_command": "code \"unterminated"}"#).unwrap();
         let err = preferences_set(&ctx, bad).unwrap_err();
         assert!(err.0.contains("unterminated"), "{err}");
         assert_eq!(
-            preferences_get(&ctx, NoParams {}).unwrap().editor_command,
-            None
+            preferences_get(&ctx, NoParams {})
+                .unwrap()
+                .editor_command
+                .as_deref(),
+            Some("code"),
+            "an invalid command must not overwrite the one already stored"
         );
 
         let ok: PreferencesPatch =
@@ -434,8 +445,14 @@ mod tests {
             Some("code --wait {file}")
         );
 
-        let clear: PreferencesPatch = serde_json::from_str(r#"{"editor_command": null}"#).unwrap();
-        assert_eq!(preferences_set(&ctx, clear).unwrap().editor_command, None);
+        // A blank command (empty or all whitespace) clears it, same as `null`.
+        let blank: PreferencesPatch = serde_json::from_str(r#"{"editor_command": ""}"#).unwrap();
+        assert_eq!(preferences_set(&ctx, blank).unwrap().editor_command, None);
+
+        set_code(&ctx);
+        let spaces: PreferencesPatch =
+            serde_json::from_str(r#"{"editor_command": "   "}"#).unwrap();
+        assert_eq!(preferences_set(&ctx, spaces).unwrap().editor_command, None);
     }
 
     #[test]

@@ -377,6 +377,11 @@ fn variable_issues(ctx: &Context, profile: &str) -> Result<Vec<AttentionItem>, T
         .collect())
 }
 
+/// `info` (a Python probe's result, or `None` when no interpreter was
+/// found) as a [`PythonStatus`]: `required` is always this HedgeBuddy's own
+/// version, and `problem` explains, in one sentence, what (if anything) is
+/// wrong — a missing interpreter, a missing `hedgebuddy` package, or a
+/// version mismatch. Shared by `home_summary` and `settings_overview`.
 pub(crate) fn python_status(info: Option<PythonInfo>) -> PythonStatus {
     let required = env!("CARGO_PKG_VERSION").to_owned();
     match info {
