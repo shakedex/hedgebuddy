@@ -780,7 +780,7 @@ export type ClaudeDesktopStatusInput = Record<string, never>;
 export type ClaudeDesktopStatusOutput = {
   /** The bundled hedgebuddy command, or null in a build without one. */
   binary: string | null;
-  /** `claude mcp add hedgebuddy -- "<binary>" mcp` (or `hedgebuddy mcp` without a binary). */
+  /** `claude mcp add hedgebuddy -- "<binary>" mcp`, with the path in single quotes on macOS (or `hedgebuddy mcp` without a binary). */
   claude_code_command: string;
   /** `{"mcpServers": {"hedgebuddy": {...}}}` for other clients, pretty-printed. */
   client_json: string;

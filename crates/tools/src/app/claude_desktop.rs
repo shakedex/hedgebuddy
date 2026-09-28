@@ -1,13 +1,13 @@
 //! Claude Desktop's MCP config (spec §6.6, §10): where this machine's Claude
 //! Desktop reads `claude_desktop_config.json`, whether HedgeBuddy is set up
 //! in it, and setting it up. Only `mcpServers.hedgebuddy` ever changes:
-//! every other server and key is kept, and the original file is copied to a
-//! backup beside it before each write. A file that can't be read or isn't
+//! every other server and key is kept, and the bytes the change was made
+//! from are saved to a new backup beside the file before each write. A file that can't be read or isn't
 //! valid is never written. The Tauri crate wraps these commands and passes
 //! the [`Bundle`] it found, so no argument from the webview names a path.
 
 use std::fs;
-use std::io;
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
 use hedgebuddy_core::catalog::expand_path;
@@ -83,8 +83,8 @@ pub struct ClaudeDesktopStatus {
     pub other_servers: Vec<String>,
     /// The bundled hedgebuddy command, or null in a build without one.
     pub binary: Option<PathBuf>,
-    /// `claude mcp add hedgebuddy -- "<binary>" mcp` (or `hedgebuddy mcp`
-    /// without a binary).
+    /// `claude mcp add hedgebuddy -- "<binary>" mcp`, with the path in
+    /// single quotes on macOS (or `hedgebuddy mcp` without a binary).
     pub claude_code_command: String,
     /// `{"mcpServers": {"hedgebuddy": {...}}}` for other clients,
     /// pretty-printed.
@@ -139,7 +139,7 @@ pub fn claude_desktop_status(
         other_servers: file.other_servers(),
         expected,
         binary: bundle.binary.clone(),
-        claude_code_command: claude_code_command(bundle),
+        claude_code_command: claude_code_command(ctx.hedge.host().os(), bundle),
         client_json: client_json(bundle),
         config_path,
     })
@@ -164,12 +164,17 @@ pub fn claude_desktop_plan(ctx: &Context, bundle: &Bundle) -> Result<ClaudeDeskt
 }
 
 /// Set up Claude Desktop to start the bundled `hedgebuddy` command, under
-/// the data folder's write lock. The existing file is copied to
-/// `claude_desktop_config.<now>.hedgebuddy-backup.json` first, then the
-/// merged config is written atomically, then older HedgeBuddy backups past
-/// the newest five are removed. `now` is the local time as
-/// `YYYYMMDD-HHMMSS` ([`backup_stamp`]). Writes nothing when Claude Desktop
-/// is already set up.
+/// the data folder's write lock. The bytes the change is made from are
+/// saved first to a new `claude_desktop_config.<now>.hedgebuddy-backup.json`
+/// (never over an existing one), then the merged config is written
+/// atomically, then older HedgeBuddy backups past the newest five are
+/// removed. `now` is the local time as `YYYYMMDD-HHMMSS` ([`backup_stamp`]).
+/// Writes nothing when Claude Desktop is already set up.
+///
+/// The config and its backup are private (0600 on Unix): the config often
+/// holds other servers' tokens in `env`. A config that is a symbolic link is
+/// replaced by a plain file with the merged contents; the link's target is
+/// left as it was.
 pub fn claude_desktop_apply(
     ctx: &Context,
     bundle: &Bundle,
@@ -190,8 +195,8 @@ pub fn claude_desktop_apply(
     if change.unchanged() {
         return Ok(applied);
     }
-    if change.file.exists() {
-        applied.backup_path = Some(write_backup(&change.path, now)?);
+    if let Some(original) = change.file.original() {
+        applied.backup_path = Some(write_backup(&change.path, now, original)?);
     }
     write_config(&change.path, merged(change.file, &change.after))?;
     if let Some(backup) = &applied.backup_path {
@@ -247,7 +252,12 @@ enum ConfigFile {
     /// Desktop".
     Missing { folder_exists: bool },
     /// A JSON object whose `mcpServers`, if present, is an object.
-    Object(Map<String, Value>),
+    Object {
+        /// The parsed object.
+        config: Map<String, Value>,
+        /// The file's bytes, as read: what a backup saves.
+        bytes: Vec<u8>,
+    },
     /// Why the file can't be used.
     Invalid(String),
 }
@@ -255,7 +265,7 @@ enum ConfigFile {
 /// Read the config at `path`.
 fn read_config(path: &Path) -> ConfigFile {
     match fs::read(path) {
-        Ok(bytes) => parse_config(&bytes),
+        Ok(bytes) => parse_config(bytes),
         Err(e) if e.kind() == io::ErrorKind::NotFound => ConfigFile::Missing {
             folder_exists: path.parent().is_some_and(Path::is_dir),
         },
@@ -264,14 +274,14 @@ fn read_config(path: &Path) -> ConfigFile {
 }
 
 /// The config in `bytes`: a JSON object whose `mcpServers`, if present, is
-/// an object.
-fn parse_config(bytes: &[u8]) -> ConfigFile {
+/// an object. The bytes are kept for the backup.
+fn parse_config(bytes: Vec<u8>) -> ConfigFile {
     let invalid = |why: &str| ConfigFile::Invalid(format!("{CONFIG_NAME} isn't valid: {why}"));
-    match serde_json::from_slice::<Value>(bytes) {
+    match serde_json::from_slice::<Value>(&bytes) {
         Err(e) => invalid(&e.to_string()),
         Ok(Value::Object(map)) => match map.get("mcpServers") {
             Some(servers) if !servers.is_object() => invalid("\"mcpServers\" is not an object"),
-            _ => ConfigFile::Object(map),
+            _ => ConfigFile::Object { config: map, bytes },
         },
         Ok(_) => invalid("it is not a JSON object"),
     }
@@ -280,13 +290,23 @@ fn parse_config(bytes: &[u8]) -> ConfigFile {
 impl ConfigFile {
     /// Whether the file exists and can be merged into.
     fn exists(&self) -> bool {
-        matches!(self, ConfigFile::Object(_))
+        self.original().is_some()
+    }
+
+    /// The file's bytes as read, if it exists and can be merged into.
+    fn original(&self) -> Option<&[u8]> {
+        match self {
+            ConfigFile::Object { bytes, .. } => Some(bytes),
+            _ => None,
+        }
     }
 
     /// The `mcpServers` object, if the file has one.
     fn servers(&self) -> Option<&Map<String, Value>> {
         match self {
-            ConfigFile::Object(map) => map.get("mcpServers").and_then(Value::as_object),
+            ConfigFile::Object { config, .. } => {
+                config.get("mcpServers").and_then(Value::as_object)
+            }
             _ => None,
         }
     }
@@ -340,8 +360,8 @@ impl ConfigFile {
                 folder_exists: false,
             } => NoClaude,
             ConfigFile::Missing { .. } => NotSetUp,
-            ConfigFile::Object(_) if !self.has_entry() => NotSetUp,
-            ConfigFile::Object(_) => match (self.current(), expected) {
+            ConfigFile::Object { .. } if !self.has_entry() => NotSetUp,
+            ConfigFile::Object { .. } => match (self.current(), expected) {
                 (Some(current), Some(expected)) if current == *expected => SetUp,
                 (Some(_), None) => SetUp,
                 _ => Outdated,
@@ -358,11 +378,24 @@ fn expected(bundle: &Bundle) -> Option<ServerEntry> {
     })
 }
 
-/// The Claude Code command that adds HedgeBuddy.
-fn claude_code_command(bundle: &Bundle) -> String {
+/// The Claude Code command that adds HedgeBuddy, for a shell on `os`.
+fn claude_code_command(os: Os, bundle: &Bundle) -> String {
     match &bundle.binary {
-        Some(binary) => format!(r#"claude mcp add hedgebuddy -- "{}" mcp"#, binary.display()),
+        Some(binary) => format!(
+            "claude mcp add hedgebuddy -- {} mcp",
+            shell_quote(os, &binary.display().to_string())
+        ),
         None => "claude mcp add hedgebuddy -- hedgebuddy mcp".into(),
+    }
+}
+
+/// `path` quoted for a shell on `os`: in double quotes on Windows (where a
+/// path can't contain `"`); in POSIX single quotes on macOS, each `'`
+/// written `'\''`, so `"`, `$` and backticks stay literal.
+fn shell_quote(os: Os, path: &str) -> String {
+    match os {
+        Os::Windows => format!("\"{path}\""),
+        Os::Macos => format!("'{}'", path.replace('\'', r"'\''")),
     }
 }
 
@@ -411,7 +444,7 @@ fn prepare(ctx: &Context, bundle: &Bundle) -> Result<Change, ToolError> {
 /// else in the file stays as it is.
 fn merged(file: ConfigFile, after: &ServerEntry) -> Value {
     let mut config = match file {
-        ConfigFile::Object(map) => map,
+        ConfigFile::Object { config, .. } => config,
         _ => Map::new(),
     };
     let servers = config.entry("mcpServers").or_insert_with(|| json!({}));
@@ -433,11 +466,12 @@ fn set_entry(servers: &mut Map<String, Value>, after: &ServerEntry) {
     }
 }
 
-/// Write `config` to `path` as pretty JSON, atomically.
+/// Write `config` to `path` as pretty JSON, atomically and privately (0600
+/// on Unix).
 fn write_config(path: &Path, config: Value) -> Result<(), ToolError> {
     let mut bytes = serde_json::to_vec_pretty(&config).expect("JSON values serialize");
     bytes.push(b'\n');
-    Ok(write_atomic(path, &bytes, false)?)
+    Ok(write_atomic(path, &bytes, true)?)
 }
 
 /// `claude_desktop_config.<stamp>.hedgebuddy-backup.json` beside `config`.
@@ -445,17 +479,48 @@ fn backup_path(config: &Path, stamp: &str) -> PathBuf {
     config.with_file_name(format!("{BACKUP_PREFIX}{stamp}{BACKUP_SUFFIX}"))
 }
 
-/// Copy the config at `path` to its backup for `stamp`.
-fn write_backup(path: &Path, stamp: &str) -> Result<PathBuf, ToolError> {
+/// Save `original`, the config's bytes as read, to a new backup for
+/// `stamp` beside `path`, privately (0600 on Unix). A backup of that name is
+/// never replaced: the call fails instead. One left half-written is removed.
+fn write_backup(path: &Path, stamp: &str, original: &[u8]) -> Result<PathBuf, ToolError> {
     let backup = backup_path(path, stamp);
-    fs::copy(path, &backup).map_err(|e| {
-        ToolError::new(format!(
-            "couldn't back up {} to {}: {e}",
-            path.display(),
-            backup.display()
-        ))
-    })?;
+    let mut file = match new_private_file(&backup) {
+        Ok(file) => file,
+        Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
+            return Err(ToolError::new(format!(
+                "a backup named {} already exists; try again in a moment",
+                backup.display()
+            )));
+        }
+        Err(e) => return Err(backup_failed(path, &backup, e)),
+    };
+    if let Err(e) = file.write_all(original).and_then(|()| file.sync_all()) {
+        drop(file);
+        let _ = fs::remove_file(&backup);
+        return Err(backup_failed(path, &backup, e));
+    }
     Ok(backup)
+}
+
+/// Why the config at `path` couldn't be backed up to `backup`.
+fn backup_failed(path: &Path, backup: &Path, e: io::Error) -> ToolError {
+    ToolError::new(format!(
+        "couldn't back up {} to {}: {e}",
+        path.display(),
+        backup.display()
+    ))
+}
+
+/// Create `path` for writing, failing when it exists; 0600 on Unix.
+fn new_private_file(path: &Path) -> io::Result<fs::File> {
+    let mut options = fs::OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    options.open(path)
 }
 
 /// Remove HedgeBuddy backups beside `newest` so that it and the four newest
@@ -968,6 +1033,94 @@ mod tests {
         let err = claude_desktop_apply(&ctx, &bundled(), NOW).unwrap_err();
         assert!(err.is_busy(), "{err}");
         assert!(!appdata_config(m.path()).exists());
+    }
+
+    #[test]
+    fn apply_never_replaces_an_existing_backup() {
+        let (m, _s, ctx) = windows();
+        let path = appdata_config(m.path());
+        write(&path, r#"{"mcpServers":{}}"#);
+        let backup = path
+            .parent()
+            .unwrap()
+            .join("claude_desktop_config.20260928-120000.hedgebuddy-backup.json");
+        fs::write(&backup, "earlier").unwrap();
+        let err = claude_desktop_apply(&ctx, &bundled(), NOW).unwrap_err();
+        assert!(err.0.contains("already exists"), "{err}");
+        assert!(err.0.contains("try again in a moment"), "{err}");
+        assert_eq!(fs::read_to_string(&backup).unwrap(), "earlier");
+        assert_eq!(fs::read_to_string(&path).unwrap(), r#"{"mcpServers":{}}"#);
+    }
+
+    #[test]
+    fn invalid_files_are_reported_and_never_written() {
+        let (m, _s, ctx) = windows();
+        let path = appdata_config(m.path());
+        let folder = path.parent().unwrap().to_path_buf();
+        let cases: [(&str, &[u8]); 7] = [
+            ("empty", b""),
+            ("BOM then JSON", b"\xEF\xBB\xBF{\"mcpServers\":{}}"),
+            ("not UTF-8", b"\xFF\xFE{}"),
+            (
+                "not UTF-8 in a string",
+                b"{\"mcpServers\":{\"x\":{\"command\":\"\xFF\"}}}",
+            ),
+            ("array", b"[1,2]"),
+            ("mcpServers a number", br#"{"mcpServers": 3}"#),
+            ("mcpServers null", br#"{"mcpServers": null}"#),
+        ];
+        fs::create_dir_all(&folder).unwrap();
+        for (what, bytes) in cases {
+            fs::write(&path, bytes).unwrap();
+            let st = status(&ctx, &bundled());
+            assert_eq!(st.state, ClaudeDesktopState::Invalid, "{what}");
+            assert!(
+                st.problem
+                    .as_deref()
+                    .is_some_and(|p| p.contains("isn't valid")),
+                "{what}: {:?}",
+                st.problem
+            );
+            let err = claude_desktop_apply(&ctx, &bundled(), NOW).unwrap_err();
+            assert!(err.0.contains("isn't valid"), "{what}: {err}");
+            assert_eq!(fs::read(&path).unwrap(), bytes, "{what}");
+            assert_eq!(names_in(&folder), ["claude_desktop_config.json"], "{what}");
+        }
+    }
+
+    #[test]
+    fn macos_command_single_quotes_the_binary() {
+        let machine = tempfile::tempdir().unwrap();
+        let (_s, _f, ctx) = test_ctx(FakeHost::new(Os::Macos).with_home(machine.path()));
+        let binary = "/Applications/Hedge $HOME's `x`.app/Contents/MacOS/hedgebuddy";
+        let bundle = Bundle {
+            binary: Some(PathBuf::from(binary)),
+            wheel: None,
+        };
+        let st = status(&ctx, &bundle);
+        assert_eq!(
+            st.claude_code_command,
+            r#"claude mcp add hedgebuddy -- '/Applications/Hedge $HOME'\''s `x`.app/Contents/MacOS/hedgebuddy' mcp"#
+        );
+        let client: Value = serde_json::from_str(&st.client_json).unwrap();
+        assert_eq!(client["mcpServers"]["hedgebuddy"]["command"], binary);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_config_and_its_backup_are_private() {
+        use std::os::unix::fs::PermissionsExt;
+        let (m, _s, ctx) = windows();
+        let path = appdata_config(m.path());
+        write(
+            &path,
+            r#"{"mcpServers":{"other":{"command":"x","env":{"TOKEN":"t"}}}}"#,
+        );
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).unwrap();
+        let applied = apply(&ctx, &bundled(), NOW);
+        let mode = |p: &Path| fs::metadata(p).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode(&path), 0o600);
+        assert_eq!(mode(&applied.backup_path.unwrap()), 0o600);
     }
 
     #[test]
