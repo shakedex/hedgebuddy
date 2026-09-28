@@ -7,15 +7,18 @@ use std::process::{Command, Stdio};
 
 use hedgebuddy_core::{Os, Preferences, PreferencesPatch};
 use hedgebuddy_tools::app::{
-    self, ActivityArgs, ActivityList, AppsOverview, ExportArgs, ExportResult, HomeSummary,
-    ImportArgs, ImportSummary, OpenAppDocsArgs, OpenInEditorArgs, Opened, PathStatusArgs,
-    PathStatusList, PickExportArgs, PickFolderArgs, PickedPath, ProfileArgs, RevealArgs,
-    ScriptTemplate, ScriptTemplateArgs, ScriptsOverview, VariablesOverview,
+    self, ActivityArgs, ActivityList, AppsOverview, Bundle, ClaudeDesktopApplied,
+    ClaudeDesktopPlan, ClaudeDesktopStatus, ExportArgs, ExportResult, HomeSummary, ImportArgs,
+    ImportSummary, OpenAppDocsArgs, OpenInEditorArgs, Opened, PathStatusArgs, PathStatusList,
+    PickExportArgs, PickFolderArgs, PickedPath, PipInstallResult, ProfileArgs, RevealArgs,
+    ScriptTemplate, ScriptTemplateArgs, ScriptsOverview, SettingsArgs, SettingsOverview,
+    VariablesOverview,
 };
 use hedgebuddy_tools::{NoParams, ToolError};
 use serde::Serialize;
 use serde_json::Value;
-use tauri::{AppHandle, State, Window};
+use tauri::async_runtime::Mutex as AsyncMutex;
+use tauri::{AppHandle, Manager, State, Window};
 use tauri_plugin_dialog::{DialogExt, FileDialogBuilder, FilePath};
 use tauri_plugin_opener::OpenerExt;
 
@@ -23,6 +26,16 @@ use crate::state::AppState;
 
 /// The file-type filter of the export and import dialogs.
 const PROFILE_FILTER: &str = "HedgeBuddy profile";
+
+/// Why `pip_install` refused to start a second install.
+const INSTALL_RUNNING: &str = "An install is already running";
+
+/// The bundled `hedgebuddy` command's file name.
+const BINARY_NAME: &str = "hedgebuddy";
+
+/// The folder, under the resource folder, that holds the bundled wheel
+/// (`tauri.bundle.conf.json` maps `bundle/wheel/` to it).
+const WHEEL_DIR: &str = "wheel";
 
 /// What `reveal_path` shows a path in.
 const FILE_MANAGER: &str = if cfg!(target_os = "macos") {
@@ -311,6 +324,142 @@ pub async fn open_app_docs(
     .await
 }
 
+/// The files this build ships with (spec §8), found where the installer put
+/// them: the `hedgebuddy` command beside the app's own executable (Tauri
+/// installs `externalBin` sidecars there: the install folder on Windows,
+/// `Contents/MacOS` on macOS), and the wheel for this app's version in the
+/// resource folder's `wheel/` (the install folder on Windows,
+/// `Contents/Resources` on macOS). Each is `None` when its file is not there,
+/// as in a build made without `tauri.bundle.conf.json`. The app's own path
+/// is resolved first, so an app started through a link still finds the
+/// command beside the real one (the path as started is used when it can't
+/// be resolved). Both paths are plain (see [`plain_path`]), since Claude
+/// Desktop's config and the pip command line show them to the operator.
+fn bundle(app: &AppHandle) -> Bundle {
+    let binary = std::env::current_exe()
+        .ok()
+        .map(|exe| std::fs::canonicalize(&exe).unwrap_or(exe))
+        .and_then(|exe| {
+            let name = format!("{BINARY_NAME}{}", std::env::consts::EXE_SUFFIX);
+            exe.parent().map(|dir| dir.join(name))
+        })
+        .map(plain_path)
+        .filter(|p| p.is_file());
+    let wheel = app
+        .path()
+        .resource_dir()
+        .ok()
+        .map(|dir| {
+            let version = &app.package_info().version;
+            dir.join(WHEEL_DIR)
+                .join(format!("hedgebuddy-{version}-py3-none-any.whl"))
+        })
+        .map(plain_path)
+        .filter(|p| p.is_file());
+    Bundle { binary, wheel }
+}
+
+/// `path` without the `\\?\` prefix Windows can put on the app's own path:
+/// `\\?\C:\…` becomes `C:\…` and `\\?\UNC\server\share\…` becomes
+/// `\\server\share\…`, as the operator would type them. Any other path,
+/// including a verbatim one that names no drive or share, is unchanged.
+fn plain_path(path: PathBuf) -> PathBuf {
+    let Some(text) = path.to_str() else {
+        return path;
+    };
+    if let Some(share) = text.strip_prefix(r"\\?\UNC\") {
+        return PathBuf::from(format!(r"\\{share}"));
+    }
+    match text.strip_prefix(r"\\?\") {
+        Some(rest) if is_drive_path(rest) => PathBuf::from(rest),
+        _ => path,
+    }
+}
+
+/// Whether `text` starts with a drive, as in `C:\`.
+fn is_drive_path(text: &str) -> bool {
+    matches!(text.as_bytes(), [letter, b':', b'\\', ..] if letter.is_ascii_alphabetic())
+}
+
+/// Whether Claude Desktop is set up to start the bundled `hedgebuddy`
+/// command, and the commands that set up other clients.
+#[tauri::command]
+pub async fn claude_desktop_status(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    args: NoParams,
+) -> Result<ClaudeDesktopStatus, CommandError> {
+    let _ = args;
+    let ctx = state.ctx();
+    blocking(move || app::claude_desktop_status(&ctx, &bundle(&app))).await
+}
+
+/// What Set up (or Update) would change in Claude Desktop's config, without
+/// writing anything: the change preview's dry run.
+#[tauri::command]
+pub async fn claude_desktop_plan(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    args: NoParams,
+) -> Result<ClaudeDesktopPlan, CommandError> {
+    let _ = args;
+    let ctx = state.ctx();
+    blocking(move || app::claude_desktop_plan(&ctx, &bundle(&app))).await
+}
+
+/// Set up Claude Desktop to start the bundled `hedgebuddy` command, backing
+/// up its config first under the local time now.
+#[tauri::command]
+pub async fn claude_desktop_apply(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    args: NoParams,
+) -> Result<ClaudeDesktopApplied, CommandError> {
+    let _ = args;
+    let ctx = state.ctx();
+    blocking(move || {
+        let now = app::backup_stamp();
+        app::claude_desktop_apply(&ctx, &bundle(&app), &now)
+    })
+    .await
+}
+
+/// Everything the Settings screen shows.
+#[tauri::command]
+pub async fn settings_overview(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    args: SettingsArgs,
+) -> Result<SettingsOverview, CommandError> {
+    let (ctx, python) = (state.ctx(), state.python.clone());
+    blocking(move || app::settings_overview(&ctx, args, &python, &bundle(&app))).await
+}
+
+/// Install the bundled wheel into the Hedge apps' Python with pip. One
+/// install runs at a time: a second call while one runs is refused rather
+/// than queued, so a double click never starts pip twice.
+#[tauri::command]
+pub async fn pip_install(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    args: NoParams,
+) -> Result<PipInstallResult, CommandError> {
+    let _ = args;
+    // Held until pip has finished and this command returns.
+    let _installing = install_slot(&state.installing)?;
+    let (ctx, python) = (state.ctx(), state.python.clone());
+    blocking(move || app::pip_install(&ctx, &python, &bundle(&app))).await
+}
+
+/// The one install slot, held until the returned guard drops, or the error
+/// `pip_install` returns while another install holds it.
+fn install_slot(installing: &AsyncMutex<()>) -> Result<impl Sized + '_, CommandError> {
+    installing.try_lock().map_err(|_| CommandError {
+        kind: "error",
+        message: INSTALL_RUNNING.into(),
+    })
+}
+
 /// Ask the operator for a folder.
 #[tauri::command]
 pub async fn pick_folder(window: Window, args: PickFolderArgs) -> Result<PickedPath, CommandError> {
@@ -381,7 +530,58 @@ fn picked(choice: Option<FilePath>) -> Result<PickedPath, ToolError> {
 mod tests {
     use hedgebuddy_tools::ToolError;
 
-    use super::CommandError;
+    use std::path::PathBuf;
+
+    use super::{install_slot, plain_path, AsyncMutex, CommandError};
+
+    #[test]
+    fn plain_path_drops_the_verbatim_prefix_of_drives_and_shares_only() {
+        let cases = [
+            (
+                r"\\?\C:\Program Files\HedgeBuddy\hedgebuddy.exe",
+                r"C:\Program Files\HedgeBuddy\hedgebuddy.exe",
+            ),
+            (
+                r"\\?\UNC\server\share\HedgeBuddy\wheel\x.whl",
+                r"\\server\share\HedgeBuddy\wheel\x.whl",
+            ),
+            (
+                r"C:\Program Files\HedgeBuddy\hedgebuddy.exe",
+                r"C:\Program Files\HedgeBuddy\hedgebuddy.exe",
+            ),
+            (r"\\server\share\x.whl", r"\\server\share\x.whl"),
+            (
+                r"\\?\Volume{0b1f}\HedgeBuddy\hedgebuddy.exe",
+                r"\\?\Volume{0b1f}\HedgeBuddy\hedgebuddy.exe",
+            ),
+            (
+                "/Applications/HedgeBuddy.app/Contents/MacOS/hedgebuddy",
+                "/Applications/HedgeBuddy.app/Contents/MacOS/hedgebuddy",
+            ),
+        ];
+        for (given, plain) in cases {
+            assert_eq!(
+                plain_path(PathBuf::from(given)),
+                PathBuf::from(plain),
+                "{given}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_second_install_is_refused_while_one_holds_the_slot() {
+        let installing = AsyncMutex::new(());
+        let held = install_slot(&installing).expect("the slot is free");
+        let Err(refused) = install_slot(&installing) else {
+            panic!("a second install got the slot");
+        };
+        assert_eq!(
+            serde_json::to_value(&refused).unwrap(),
+            serde_json::json!({"kind": "error", "message": "An install is already running"})
+        );
+        drop(held);
+        assert!(install_slot(&installing).is_ok(), "the slot frees on drop");
+    }
 
     #[test]
     fn busy_errors_are_marked_so_the_ui_can_offer_try_again() {

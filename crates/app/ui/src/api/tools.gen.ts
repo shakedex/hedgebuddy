@@ -739,6 +739,69 @@ export type AppsOverviewOutput = {
   os: Os;
 };
 
+/** Parameters of tools that take none. */
+export type ClaudeDesktopApplyInput = Record<string, never>;
+
+/** Result of `claude_desktop_apply`. */
+export type ClaudeDesktopApplyOutput = {
+  /** Where the original was copied, or null when there was no file or nothing changed. */
+  backup_path: string | null;
+  /** The config file that was written. */
+  config_path: string;
+  /** Old HedgeBuddy backups removed to keep the newest five. */
+  removed_backups: Array<string>;
+};
+
+/** Parameters of tools that take none. */
+export type ClaudeDesktopPlanInput = Record<string, never>;
+
+/** Result of `claude_desktop_plan`: what `claude_desktop_apply` would do. */
+export type ClaudeDesktopPlanOutput = {
+  /** The hedgebuddy entry after the change. */
+  after: ServerEntry;
+  /** Where the original is copied first, or null when there is no file yet or nothing would change. */
+  backup_path: string | null;
+  /** The hedgebuddy entry in the file now, if any. */
+  before: ServerEntry | null;
+  /** The config file that would change. */
+  config_path: string;
+  /** True when the file does not exist yet and will be created. */
+  creates_file: boolean;
+  /** The other MCP servers in the file, by name (kept as they are). */
+  other_servers: Array<string>;
+  /** The `%APPDATA%` config the new file starts from, when `config_path` is an MSIX-packaged Claude Desktop's and doesn't exist yet; else null. That file is read, never changed. */
+  seeded_from: string | null;
+  /** True when nothing would change (already set up). */
+  unchanged: boolean;
+};
+
+/** Parameters of tools that take none. */
+export type ClaudeDesktopStatusInput = Record<string, never>;
+
+/** Result of `claude_desktop_status`. */
+export type ClaudeDesktopStatusOutput = {
+  /** The bundled hedgebuddy command, or null in a build without one. */
+  binary: string | null;
+  /** `claude mcp add hedgebuddy -- "<binary>" mcp`, with the path in single quotes on macOS (or `hedgebuddy mcp` without a binary). */
+  claude_code_command: string;
+  /** `{"mcpServers": {"hedgebuddy": {...}}}` for other clients, pretty-printed. */
+  client_json: string;
+  /** The config file this machine's Claude Desktop reads. */
+  config_path: string;
+  /** The hedgebuddy entry in the file now, if any. */
+  current: ServerEntry | null;
+  /** The entry Set up writes, or null without a bundled binary. */
+  expected: ServerEntry | null;
+  /** The other MCP servers in the file, by name (kept as they are). */
+  other_servers: Array<string>;
+  /** Why the config can't be read (state `invalid`), else null. */
+  problem: string | null;
+  /** The `%APPDATA%` config read in its place, when `config_path` is an MSIX-packaged Claude Desktop's and doesn't exist yet; else null. The state, entry and other servers then describe that file. */
+  seeded_from: string | null;
+  /** Whether HedgeBuddy is set up in it. */
+  state: ClaudeDesktopState;
+};
+
 /** Arguments of `export_profile`. */
 export type ExportProfileInput = {
   /** The absolute path of the file to write (replaced if it exists), outside the data folder, with no `.` or `..` part. */
@@ -886,6 +949,23 @@ export type PickImportFileOutput = {
 };
 
 /** Parameters of tools that take none. */
+export type PipInstallInput = Record<string, never>;
+
+/** Result of `pip_install`. */
+export type PipInstallOutput = {
+  /** The command line that ran. */
+  command: string;
+  /** pip's exit code. */
+  exit_code: number;
+  /** The hedgebuddy version installed afterwards, if any. */
+  installed: string | null;
+  /** Whether pip exited 0. */
+  ok: boolean;
+  /** pip's stdout then stderr, the last 64 KiB. */
+  output: string;
+};
+
+/** Parameters of tools that take none. */
 export type PreferencesGetInput = Record<string, never>;
 
 /** Contents of `preferences.json`. */
@@ -962,6 +1042,34 @@ export type ScriptsOverviewOutput = {
   scripts: Array<ScriptRow>;
 };
 
+/** Arguments of `settings_overview`. */
+export type SettingsOverviewInput = {
+  /** Ignore the cached Python probe and check again now, rather than reusing a result up to [`super::PYTHON_CACHE_TTL`] old (or, after a miss, up to [`super::PYTHON_MISSING_TTL`] old). This is what Settings' "Check again" does after the operator installs Python or the package. */
+  recheck?: boolean;
+};
+
+/** Result of `settings_overview`. */
+export type SettingsOverviewOutput = {
+  /** The bundled files this build ships with. */
+  bundle: BundleInfo;
+  /** Why the catalog overrides could not be loaded, or null. */
+  catalog_error: string | null;
+  /** Apps whose catalog entry comes from `<data>/catalog/`, by id. */
+  catalog_overrides: Array<string>;
+  /** The data folder. */
+  data_dir: string;
+  /** The operator's editor command, or null for the system default (also null when `preferences_error` is set). */
+  editor_command: string | null;
+  /** The pip command Install runs, as the operator would type it, or null without Python or a bundled wheel. */
+  install_command: string | null;
+  /** This machine's OS (for OS-specific wording such as the default editor). */
+  os: Os;
+  /** Why the preferences file could not be read, or null. Settings still loads in that case; only `editor_command` is affected. */
+  preferences_error: string | null;
+  /** The Python the Hedge apps use. */
+  python: PythonStatus;
+};
+
 /** Arguments of the overviews that read one profile. */
 export type VariablesOverviewInput = {
   /** Profile name; defaults to the active profile. */
@@ -981,6 +1089,9 @@ export type VariablesOverviewOutput = {
 export interface AppCommandTypes {
   activity: { input: ActivityInput; output: ActivityOutput };
   apps_overview: { input: AppsOverviewInput; output: AppsOverviewOutput };
+  claude_desktop_apply: { input: ClaudeDesktopApplyInput; output: ClaudeDesktopApplyOutput };
+  claude_desktop_plan: { input: ClaudeDesktopPlanInput; output: ClaudeDesktopPlanOutput };
+  claude_desktop_status: { input: ClaudeDesktopStatusInput; output: ClaudeDesktopStatusOutput };
   export_profile: { input: ExportProfileInput; output: ExportProfileOutput };
   home_summary: { input: HomeSummaryInput; output: HomeSummaryOutput };
   import_profile: { input: ImportProfileInput; output: ImportProfileOutput };
@@ -990,11 +1101,13 @@ export interface AppCommandTypes {
   pick_export_path: { input: PickExportPathInput; output: PickExportPathOutput };
   pick_folder: { input: PickFolderInput; output: PickFolderOutput };
   pick_import_file: { input: PickImportFileInput; output: PickImportFileOutput };
+  pip_install: { input: PipInstallInput; output: PipInstallOutput };
   preferences_get: { input: PreferencesGetInput; output: PreferencesGetOutput };
   preferences_set: { input: PreferencesSetInput; output: PreferencesSetOutput };
   reveal_path: { input: RevealPathInput; output: RevealPathOutput };
   script_template: { input: ScriptTemplateInput; output: ScriptTemplateOutput };
   scripts_overview: { input: ScriptsOverviewInput; output: ScriptsOverviewOutput };
+  settings_overview: { input: SettingsOverviewInput; output: SettingsOverviewOutput };
   variables_overview: { input: VariablesOverviewInput; output: VariablesOverviewOutput };
 }
 
@@ -1003,6 +1116,9 @@ export type AppCommandName = keyof AppCommandTypes;
 export const app = {
   activity: (args: ActivityInput = {}) => callApp("activity", args),
   appsOverview: (args: AppsOverviewInput = {}) => callApp("apps_overview", args),
+  claudeDesktopApply: (args: ClaudeDesktopApplyInput = {}) => callApp("claude_desktop_apply", args),
+  claudeDesktopPlan: (args: ClaudeDesktopPlanInput = {}) => callApp("claude_desktop_plan", args),
+  claudeDesktopStatus: (args: ClaudeDesktopStatusInput = {}) => callApp("claude_desktop_status", args),
   exportProfile: (args: ExportProfileInput) => callApp("export_profile", args),
   homeSummary: (args: HomeSummaryInput = {}) => callApp("home_summary", args),
   importProfile: (args: ImportProfileInput) => callApp("import_profile", args),
@@ -1012,11 +1128,13 @@ export const app = {
   pickExportPath: (args: PickExportPathInput) => callApp("pick_export_path", args),
   pickFolder: (args: PickFolderInput = {}) => callApp("pick_folder", args),
   pickImportFile: (args: PickImportFileInput = {}) => callApp("pick_import_file", args),
+  pipInstall: (args: PipInstallInput = {}) => callApp("pip_install", args),
   preferencesGet: (args: PreferencesGetInput = {}) => callApp("preferences_get", args),
   preferencesSet: (args: PreferencesSetInput = {}) => callApp("preferences_set", args),
   revealPath: (args: RevealPathInput) => callApp("reveal_path", args),
   scriptTemplate: (args: ScriptTemplateInput) => callApp("script_template", args),
   scriptsOverview: (args: ScriptsOverviewInput = {}) => callApp("scripts_overview", args),
+  settingsOverview: (args: SettingsOverviewInput = {}) => callApp("settings_overview", args),
   variablesOverview: (args: VariablesOverviewInput = {}) => callApp("variables_overview", args),
 } as const;
 
@@ -1215,6 +1333,16 @@ export type AttentionItem = {
   kind: "scripting_off";
 };
 
+/** The bundled files [`settings_overview`] found on disk. */
+export type BundleInfo = {
+  /** The bundled hedgebuddy command, or null. */
+  binary: string | null;
+  /** The bundled wheel, or null. */
+  wheel: string | null;
+  /** The wheel's version (from its file name), or null. */
+  wheel_version: string | null;
+};
+
 /** Which kind of card a volume looks like, and the evidence. */
 export type CardGuess = {
   evidence: string;
@@ -1228,6 +1356,9 @@ export type CatalogState = {
   /** Apps whose catalog file is overridden from `<data>/catalog/`. */
   overridden: Array<string>;
 };
+
+/** Whether Claude Desktop is set up to start HedgeBuddy. */
+export type ClaudeDesktopState = "set_up" | "outdated" | "not_set_up" | "no_claude" | "invalid";
 
 /** One command of `run_app_command`. */
 export type CommandArg = {
@@ -1636,6 +1767,14 @@ export type Scripting = {
 
 /** How scripts are attached for an app on this platform. */
 export type ScriptingSupport = "registry" | "helper_workspace" | "manual" | "none";
+
+/** The `mcpServers.hedgebuddy` entry. */
+export type ServerEntry = {
+  /** Its arguments. */
+  args: Array<string>;
+  /** The program Claude Desktop starts. */
+  command: string;
+};
 
 /** Counts for the sidebar badges. */
 export type SidebarBadges = {

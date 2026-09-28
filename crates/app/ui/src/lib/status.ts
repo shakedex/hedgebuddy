@@ -1,8 +1,8 @@
 import {
   AppWindow, Ban, Braces, CircleCheck, CircleDashed, CirclePause, CircleX, FileCode, FileX, Hand,
-  History, Hourglass, House, Link, Link2Off, Package, Plug, Settings, TriangleAlert, Unlink, type LucideIcon,
+  History, Hourglass, House, Link, Link2Off, Package, Plug, Settings, TriangleAlert, Unlink, Unplug, type LucideIcon,
 } from "lucide-react";
-import type { ActivityOutcome, Run, RunStatus } from "@/api/tools.gen";
+import type { ActivityOutcome, ClaudeDesktopState, Run, RunStatus } from "@/api/tools.gen";
 
 /** Colour only marks problems (spec §2.7): red failed, amber needs a look; fine is neutral grey. */
 export type Tone = "neutral" | "muted" | "destructive" | "warning";
@@ -22,10 +22,17 @@ export const STATUS = {
   unsupported: { icon: Ban, word: "not supported yet", tone: "muted" },
   varMissing: { icon: Braces, word: "not set", tone: "warning" },
   package: { icon: Package, word: "package problem", tone: "warning" },
+  packageOk: { icon: CircleCheck, word: "up to date", tone: "neutral" },
+  pythonNotFound: { icon: TriangleAlert, word: "not found", tone: "warning" },
   alert: { icon: TriangleAlert, word: "needs a look", tone: "warning" },
   callOk: { icon: CircleCheck, word: "ok", tone: "neutral" },
   callError: { icon: CircleX, word: "error", tone: "destructive" },
   callWaiting: { icon: CirclePause, word: "waited for your OK", tone: "neutral" },
+  claudeSetUp: { icon: Plug, word: "set up", tone: "neutral" },
+  claudeNotSetUp: { icon: Unplug, word: "not set up", tone: "muted" },
+  claudeNotFound: { icon: Unplug, word: "Claude Desktop not found", tone: "muted" },
+  claudeOutdated: { icon: TriangleAlert, word: "points elsewhere", tone: "warning" },
+  claudeInvalid: { icon: TriangleAlert, word: "can't read the config", tone: "warning" },
 } as const satisfies Record<string, { icon: LucideIcon; word: string; tone: Tone }>;
 
 export type StatusKey = keyof typeof STATUS;
@@ -51,6 +58,22 @@ export function isFailedRun(run: Pick<Run, "status">): boolean {
 
 export function outcomeKey(outcome: ActivityOutcome): StatusKey {
   return outcome === "ok" ? "callOk" : outcome === "error" ? "callError" : "callWaiting";
+}
+
+/** Spec §6.6: Connect's Claude Desktop status line. */
+export function claudeStateKey(state: ClaudeDesktopState): StatusKey {
+  switch (state) {
+    case "set_up":
+      return "claudeSetUp";
+    case "outdated":
+      return "claudeOutdated";
+    case "not_set_up":
+      return "claudeNotSetUp";
+    case "no_claude":
+      return "claudeNotFound";
+    case "invalid":
+      return "claudeInvalid";
+  }
 }
 
 /** Spec §5.2 navigation icons. */

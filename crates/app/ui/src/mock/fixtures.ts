@@ -6,12 +6,13 @@
  * matter when the preview runs.
  */
 import type { ActivityRecord, Os, PreferencesGetOutput, RegValue, Run, Variable } from "@/api/tools.gen";
+import { HEDGEBUDDY_BINARY, type ClaudeDesktopSeed } from "./claudeDesktop";
 import { DATA_DIR, type HedgeSeed } from "./hedge";
 import type { ProfileData, StoreSeed } from "./store";
 
-export type Scenario = "problems" | "healthy" | "empty" | "error" | "busy" | "macos";
+export type Scenario = "problems" | "healthy" | "empty" | "error" | "busy" | "macos" | "unactivated" | "nopackage";
 
-const SCENARIOS: readonly Scenario[] = ["problems", "healthy", "empty", "error", "busy", "macos"];
+const SCENARIOS: readonly Scenario[] = ["problems", "healthy", "empty", "error", "busy", "macos", "unactivated", "nopackage"];
 
 /** Unknown `?scenario=` values fall back to the default, `problems`. */
 export function parseScenario(raw: string | null): Scenario {
@@ -20,6 +21,13 @@ export function parseScenario(raw: string | null): Scenario {
 
 /** The version this preview pretends HedgeBuddy needs (matches the workspace version). */
 export const REQUIRED_VERSION = "0.11.0";
+
+/** The bundled wheel, per platform, named for `REQUIRED_VERSION`; `macos` shows it as missing instead
+ *  (Settings' Install is disabled there). */
+const WHEEL_PATH: Record<Os, string> = {
+  windows: `C:\\Users\\operator\\AppData\\Local\\Programs\\HedgeBuddy\\wheel\\hedgebuddy-${REQUIRED_VERSION}-py3-none-any.whl`,
+  macos: `/Applications/HedgeBuddy.app/Contents/Resources/wheel/hedgebuddy-${REQUIRED_VERSION}-py3-none-any.whl`,
+};
 
 const OFFSHOOT = "offshoot";
 const FOOLCAT = "foolcat";
@@ -506,7 +514,7 @@ const FOOLCAT_KEY = "HKCU\\Software\\FoolCat";
 const OWN_SCRIPT = "C:\\Tools\\notify_dit.py";
 
 /** Scripts an old tool left attached and then deleted. */
-const STALE_DIR = "C:\\Users\\you\\Quills\\service";
+const STALE_DIR = "C:\\Users\\operator\\Quills\\service";
 
 function scriptPath(os: Os, script: string): string {
   const sep = os === "windows" ? "\\" : "/";
@@ -569,6 +577,40 @@ function freshApps(): HedgeSeed {
   };
 }
 
+// ---- Claude Desktop --------------------------------------------------------------------------------
+
+/** A `filesystem` MCP server beside an outdated `hedgebuddy` entry (it runs the unqualified command name,
+ *  not the bundled binary): the `problems`-shaped scenarios. */
+function outdatedClaudeConfig(): string {
+  return JSON.stringify(
+    {
+      mcpServers: {
+        filesystem: { command: "npx", args: ["-y", "@modelcontextprotocol/server-filesystem", "C:\\Users\\operator\\Documents"] },
+        hedgebuddy: { command: "hedgebuddy", args: ["mcp"] },
+      },
+    },
+    null,
+    2,
+  );
+}
+
+/** A `hedgebuddy` entry that already matches the bundled binary: `set_up`. */
+function setUpClaudeConfig(os: Os): string {
+  return JSON.stringify({ mcpServers: { hedgebuddy: { command: HEDGEBUDDY_BINARY[os], args: ["mcp"] } } }, null, 2);
+}
+
+/** Each scenario's starting Claude Desktop config (spec §6.6, §10): `empty` has no Claude Desktop at all;
+ *  `macos` has the folder but no file yet (`not_set_up`); `healthy`, `unactivated` and `nopackage` are
+ *  already set up; everything else (`problems`, `busy`, `error`) is outdated, alongside another MCP server. */
+function claudeDesktopSeed(scenario: Scenario, os: Os): ClaudeDesktopSeed {
+  if (scenario === "empty") return { folderExists: false, text: null };
+  if (scenario === "macos") return { folderExists: true, text: null };
+  if (scenario === "healthy" || scenario === "unactivated" || scenario === "nopackage") {
+    return { folderExists: true, text: setUpClaudeConfig(os) };
+  }
+  return { folderExists: true, text: outdatedClaudeConfig() };
+}
+
 // ---- Python ---------------------------------------------------------------------------------------
 
 /** The interpreter the Hedge apps use (python_env.rs `PythonInfo`), or null when none is found. */
@@ -601,11 +643,18 @@ export interface ScenarioSeed {
   /** When the app was last opened before this session, or null on a first launch. */
   since: string | null;
   preferences: PreferencesGetOutput;
+  /** The Claude Desktop config this machine starts with. */
+  claudeDesktop: ClaudeDesktopSeed;
+  /** The bundled wheel, or null (`macos`: shows Settings' Install disabled). */
+  wheel: string | null;
 }
 
 /**
- * `problems` matches the mockups; `healthy` has nothing to flag; `empty` is a first launch; `error` and
- * `busy` read like `problems` (their failures are injected in `handlers.ts`); `macos` is `problems` on a Mac.
+ * `problems` matches the mockups; `healthy` has nothing to flag; `empty` is a first launch (no Python
+ * either, so Settings shows it not found); `error` and `busy` read like `problems` (their failures are
+ * injected in `handlers.ts`); `macos` is `problems` on a Mac; `unactivated` has profiles but none active
+ * (Home's "choose a profile" step); `nopackage` is otherwise healthy but with Python found and `hedgebuddy`
+ * not installed for it.
  */
 export function scenarioSeed(scenario: Scenario): ScenarioSeed {
   if (scenario === "empty") {
@@ -614,28 +663,38 @@ export function scenarioSeed(scenario: Scenario): ScenarioSeed {
       os: "windows",
       store: { profiles: {}, active: null },
       hedge: freshApps(),
-      python: python("windows", REQUIRED_VERSION),
+      python: null,
       runs: [],
       activity: [],
       since: null,
       preferences: { version: 1, last_opened: null, editor_command: null },
+      claudeDesktop: claudeDesktopSeed(scenario, "windows"),
+      wheel: WHEEL_PATH.windows,
     };
   }
-  const healthy = scenario === "healthy";
+  // `healthy`, `unactivated` and `nopackage` all start from the same clean baseline (nothing else to flag),
+  // so each isolates its own one condition: no active profile, or Python found but the package missing.
+  const clean = scenario === "healthy" || scenario === "unactivated" || scenario === "nopackage";
   const os: Os = scenario === "macos" ? "macos" : "windows";
   const since = ago(120);
+  const installed = scenario === "nopackage" ? null : clean ? REQUIRED_VERSION : "0.10.0";
   return {
     scenario,
     os,
-    store: { profiles: { "commercial-one-day": commercialOneDay(healthy), "doc-series": docSeries() }, active: "commercial-one-day" },
-    hedge: os === "macos" ? macosApps() : windowsApps(!healthy),
-    python: python(os, healthy ? REQUIRED_VERSION : "0.10.0"),
-    runs: buildRuns(healthy),
+    store: {
+      profiles: { "commercial-one-day": commercialOneDay(clean), "doc-series": docSeries() },
+      active: scenario === "unactivated" ? null : "commercial-one-day",
+    },
+    hedge: os === "macos" ? macosApps() : windowsApps(!clean),
+    python: python(os, installed),
+    runs: buildRuns(clean),
     activity: buildActivity(),
     since,
     preferences: { version: 1, last_opened: since, editor_command: null },
+    claudeDesktop: claudeDesktopSeed(scenario, os),
+    wheel: scenario === "macos" ? null : WHEEL_PATH[os],
   };
 }
 
 /** Where `pick_import_file` points: an export of `problems`' `commercial-one-day`, without secret values. */
-export const IMPORT_FILE = "C:/Users/you/Documents/commercial-one-day.hedgebuddy.json";
+export const IMPORT_FILE = "C:/Users/operator/Documents/commercial-one-day.hedgebuddy.json";

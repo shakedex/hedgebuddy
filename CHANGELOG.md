@@ -12,6 +12,8 @@ All notable changes to this project are documented here. Versioning follows [Zer
 - `list_runs` decodes run files lossily, so one bad byte skips a single line instead of the whole day.
 - On Windows, atomic writes retry a rename that fails with `PermissionDenied` for up to one second.
 - The desktop app now requires macOS 26.0 or newer.
+- Claude's tool-call activity keeps a target of up to 200 characters, cut with `…` past that.
+- `preferences_set` rejects an editor command it can't parse (an unterminated quote, say) and keeps the one saved before.
 
 ### Added
 - Cargo workspace with `hedgebuddy-core`, `hedgebuddy-cli`, and `hedgebuddy-app` (Tauri 2).
@@ -44,3 +46,9 @@ All notable changes to this project are documented here. Versioning follows [Zer
 - Profile export and import as one JSON file, with secret values left out unless asked; a file with secrets is created owner-only on macOS and Linux.
 - App-only commands `open_in_editor`, `reveal_path`, `script_template`, `export_profile`, `import_profile`, `variables_overview`, `scripts_overview`, `apps_overview`, `path_status`, `open_app_docs`, `pick_folder`, `pick_export_path` and `pick_import_file`, backed by `tauri-plugin-dialog` and `tauri-plugin-opener`.
 - A catalog override in `<data>/catalog/` reloads while the app is running, without a restart.
+- The desktop app's Connect screen: Claude Desktop status with Set up or Update behind a change preview, a timestamped backup before every write (the newest 5 kept beside the config), the Claude Code command and another MCP client's command and JSON config (both with Copy), and the last 200 Claude tool calls. A Claude Desktop installed as a Windows app package, with no config of its own yet, is set up from the `%APPDATA%` config, which stays as it is.
+- The desktop app's Settings screen: the Python interpreter the Hedge apps use and the installed `hedgebuddy` package against the version required, Install from the bundled wheel offline (before the PyPI release), the data folder with Show in folder, the catalog overrides in effect, and an optional editor command for Open in editor.
+- The installer bundles the `hedgebuddy` binary and its wheel beside the app, so Connect and Settings work out of the box.
+- A native error dialog when the app's data folder can't be opened at startup, instead of a blank window.
+- An unsigned "App bundle" CI job on Windows (NSIS) and macOS, checking the installed layout without publishing anything.
+- App-only commands `claude_desktop_status`, `claude_desktop_plan`, `claude_desktop_apply`, `settings_overview` and `pip_install`, none of them registered as MCP tools.

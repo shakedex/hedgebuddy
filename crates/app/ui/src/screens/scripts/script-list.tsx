@@ -19,6 +19,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { useImportProfile } from "@/hooks/use-import-profile";
 import { useListKeyboard } from "@/hooks/use-list-keyboard";
 import { describeActions, describeSkipReason, describeState, type ChangeRow } from "@/lib/actions";
+import { useFocusHeadingWhenEmptied } from "@/lib/focus";
 import { appName } from "@/lib/format";
 import type { StatusKey } from "@/lib/status";
 import { cn } from "@/lib/utils";
@@ -196,6 +197,9 @@ export function ScriptList({
 
   const data = overview.data;
   const { scripts, filtered } = filterScripts(data, filterText);
+  // See `useFocusHeadingWhenEmptied`: deleting the last script leaves the delete dialog's own `returnFocus`
+  // landing on the listbox, which the follow-up refetch then removes.
+  useFocusHeadingWhenEmptied(scripts.length === 0);
   // Pinned to the active profile, not just "some overview has loaded": right after a profile switch,
   // `overview.data` can still be one refetch behind (same race `ScriptDetail` guards against), and New/Sync
   // must not act on the profile the operator just switched away from.

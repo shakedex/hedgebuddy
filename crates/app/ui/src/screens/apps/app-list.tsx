@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import type { UseQueryResult } from "@tanstack/react-query";
 import { AppWindow, RotateCw } from "lucide-react";
 import { Link } from "wouter";
@@ -131,6 +132,14 @@ export function AppList({ overview, selectedId, onSelect }: {
   selectedId: string | null;
   onSelect: (id: string) => void;
 }) {
+  // Home's own `lastError` pattern (final review, Important): without it, Retry's refetch flips `isPending`
+  // back true for a query that has never had data, swapping this `ErrorPanel` for `AppListSkeleton` and
+  // dropping focus to `<body>` the moment Retry is clicked.
+  const lastError = useRef<unknown>(null);
+  if (overview.isError) lastError.current = overview.error;
+  else if (overview.isSuccess) lastError.current = null;
+  const failed = lastError.current !== null && !overview.isSuccess;
+
   const data = overview.data;
   const rows = data
     ? data.apps
@@ -165,14 +174,19 @@ export function AppList({ overview, selectedId, onSelect }: {
   );
 
   let body: React.ReactNode;
-  if (overview.isPending) {
-    body = <AppListSkeleton />;
-  } else if (overview.isError && !overview.isSuccess) {
+  if (failed) {
     body = (
       <div className="p-3">
-        <ErrorPanel error={overview.error} onRetry={() => void overview.refetch()} retrying={overview.isFetching} />
+        <ErrorPanel
+          error={overview.error ?? lastError.current}
+          onRetry={() => void overview.refetch()}
+          retrying={overview.isFetching}
+          title="Couldn't load Hedge apps"
+        />
       </div>
     );
+  } else if (overview.isPending) {
+    body = <AppListSkeleton />;
   } else if (rows.length === 0) {
     body = (
       <EmptyState icon={AppWindow} title="No Hedge apps in the catalog" className="px-3 py-6">

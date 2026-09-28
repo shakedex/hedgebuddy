@@ -4,6 +4,9 @@
 
 # Tauri
 /crates/app/gen/
+# Placed by scripts/prepare_bundle.py for tauri.bundle.conf.json
+/crates/app/binaries/
+/crates/app/bundle/
 
 # Node / Vite
 node_modules/

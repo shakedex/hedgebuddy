@@ -152,7 +152,7 @@ export function ImportProfileDialog({ open, onOpenChange, path, onCloseFocus }: 
     if (!imported || inFlightRef.current || !openRef.current) return;
     // Rule for this task: switching changes the active profile, so it asks first, same as switching
     // profiles from the pill does. Declining leaves this dialog exactly as it was.
-    void confirmLeave().then((ok) => {
+    void confirmLeave("profile").then((ok) => {
       // Re-checked: confirmLeave's own prompt can take arbitrarily long, and a busy retry (or a second click
       // before this resolved) could already be in flight, or the dialog could already be gone, by the time
       // the operator answers it.
@@ -197,7 +197,7 @@ export function ImportProfileDialog({ open, onOpenChange, path, onCloseFocus }: 
   const submit = () => {
     const cur = latestRef.current;
     if (!cur.canImport || inFlightRef.current || !openRef.current) return;
-    if (cur.switchToIt) void confirmLeave().then((ok) => { if (ok) doImport(); });
+    if (cur.switchToIt) void confirmLeave("profile").then((ok) => { if (ok) doImport(); });
     else doImport();
   };
 

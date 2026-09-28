@@ -28,13 +28,14 @@ import type { Store } from "./store";
 export const APPLY_NOTE =
   "On macOS the change is staged in the OffShoot Helper workspace HedgeBuddy.json; the operator applies it from the OffShoot Helper menu. The Hedge app may need a restart to pick up the change (unverified).";
 
-/** The operator's home folder, per platform. */
-export const HOME: Record<Os, string> = { windows: "C:\\Users\\you", macos: "/Users/you" };
+/** The operator's home folder, per platform (final review, trivia: "operator", matching every other mock path
+ *  under the operator's home — Claude Desktop's config, the bundled binary and wheel). */
+export const HOME: Record<Os, string> = { windows: "C:\\Users\\operator", macos: "/Users/operator" };
 
 /** Where HedgeBuddy keeps its data, per platform (paths.rs: `%APPDATA%` and Application Support). */
 export const DATA_DIR: Record<Os, string> = {
-  windows: "C:\\Users\\you\\AppData\\Roaming\\HedgeBuddy",
-  macos: "/Users/you/Library/Application Support/HedgeBuddy",
+  windows: "C:\\Users\\operator\\AppData\\Roaming\\HedgeBuddy",
+  macos: "/Users/operator/Library/Application Support/HedgeBuddy",
 };
 
 /** What a scenario's Hedge apps start with. */

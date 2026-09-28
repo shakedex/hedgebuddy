@@ -63,7 +63,7 @@ export function HomeScreen() {
   if (!s.active_profile) return <FirstRun profiles={s.profiles} />;
   return (
     <div className="@container h-full overflow-y-auto">
-      <div className="mx-auto flex max-w-[1080px] flex-col gap-3 p-4 @max-[640px]:p-3">
+      <div className="flex max-w-[1080px] flex-col gap-3 p-4 @max-[640px]:p-3">
         <div className="grid grid-cols-2 gap-2 @min-[640px]:grid-cols-4">
           <Stat label={s.since ? "Runs since last open" : "Runs, last 30 days"} value={s.counts.runs_since} />
           <Stat label="Failed" value={s.counts.failed_since} tone="destructive" />
@@ -90,7 +90,7 @@ export function HomeScreen() {
 function HomeSkeleton() {
   return (
     <div className="@container h-full overflow-y-auto" aria-busy="true" aria-label="Loading">
-      <div className="mx-auto flex max-w-[1080px] flex-col gap-3 p-4 @max-[640px]:p-3">
+      <div className="flex max-w-[1080px] flex-col gap-3 p-4 @max-[640px]:p-3">
         <div className="grid grid-cols-2 gap-2 @min-[640px]:grid-cols-4">
           {[0, 1, 2, 3].map((i) => (
             <Skeleton key={i} className="h-[66px] rounded-lg bg-card" />

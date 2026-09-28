@@ -2,6 +2,7 @@
 //! [`Context`], tested with `FakeHost`; the Tauri crate wraps each one. None
 //! of them is ever registered as a tool, so no MCP client can reach them.
 
+use std::path::Path;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
@@ -15,10 +16,16 @@ use serde_json::{json, Value};
 
 use crate::{output_schema_of, schema_of, Context, NoParams, ToolError};
 
+mod claude_desktop;
 mod files;
 mod home;
 mod overview;
+mod settings;
 
+pub use claude_desktop::{
+    backup_stamp, claude_desktop_apply, claude_desktop_plan, claude_desktop_status, Bundle,
+    ClaudeDesktopApplied, ClaudeDesktopPlan, ClaudeDesktopState, ClaudeDesktopStatus, ServerEntry,
+};
 pub use files::{
     app_docs_url, editor_argv, export_profile, find_in_path, import_profile, path_status,
     reveal_target, script_file, script_template, text_editor_argv, ExportArgs, ExportResult,
@@ -34,6 +41,9 @@ pub use overview::{
     apps_overview, scripts_overview, variables_overview, AppEventInfo, AppRow, AppsOverview,
     ProfileArgs, RequirementRow, RequirementState, ScriptRow, ScriptTarget, ScriptsOverview,
     TargetAttachment, TargetEvent, VariablesOverview,
+};
+pub use settings::{
+    pip_install, settings_overview, BundleInfo, PipInstallResult, SettingsArgs, SettingsOverview,
 };
 
 pub use hedgebuddy_core::ImportSummary;
@@ -81,6 +91,11 @@ pub fn commands() -> Vec<AppCommandDef> {
         app_command!("pick_folder", PickFolderArgs, PickedPath),
         app_command!("pick_export_path", PickExportArgs, PickedPath),
         app_command!("pick_import_file", NoParams, PickedPath),
+        app_command!("claude_desktop_status", NoParams, ClaudeDesktopStatus),
+        app_command!("claude_desktop_plan", NoParams, ClaudeDesktopPlan),
+        app_command!("claude_desktop_apply", NoParams, ClaudeDesktopApplied),
+        app_command!("settings_overview", SettingsArgs, SettingsOverview),
+        app_command!("pip_install", NoParams, PipInstallResult),
     ]
 }
 
@@ -248,8 +263,16 @@ pub fn preferences_get(ctx: &Context, _: NoParams) -> Result<Preferences, ToolEr
     Ok(ctx.store.preferences()?)
 }
 
-/// Change the app's preferences under the write lock.
+/// Change the app's preferences under the write lock. A non-empty
+/// `editor_command` must parse as a shell-like command ([`editor_argv`])
+/// before anything is written, so a broken command is never saved (a blank
+/// one still clears it, as the store itself does).
 pub fn preferences_set(ctx: &Context, patch: PreferencesPatch) -> Result<Preferences, ToolError> {
+    if let Some(Some(command)) = &patch.editor_command {
+        if !command.trim().is_empty() {
+            editor_argv(command, Path::new("x.py"))?;
+        }
+    }
     let _guard = ctx.write_guard()?;
     Ok(ctx.store.update_preferences(&patch)?)
 }
@@ -390,6 +413,46 @@ mod tests {
         );
         let _held = Store::open(ctx.store.root()).lock().unwrap();
         assert!(preferences_set(&ctx, patch).unwrap_err().is_busy());
+    }
+
+    #[test]
+    fn preferences_set_rejects_an_unparsable_editor_command() {
+        let (_d, _f, ctx) = test_ctx(FakeHost::new(Os::Windows));
+        let set_code = |ctx: &Context| {
+            let patch: PreferencesPatch =
+                serde_json::from_str(r#"{"editor_command": "code"}"#).unwrap();
+            preferences_set(ctx, patch).unwrap();
+        };
+        set_code(&ctx);
+
+        let bad: PreferencesPatch =
+            serde_json::from_str(r#"{"editor_command": "code \"unterminated"}"#).unwrap();
+        let err = preferences_set(&ctx, bad).unwrap_err();
+        assert!(err.0.contains("unterminated"), "{err}");
+        assert_eq!(
+            preferences_get(&ctx, NoParams {})
+                .unwrap()
+                .editor_command
+                .as_deref(),
+            Some("code"),
+            "an invalid command must not overwrite the one already stored"
+        );
+
+        let ok: PreferencesPatch =
+            serde_json::from_str(r#"{"editor_command": "code --wait {file}"}"#).unwrap();
+        assert_eq!(
+            preferences_set(&ctx, ok).unwrap().editor_command.as_deref(),
+            Some("code --wait {file}")
+        );
+
+        // A blank command (empty or all whitespace) clears it, same as `null`.
+        let blank: PreferencesPatch = serde_json::from_str(r#"{"editor_command": ""}"#).unwrap();
+        assert_eq!(preferences_set(&ctx, blank).unwrap().editor_command, None);
+
+        set_code(&ctx);
+        let spaces: PreferencesPatch =
+            serde_json::from_str(r#"{"editor_command": "   "}"#).unwrap();
+        assert_eq!(preferences_set(&ctx, spaces).unwrap().editor_command, None);
     }
 
     #[test]

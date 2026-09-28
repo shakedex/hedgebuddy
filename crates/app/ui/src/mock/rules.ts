@@ -268,6 +268,79 @@ export function compareVersions(a: string, b: string): number {
   return 0;
 }
 
+/** The word an editor command can't start with (files.rs `FILE_PLACEHOLDER`): the script path itself, which
+ *  would run the script rather than open it in an editor. */
+const FILE_PLACEHOLDER = "{file}";
+
+/** Splits a command into shell-like words (files.rs `split_words`): `"..."` with `\"` escapes, `'...'` with
+ *  none, anything else a plain run of non-space characters. Only used to validate an editor command — the
+ *  mock never actually runs one — so, unlike `editor_argv`, this never substitutes `{file}` for a path. */
+function splitWords(command: string): string[] {
+  const unterminated = () => new ToolError(`unterminated quote in editor command: ${command}`);
+  const words: string[] = [];
+  let word = "";
+  let inWord = false;
+  let i = 0;
+  while (i < command.length) {
+    const c = command[i];
+    if (c === '"') {
+      inWord = true;
+      i++;
+      for (;;) {
+        if (i >= command.length) throw unterminated();
+        const d = command[i];
+        if (d === '"') {
+          i++;
+          break;
+        }
+        if (d === "\\" && command[i + 1] === '"') {
+          word += '"';
+          i += 2;
+          continue;
+        }
+        word += d;
+        i++;
+      }
+    } else if (c === "'") {
+      inWord = true;
+      i++;
+      for (;;) {
+        if (i >= command.length) throw unterminated();
+        const d = command[i];
+        if (d === "'") {
+          i++;
+          break;
+        }
+        word += d;
+        i++;
+      }
+    } else if (/\s/.test(c)) {
+      if (inWord) {
+        words.push(word);
+        word = "";
+        inWord = false;
+      }
+      i++;
+    } else {
+      inWord = true;
+      word += c;
+      i++;
+    }
+  }
+  if (inWord) words.push(word);
+  return words;
+}
+
+/** Whether `command` would be accepted by `preferences_set` (files.rs `editor_argv`): it must split into at
+ *  least one word (an unterminated quote is an error), and its first word must be a real program, not
+ *  `{file}` or an empty word (`""`, `''`). Throws with the same wording the Rust tool uses. */
+export function validateEditorCommand(command: string): void {
+  const first = splitWords(command)[0];
+  if (first === undefined) throw new ToolError("the editor command is empty");
+  if (first === FILE_PLACEHOLDER) throw new ToolError("the editor command must start with a program, not {file}");
+  if (first.trim() === "") throw new ToolError("the editor command must start with a program, not an empty word");
+}
+
 /** `FileCopyCompleted` → `file_copy_completed` (files.rs `snake_case`). */
 export function snakeCase(id: string): string {
   const chars = [...id];

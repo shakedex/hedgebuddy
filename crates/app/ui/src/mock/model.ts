@@ -6,9 +6,11 @@
  */
 import type { ActivityRecord, AppCommandTypes, Os, PythonStatus, Run, ToolTypes } from "@/api/tools.gen";
 import { catalogApp, catalogEvent } from "./catalog";
+import { ClaudeDesktop, HEDGEBUDDY_BINARY, MSIX_CLAUDE_DESKTOP_PATH, type ClaudeDesktopSeed } from "./claudeDesktop";
 import { commercialOneDay, IMPORT_FILE, REQUIRED_VERSION, scenarioSeed, type PythonSeed, type Scenario } from "./fixtures";
 import { APPLY_NOTE, DATA_DIR, Hedge } from "./hedge";
-import { importsHedgebuddy, parseManifest, parseVarType, snakeCase, ToolError, validateScriptName } from "./rules";
+import { importsHedgebuddy, parseManifest, parseVarType, snakeCase, ToolError, validateEditorCommand, validateScriptName } from "./rules";
+import { bundleInfo, NO_WHEEL, pipCommandLine, pipSuccessOutput, PIP_FAIL_OUTPUT, PREFS_ERROR } from "./settings";
 import { Store, type ProfileExport, type ResolvedVariable } from "./store";
 import { appsOverview, catalogError, homeSummary, scriptsOverview, variablesOverview, varView } from "./views";
 
@@ -22,6 +24,10 @@ const PATH_STATUS_MAX = 64;
 const REVEAL_REFUSED = "HedgeBuddy only reveals its data folder and Hedge app files";
 const FILE_MANAGER: Record<Os, string> = { windows: "File Explorer", macos: "Finder" };
 const TEXT_EDITOR: Record<Os, string> = { windows: "Notepad", macos: "the default text editor" };
+/** `?catalogerror=1`: a broken catalog override, in the shape `Catalog::load`'s own failures take (the
+ *  broken file's own name, per `crates/core/src/catalog.rs`'s `invalid_overrides_are_reported_with_the_file_
+ *  name` test), so Settings' amber catalog line can be checked. */
+const CATALOG_ERROR = "offshoot.toml: TOML parse error at line 1, column 20";
 
 /** The apply note, only on a change that was applied (attachments.rs `note`). */
 function note(applied: boolean): { note?: string } {
@@ -126,16 +132,37 @@ export class Model {
   readonly os: Os;
   private readonly store: Store;
   private readonly hedge: Hedge;
-  private readonly python: PythonSeed | null;
+  /** Not `readonly`: a successful `pip_install` updates `installed` in place. */
+  private python: PythonSeed | null;
   private readonly runs: Run[];
   private readonly activityLog: ActivityRecord[];
   private readonly since: string | null;
-  private readonly preferences: AppOut<"preferences_get">;
+  /** Not `readonly`: a successful `preferences_set` updates it in place. */
+  private preferences: AppOut<"preferences_get">;
+  /** `?prefserror=1`: `preferences.json` can't be read, so `settings_overview` reports `preferences_error`
+   *  and a null `editor_command`, and `preferences_set` refuses (Task 6 note: the mock had always returned
+   *  `preferences_error: null`, since nothing forced the failing case). */
+  private readonly prefsBroken: boolean;
+  /** `?catalogerror=1`: a catalog override is broken, so `settings_overview` reports `catalog_error` and no
+   *  overrides (a failed load falls back to the embedded catalog, which has none) (Task 6 review round 2,
+   *  minor: the mock had no way to force this, so the amber catalog line was never reachable). */
+  private readonly catalogErrorForced: boolean;
+  private readonly claudeDesktop: ClaudeDesktop;
+  /** The bundled `hedgebuddy` command, or null (`?nobinary=1`: a build without one). */
+  private readonly binary: string | null;
+  /** The bundled wheel, or null (`macos`, or `?nowheel=1`: either way Settings' Install is disabled). */
+  private readonly wheel: string | null;
+  /** `?pipfail=1` forces `pip_install` to fail with a PEP 668-style message, in any scenario. */
+  private readonly pipFail: boolean;
   /** Export files by path: the fixed import file, plus whatever `export_profile` writes. */
   private readonly exportFiles = new Map<string, ProfileExport>();
 
   constructor(scenario: Scenario) {
     const seed = scenarioSeed(scenario);
+    // `?claude=invalid`, `?claude=seeded`, `?nobinary=1`, `?nowheel=1`, `?pipfail=1`, `?prefserror=1` and
+    // `?catalogerror=1` each force an otherwise-unreachable state, in any scenario, so Connect and Settings
+    // can be checked visually against every state.
+    const params = new URLSearchParams(window.location.search);
     this.scenario = scenario;
     this.os = seed.os;
     this.store = new Store(DATA_DIR[seed.os], seed.os === "windows" ? "\\" : "/", seed.store);
@@ -145,6 +172,19 @@ export class Model {
     this.activityLog = seed.activity;
     this.since = seed.since;
     this.preferences = seed.preferences;
+    this.binary = params.get("nobinary") === "1" ? null : HEDGEBUDDY_BINARY[seed.os];
+    const claudeParam = params.get("claude");
+    const claudeDesktopSeed: ClaudeDesktopSeed =
+      claudeParam === "invalid" ? { ...seed.claudeDesktop, forceInvalidProblem: "expected value at line 1 column 1" } : seed.claudeDesktop;
+    // `?claude=seeded`: an MSIX-packaged Claude Desktop with no config of its own yet, reading the scenario's
+    // own config from `%APPDATA%` in its place (item 11, final review) — Windows only, since MSIX packaging
+    // is a Windows-only concept (`claude_desktop.rs`'s own `msix_folder`).
+    const msixPath = claudeParam === "seeded" && seed.os === "windows" ? MSIX_CLAUDE_DESKTOP_PATH : null;
+    this.claudeDesktop = new ClaudeDesktop(seed.os, this.binary, claudeDesktopSeed, msixPath);
+    this.wheel = params.get("nowheel") === "1" ? null : seed.wheel;
+    this.pipFail = params.get("pipfail") === "1";
+    this.prefsBroken = params.get("prefserror") === "1";
+    this.catalogErrorForced = params.get("catalogerror") === "1";
     const source = new Store(DATA_DIR.windows, "\\", { profiles: { "commercial-one-day": commercialOneDay(false) }, active: null });
     this.exportFiles.set(this.hedge.pathKey(IMPORT_FILE), source.exportProfile("commercial-one-day", false));
   }
@@ -368,6 +408,29 @@ export class Model {
     return { ...this.preferences };
   }
 
+  /** A non-empty `editor_command` must parse as a shell-like command (`validateEditorCommand`, a port of
+   *  `editor_argv`) *before* `?prefserror=1` refuses (review round 2, minor): the real tool validates first
+   *  and only reads the file back — where a corrupt one fails — once that passes (`preferences_set` in
+   *  `crates/tools/src/app/mod.rs` calls `editor_argv` ahead of `ctx.store.update_preferences`, which is
+   *  what does the read). Getting this backwards would report the wrong one of two simultaneous problems. */
+  preferencesSet(args: AppIn<"preferences_set">): AppOut<"preferences_set"> {
+    let editorCommand: string | null | undefined; // undefined: the key was absent, leave it alone.
+    if ("editor_command" in args) {
+      const raw = args.editor_command ?? null;
+      const trimmed = raw?.trim() ?? "";
+      if (trimmed !== "") validateEditorCommand(raw!);
+      editorCommand = trimmed === "" ? null : trimmed;
+    }
+    if (this.prefsBroken) throw new ToolError(PREFS_ERROR);
+    if (editorCommand !== undefined) {
+      this.preferences = { ...this.preferences, editor_command: editorCommand };
+    }
+    if ("last_opened" in args) {
+      this.preferences = { ...this.preferences, last_opened: args.last_opened ?? null };
+    }
+    return { ...this.preferences };
+  }
+
   // ---- Python and Home ---------------------------------------------------------------------------
 
   private packageProblem(py: PythonSeed): string | null {
@@ -396,6 +459,51 @@ export class Model {
 
   homeSummary(): AppOut<"home_summary"> {
     return homeSummary(this.store, this.hedge, this.pythonStatus(), { runs: this.runs, activity: this.activityLog, since: this.since });
+  }
+
+  // ---- Claude Desktop (spec §6.6, §10) ------------------------------------------------------------
+
+  claudeDesktopStatus(): AppOut<"claude_desktop_status"> {
+    return this.claudeDesktop.status();
+  }
+
+  claudeDesktopPlan(): AppOut<"claude_desktop_plan"> {
+    return this.claudeDesktop.plan();
+  }
+
+  claudeDesktopApply(): AppOut<"claude_desktop_apply"> {
+    return this.claudeDesktop.apply();
+  }
+
+  // ---- Settings (spec §6.7) ------------------------------------------------------------------------
+
+  /** `args.recheck` has nothing to do here: the preview keeps no Python cache to invalidate, so every call
+   *  already reads the current (possibly just-installed) value. */
+  settingsOverview(_args: AppIn<"settings_overview">): AppOut<"settings_overview"> {
+    return {
+      os: this.os,
+      data_dir: this.store.dataDir,
+      catalog_overrides: this.catalogErrorForced ? [] : this.scenario === "problems" ? ["offshoot"] : [],
+      catalog_error: this.catalogErrorForced ? CATALOG_ERROR : null,
+      python: this.pythonStatus(),
+      install_command: this.python && this.wheel ? pipCommandLine(this.os, this.wheel) : null,
+      bundle: bundleInfo(this.binary, this.wheel),
+      editor_command: this.prefsBroken ? null : this.preferences.editor_command,
+      preferences_error: this.prefsBroken ? PREFS_ERROR : null,
+    };
+  }
+
+  /** Installs the bundled wheel offline; a success updates `installed` in place, so a later `home_summary`
+   *  or `settings_overview` (recheck or not) already shows it. `?pipfail=1` forces a PEP 668-style failure. */
+  pipInstall(): AppOut<"pip_install"> {
+    if (this.python === null) throw new ToolError("Python 3 was not found; the Hedge apps need it to run scripts");
+    if (this.wheel === null) throw new ToolError(NO_WHEEL);
+    const command = pipCommandLine(this.os, this.wheel);
+    if (this.pipFail) {
+      return { ok: false, exit_code: 1, command, output: PIP_FAIL_OUTPUT, installed: this.python.installed };
+    }
+    this.python = { ...this.python, installed: REQUIRED_VERSION };
+    return { ok: true, exit_code: 0, command, output: pipSuccessOutput(this.wheel, REQUIRED_VERSION), installed: REQUIRED_VERSION };
   }
 
   // ---- overviews (views.ts) -----------------------------------------------------------------------
@@ -493,7 +601,7 @@ export class Model {
   }
 
   pickExportPath(args: AppIn<"pick_export_path">): AppOut<"pick_export_path"> {
-    return { path: `C:/Users/you/Documents/${args.default_name}` };
+    return { path: `C:/Users/operator/Documents/${args.default_name}` };
   }
 
   pickImportFile(): AppOut<"pick_import_file"> {

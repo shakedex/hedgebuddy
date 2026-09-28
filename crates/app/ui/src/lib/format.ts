@@ -5,6 +5,32 @@ const APP_NAMES: Record<string, string> = {
 /** A catalog app id as the operator knows it. */
 export const appName = (id: string | null | undefined) => (id ? (APP_NAMES[id] ?? id) : "—");
 
+/** The file name at the end of a path (`\` or `/`), for a name worth showing on its own — never the whole
+ *  path. Shared by Connect's Claude Desktop panel (a backup file) and Settings' Python panel (the bundled
+ *  wheel). */
+export function basename(path: string): string {
+  const idx = Math.max(path.lastIndexOf("\\"), path.lastIndexOf("/"));
+  return idx === -1 ? path : path.slice(idx + 1);
+}
+
+/** A package problem's own `"; run: <command>"` suffix (`hedgebuddy-core`'s `package_problem`), split off so
+ *  a caller can show the sentence and the command separately — Settings' Python panel puts the command in
+ *  its own `CommandWell`; Scripts' CHECK section drops it entirely, in favour of a link to Settings (final
+ *  review ruling: PyPI isn't published, so the `pip install hedgebuddy==X` command doesn't actually work). */
+export function splitProblem(problem: string): { sentence: string; command: string | null } {
+  const at = problem.indexOf("; run: ");
+  if (at === -1) return { sentence: problem, command: null };
+  return { sentence: problem.slice(0, at), command: problem.slice(at + "; run: ".length) };
+}
+
+/** A message's own first line — a multi-line error (a TOML parse error's own source excerpt, say) renders as
+ *  one plain sentence instead of garbling across lines; the full text still belongs in a `title` so it isn't
+ *  lost, just not the default reading. */
+export function firstLine(text: string): string {
+  const at = text.indexOf("\n");
+  return at === -1 ? text : text.slice(0, at);
+}
+
 /** Local 24-hour time: `02:14`, or `02:14:07` with seconds. */
 export function clock(ts: string, seconds = false): string {
   return new Date(ts).toLocaleTimeString(undefined, {

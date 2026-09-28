@@ -30,8 +30,8 @@ const RELOAD: Record<string, Name[]> = {
   index: ["list_profiles", "get_profile", "list_runs", "home_summary", "variables_overview", "scripts_overview"],
   runs: ["list_runs", "get_run", "home_summary"],
   activity: ["activity", "home_summary"],
-  preferences: ["preferences_get"],
-  catalog: ["list_apps", "describe_app", "list_attachments", "home_summary", "apps_overview", "scripts_overview"],
+  preferences: ["preferences_get", "settings_overview"],
+  catalog: ["list_apps", "describe_app", "list_attachments", "home_summary", "apps_overview", "scripts_overview", "settings_overview"],
 };
 const PROFILE: Name[] = ["list_profiles", "get_profile", "list_vars", "get_var", "home_summary", "variables_overview", "scripts_overview"];
 const SCRIPTS: Name[] = [
@@ -80,6 +80,67 @@ export function useHomeSummary() {
     queryKey: queryKey.app("home_summary", {}),
     queryFn: () => callApp("home_summary", {}),
     refetchOnWindowFocus: true,
+  });
+}
+
+/** Connect's Claude Desktop status (spec §6.6): the config file lives outside the data folder (the operator
+ *  may set it up, or restart Claude Desktop, without HedgeBuddy noticing), so this also reloads on window focus. */
+export function useClaudeDesktopStatus() {
+  return useQuery({
+    queryKey: queryKey.app("claude_desktop_status", {}),
+    queryFn: () => callApp("claude_desktop_status", {}),
+    refetchOnWindowFocus: true,
+  });
+}
+
+/** The Settings screen (spec §6.7): Python, the data folder, its catalog overrides, the bundled files and
+ *  the editor command. */
+export function useSettingsOverview() {
+  return useQuery({
+    queryKey: queryKey.app("settings_overview", {}),
+    queryFn: () => callApp("settings_overview", {}),
+  });
+}
+
+/** Settings' "Check again" (Task 6 ruling): re-probes Python right now instead of waiting out the 10-minute
+ *  miss cache, by calling `settings_overview` with `{ recheck: true }` and writing the fresh result straight
+ *  into the shared query's cache — every readout that depends on it updates without a second round trip.
+ *  Also invalidates `home_summary`, so the sidebar's Settings badge clears the moment a recheck finds what
+ *  Install would otherwise have fixed (Python installed, or the package found some other way). */
+export function useRecheckPython() {
+  return useMutation({
+    mutationFn: () => callApp("settings_overview", { recheck: true }),
+    onSuccess: (data) => {
+      queryClient.setQueryData(queryKey.app("settings_overview", {}), data);
+      // Also `check_script`, not only `home_summary` (final review, Important): Scripts' own CHECK section
+      // reads `check_script`, whose 30 s `staleTime` would otherwise still show a script's now-fixed package
+      // problem for up to half a minute after Python is found or the package is installed some other way.
+      const names = new Set<string>(["home_summary", "check_script"]);
+      void queryClient.invalidateQueries({ predicate: (q) => names.has(String(q.queryKey[1])) });
+    },
+  });
+}
+
+/** Connect's activity list (spec §6.6): the last 200 Claude calls. */
+export function useActivity() {
+  return useQuery({
+    queryKey: queryKey.app("activity", { limit: 200 }),
+    queryFn: () => callApp("activity", { limit: 200 }),
+  });
+}
+
+/** Settings' Install button (spec §6.7): installs the bundled wheel with pip, then reloads wherever the
+ *  installed version shows. `pip_install` itself is never busy (it takes no data-folder lock), so there is
+ *  no busy toast to clear here, unlike the other mutations in this file. */
+export function usePipInstall() {
+  return useMutation({
+    mutationFn: () => callApp("pip_install", {}),
+    onSettled: () => {
+      // Also `check_script` (final review, Important): see `useRecheckPython`'s own comment — Install can fix
+      // the same package problem Scripts' CHECK shows, and its 30 s `staleTime` must not outlive the install.
+      const names = new Set<string>(["settings_overview", "home_summary", "check_script"]);
+      void queryClient.invalidateQueries({ predicate: (q) => names.has(String(q.queryKey[1])) });
+    },
   });
 }
 

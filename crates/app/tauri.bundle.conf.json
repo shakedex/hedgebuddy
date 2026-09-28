@@ -1,0 +1,6 @@
+{
+  "bundle": {
+    "externalBin": ["binaries/hedgebuddy"],
+    "resources": { "bundle/wheel/": "wheel/" }
+  }
+}

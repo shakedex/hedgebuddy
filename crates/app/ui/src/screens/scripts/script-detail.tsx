@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { UseQueryResult } from "@tanstack/react-query";
-import { CircleCheck, CircleX, FileCode, FolderOpen, Package, RefreshCw, SquarePen, TriangleAlert, type LucideIcon } from "lucide-react";
+import { CircleCheck, CircleX, FileCode, FolderOpen, Package, SquarePen, TriangleAlert, type LucideIcon } from "lucide-react";
 import { toast } from "sonner";
 import { Link, useLocation } from "wouter";
 import { callApp, callTool } from "@/api/bridge";
@@ -16,6 +16,7 @@ import type {
   TargetAttachment,
 } from "@/api/tools.gen";
 import { ChangePreviewDialog, renderWords } from "@/components/app/change-preview-dialog";
+import { CheckAgainButton } from "@/components/app/check-again-button";
 import { EmptyState } from "@/components/app/empty-state";
 import { ErrorPanel } from "@/components/app/error-panel";
 import { Mono } from "@/components/app/mono";
@@ -23,7 +24,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { describeActions, describeState } from "@/lib/actions";
-import { appName } from "@/lib/format";
+import { appName, splitProblem } from "@/lib/format";
 import { focusMainHeading } from "@/lib/focus";
 import { STATUS, TONE_TEXT, type StatusKey, type Tone } from "@/lib/status";
 import { clearBusyToast, showError } from "@/lib/toast";
@@ -214,16 +215,12 @@ function CheckSection({ name, profile }: { name: string; profile: string }) {
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center justify-between gap-2">
         <span className="micro-label">Check</span>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="text-muted-foreground hover:text-foreground-strong"
-          disabled={check.isFetching}
-          onClick={() => void check.refetch()}
-        >
-          <RefreshCw aria-hidden strokeWidth={1.75} className={cn(check.isFetching && "animate-spin")} />
-          {check.isFetching ? "Checking…" : "Check again"}
-        </Button>
+        <CheckAgainButton
+          pending={check.isFetching}
+          onClick={() => {
+            if (!check.isFetching) void check.refetch();
+          }}
+        />
       </div>
       {data.python === null ? (
         <CheckRow icon={TriangleAlert} tone="warning">
@@ -245,7 +242,13 @@ function CheckSection({ name, profile }: { name: string; profile: string }) {
           )}
           {data.package_problem ? (
             <CheckRow icon={Package} tone="warning">
-              {data.package_problem}
+              {/* Final review ruling: point to Settings' Install instead of the PyPI `pip install
+                  hedgebuddy==X` command `package_problem`'s own text would otherwise show — PyPI isn't
+                  published yet, so that command doesn't actually work. */}
+              {splitProblem(data.package_problem).sentence}.{" "}
+              <Link href="/settings" className="relative text-link after:absolute after:-inset-x-1 after:-inset-y-1.5 hover:underline">
+                Install in Settings
+              </Link>
             </CheckRow>
           ) : installedVersion ? (
             <CheckRow icon={CircleCheck} tone="neutral">
@@ -436,7 +439,17 @@ export function ScriptDetail({ name, profile, overview, appsOverview }: {
           <Button variant="ghost" size="sm" disabled={openingEditor} onClick={handleOpenEditor}>
             <SquarePen aria-hidden strokeWidth={1.75} /> Open in editor
           </Button>
-          <Button variant="ghost" size="sm" disabled={revealing} onClick={handleReveal}>
+          {/* aria-disabled (not disabled): a focused button that goes natively `disabled` mid-click drops
+              keyboard focus to <body> in some webviews (Task 6 review round 2, Important 2). `handleReveal`
+              itself ignores a click while already revealing. */}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="aria-disabled:pointer-events-none aria-disabled:opacity-45"
+            aria-disabled={revealing}
+            aria-busy={revealing}
+            onClick={handleReveal}
+          >
             <FolderOpen aria-hidden strokeWidth={1.75} /> Show in folder
           </Button>
         </div>

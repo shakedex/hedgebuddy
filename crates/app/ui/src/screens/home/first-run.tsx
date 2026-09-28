@@ -31,8 +31,8 @@ function ChooseProfile({ profiles }: { profiles: string[] }) {
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap gap-2">
         {profiles.map((name) => (
-          <Button key={name} variant="outline" size="sm" disabled={activate.isPending} onClick={() => activateTo(name)}>
-            <Mono>{name}</Mono>
+          <Button key={name} variant="outline" size="sm" className="h-auto min-w-0 max-w-full whitespace-normal" disabled={activate.isPending} onClick={() => activateTo(name)}>
+            <Mono className="break-all">{name}</Mono>
           </Button>
         ))}
       </div>
