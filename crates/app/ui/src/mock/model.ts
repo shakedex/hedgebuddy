@@ -6,7 +6,7 @@
  */
 import type { ActivityRecord, AppCommandTypes, Os, PythonStatus, Run, ToolTypes } from "@/api/tools.gen";
 import { catalogApp, catalogEvent } from "./catalog";
-import { ClaudeDesktop, HEDGEBUDDY_BINARY } from "./claudeDesktop";
+import { ClaudeDesktop, HEDGEBUDDY_BINARY, type ClaudeDesktopSeed } from "./claudeDesktop";
 import { commercialOneDay, IMPORT_FILE, REQUIRED_VERSION, scenarioSeed, type PythonSeed, type Scenario } from "./fixtures";
 import { APPLY_NOTE, DATA_DIR, Hedge } from "./hedge";
 import { importsHedgebuddy, parseManifest, parseVarType, snakeCase, ToolError, validateScriptName } from "./rules";
@@ -135,7 +135,9 @@ export class Model {
   private readonly since: string | null;
   private readonly preferences: AppOut<"preferences_get">;
   private readonly claudeDesktop: ClaudeDesktop;
-  /** The bundled wheel, or null (`macos`: Settings' Install is disabled). */
+  /** The bundled `hedgebuddy` command, or null (`?nobinary=1`: a build without one). */
+  private readonly binary: string | null;
+  /** The bundled wheel, or null (`macos`, or `?nowheel=1`: either way Settings' Install is disabled). */
   private readonly wheel: string | null;
   /** `?pipfail=1` forces `pip_install` to fail with a PEP 668-style message, in any scenario. */
   private readonly pipFail: boolean;
@@ -144,6 +146,9 @@ export class Model {
 
   constructor(scenario: Scenario) {
     const seed = scenarioSeed(scenario);
+    // `?claude=invalid`, `?nobinary=1`, `?nowheel=1` and `?pipfail=1` each force an otherwise-unreachable
+    // state, in any scenario, so Connect and Settings can be checked visually against every state.
+    const params = new URLSearchParams(window.location.search);
     this.scenario = scenario;
     this.os = seed.os;
     this.store = new Store(DATA_DIR[seed.os], seed.os === "windows" ? "\\" : "/", seed.store);
@@ -153,9 +158,14 @@ export class Model {
     this.activityLog = seed.activity;
     this.since = seed.since;
     this.preferences = seed.preferences;
-    this.claudeDesktop = new ClaudeDesktop(seed.os, HEDGEBUDDY_BINARY[seed.os], seed.claudeDesktop);
-    this.wheel = seed.wheel;
-    this.pipFail = new URLSearchParams(window.location.search).get("pipfail") === "1";
+    this.binary = params.get("nobinary") === "1" ? null : HEDGEBUDDY_BINARY[seed.os];
+    const claudeDesktopSeed: ClaudeDesktopSeed =
+      params.get("claude") === "invalid"
+        ? { ...seed.claudeDesktop, forceInvalidProblem: "expected value at line 1 column 1" }
+        : seed.claudeDesktop;
+    this.claudeDesktop = new ClaudeDesktop(seed.os, this.binary, claudeDesktopSeed);
+    this.wheel = params.get("nowheel") === "1" ? null : seed.wheel;
+    this.pipFail = params.get("pipfail") === "1";
     const source = new Store(DATA_DIR.windows, "\\", { profiles: { "commercial-one-day": commercialOneDay(false) }, active: null });
     this.exportFiles.set(this.hedge.pathKey(IMPORT_FILE), source.exportProfile("commercial-one-day", false));
   }
@@ -435,7 +445,7 @@ export class Model {
       catalog_error: null,
       python: this.pythonStatus(),
       install_command: this.python && this.wheel ? pipCommandLine(this.os, this.wheel) : null,
-      bundle: bundleInfo(HEDGEBUDDY_BINARY[this.os], this.wheel),
+      bundle: bundleInfo(this.binary, this.wheel),
       editor_command: this.preferences.editor_command,
       preferences_error: null,
     };

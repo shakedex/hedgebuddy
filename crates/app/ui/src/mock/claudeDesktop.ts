@@ -47,6 +47,10 @@ export interface ClaudeDesktopSeed {
   folderExists: boolean;
   /** The file's raw JSON text, or null when there is no file yet. */
   text: string | null;
+  /** `?claude=invalid`: report the config as invalid for this reason (after the `claude_desktop_config.json
+   *  isn't valid: ` prefix), regardless of `text` or `folderExists` — a fixed message that reads like
+   *  serde_json's own, rather than whatever the browser's `JSON.parse` happens to say. */
+  forceInvalidProblem?: string;
 }
 
 type ParsedConfig =
@@ -147,17 +151,20 @@ function backupStamp(): string {
 export class ClaudeDesktop {
   private text: string | null;
   private folderExists: boolean;
+  /** `?claude=invalid` (see `ClaudeDesktopSeed.forceInvalidProblem`). */
+  private readonly forceInvalidProblem?: string;
   /** Backups by file name (their content, as the config's bytes were when each was made). */
   private readonly backups = new Map<string, string>();
 
   constructor(
     private readonly os: Os,
-    /** The bundled `hedgebuddy` command, or null in a build without one. */
+    /** The bundled `hedgebuddy` command, or null in a build without one (`?nobinary=1`). */
     private readonly binary: string | null,
     seed: ClaudeDesktopSeed,
   ) {
     this.text = seed.text;
     this.folderExists = seed.folderExists || seed.text !== null;
+    this.forceInvalidProblem = seed.forceInvalidProblem;
   }
 
   get configPath(): string {
@@ -165,6 +172,9 @@ export class ClaudeDesktop {
   }
 
   private parsed(): ParsedConfig {
+    if (this.forceInvalidProblem !== undefined) {
+      return { kind: "invalid", problem: `${CONFIG_NAME} isn't valid: ${this.forceInvalidProblem}` };
+    }
     return parseConfig(this.text, this.folderExists);
   }
 
