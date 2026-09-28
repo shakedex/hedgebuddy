@@ -1,4 +1,4 @@
-# Manual smoke checklist (phases 3, 4, 5A and 5B)
+# Manual smoke checklist (phases 3, 4, 5A, 5B and 5C)
 
 These steps change real Hedge app settings and need a machine with OffShoot Pro (and optionally FoolCat Pro). Run them from Claude Desktop or Claude Code with the HedgeBuddy MCP server connected, or with `hedgebuddy call`. Record results in the boxes.
 
@@ -59,3 +59,21 @@ Run on Windows and macOS. These steps change real Hedge app settings; wait for t
 - [ ] Import a profile from Home's first step on a machine (or a fresh profile folder) with no active profile. Result:
 - [ ] Show in folder and Docs open the right places. Result:
 - [ ] Edit a catalog override in `<data>/catalog/` while the app is open: Hedge apps and Scripts reflect it without a restart. Result:
+
+## 9. Desktop app connect and settings (phase 5C)
+Run on Windows and macOS. These steps change Claude Desktop's config file and the Python environment the Hedge apps use; wait for the go-ahead before running this section.
+- [ ] Connect's Claude Desktop panel shows the right config path: `%LOCALAPPDATA%\Packages\Claude_*\LocalCache\Roaming\Claude` when exactly one `Claude_*` package is installed, else `%APPDATA%\Claude` on Windows; `~/Library/Application Support/Claude` on macOS. Result:
+- [ ] MSIX edge case (Windows): with one `Claude_*` package installed but no config file in its folder, while `%APPDATA%\Claude` does have one, check which file the real Claude Desktop actually reads, and that Connect's own path matches it. Result:
+- [ ] Set up previews the change (the file, `mcpServers.hedgebuddy`, and a timestamped backup of the config in its folder), applies it, writes the backup, and keeps every other server already in the file. After restarting Claude Desktop, HedgeBuddy's tools appear in a new chat. Result:
+- [ ] Manually add a README-style entry (`"command": "hedgebuddy"`) to `claude_desktop_config.json`, restart Claude Desktop, then use Connect's Update: it points the entry at the bundled binary, keeps other servers, and HedgeBuddy still works after restarting again. Result:
+- [ ] Make the config invalid (truncate it to `{`, say): Connect shows "can't read the config" and Set up/Update is refused; the file is untouched. Result:
+- [ ] Copy the Claude Code command from Connect and run it as printed: `claude mcp add hedgebuddy` succeeds and HedgeBuddy's tools appear in Claude Code. Result:
+- [ ] Copy the JSON config from Connect's Other MCP clients panel into another MCP-speaking client's own config: it connects and lists HedgeBuddy's tools over stdio. Result:
+- [ ] With Claude Desktop or Claude Code connected, ask Claude to run a few tools: Connect's activity list updates with each call (time, tool, target, outcome) while Claude is still working, without a reload. Result:
+- [ ] With network access turned off, use Settings' Install to run the bundled wheel (`pip install --no-index`): it succeeds offline, and Home and Settings both show `hedgebuddy` 0.11.0 installed. Result:
+- [ ] Settings' Reveal (Show in folder) opens the real data folder in the file manager. Result:
+- [ ] With a catalog override in `<data>/catalog/`, Settings' Data folder panel lists it under Overrides. Result:
+- [ ] Set an editor command in Settings, then use Open in editor (Scripts): it runs that command. Set it to something unparsable (an unterminated quote): Save is refused with the reason shown, and the old command keeps working. Result:
+- [ ] macOS: start the app with `HEDGEBUDDY_DATA_DIR` pointed at a path it can't open (an existing file, say): a native "HedgeBuddy can't start" alert shows the reason, with no blank window behind it. Result:
+- [ ] macOS: launch the app via a symlink to it, from a mounted DMG, or translocated (moved to Downloads and opened without first dragging it to Applications): Connect's Claude Desktop panel shows the entry as set up. Then run the app for real from `/Applications`: the path written earlier no longer resolves, and Connect now reads "points elsewhere" until Set up/Update is run again. Result:
+- [ ] The installed layout matches the confirmed bundle paths: on Windows, `hedgebuddy-app.exe`, `hedgebuddy.exe` and the `wheel\` folder all sit together in the install folder; on macOS, `HedgeBuddy.app/Contents/MacOS/` holds both `hedgebuddy-app` and `hedgebuddy` side by side, and `HedgeBuddy.app/Contents/Resources/wheel/` holds the `.whl`. Result:

@@ -21,7 +21,9 @@ HedgeBuddy is a small setup tool for DITs who automate Hedge's apps (OffShoot, F
 
 ## Use it from Claude (MCP)
 
-Build and install the binary (it lands in `~/.cargo/bin`, which rustup puts on PATH):
+With the desktop app installed, open HedgeBuddy → **Connect**. Claude Desktop shows Set up (or Update, if it already points at something else) behind a preview of the change, with a timestamped backup of the config before anything is written; Claude Code and any other MCP-speaking client each get a ready command, with Copy. There's nothing to type by hand.
+
+Building just the CLI, without the desktop app? Build and install the binary (it lands in `~/.cargo/bin`, which rustup puts on PATH):
 
 ```bash
 cargo install --path crates/cli
