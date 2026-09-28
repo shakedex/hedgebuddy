@@ -197,6 +197,8 @@ export class ClaudeDesktop {
     const expected = this.expected();
     return {
       config_path: this.configPath,
+      // The preview has no MSIX package, so its config is never read from %APPDATA% in its place.
+      seeded_from: null,
       state: computeState(parsed, expected),
       problem: problemOf(parsed),
       current: currentEntry(parsed),
@@ -232,6 +234,7 @@ export class ClaudeDesktop {
     return {
       config_path: this.configPath,
       creates_file: !exists,
+      seeded_from: null,
       backup_path: exists && !unchanged ? this.besideConfig(this.backupName(backupStamp())) : null,
       before: currentEntry(parsed),
       after,

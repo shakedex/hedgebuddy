@@ -330,12 +330,15 @@ pub async fn open_app_docs(
 /// `Contents/MacOS` on macOS), and the wheel for this app's version in the
 /// resource folder's `wheel/` (the install folder on Windows,
 /// `Contents/Resources` on macOS). Each is `None` when its file is not there,
-/// as in a build made without `tauri.bundle.conf.json`. Both paths are plain
-/// (see [`plain_path`]), since Claude Desktop's config and the pip command
-/// line show them to the operator.
+/// as in a build made without `tauri.bundle.conf.json`. The app's own path
+/// is resolved first, so an app started through a link still finds the
+/// command beside the real one (the path as started is used when it can't
+/// be resolved). Both paths are plain (see [`plain_path`]), since Claude
+/// Desktop's config and the pip command line show them to the operator.
 fn bundle(app: &AppHandle) -> Bundle {
     let binary = std::env::current_exe()
         .ok()
+        .map(|exe| std::fs::canonicalize(&exe).unwrap_or(exe))
         .and_then(|exe| {
             let name = format!("{BINARY_NAME}{}", std::env::consts::EXE_SUFFIX);
             exe.parent().map(|dir| dir.join(name))

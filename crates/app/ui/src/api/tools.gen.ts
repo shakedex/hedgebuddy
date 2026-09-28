@@ -769,6 +769,8 @@ export type ClaudeDesktopPlanOutput = {
   creates_file: boolean;
   /** The other MCP servers in the file, by name (kept as they are). */
   other_servers: Array<string>;
+  /** The `%APPDATA%` config the new file starts from, when `config_path` is an MSIX-packaged Claude Desktop's and doesn't exist yet; else null. That file is read, never changed. */
+  seeded_from: string | null;
   /** True when nothing would change (already set up). */
   unchanged: boolean;
 };
@@ -794,6 +796,8 @@ export type ClaudeDesktopStatusOutput = {
   other_servers: Array<string>;
   /** Why the config can't be read (state `invalid`), else null. */
   problem: string | null;
+  /** The `%APPDATA%` config read in its place, when `config_path` is an MSIX-packaged Claude Desktop's and doesn't exist yet; else null. The state, entry and other servers then describe that file. */
+  seeded_from: string | null;
   /** Whether HedgeBuddy is set up in it. */
   state: ClaudeDesktopState;
 };

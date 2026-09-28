@@ -3,8 +3,10 @@
 //! in it, and setting it up. Only `mcpServers.hedgebuddy` ever changes:
 //! every other server and key is kept, and the bytes the change was made
 //! from are saved to a new backup beside the file before each write. A file that can't be read or isn't
-//! valid is never written. The Tauri crate wraps these commands and passes
-//! the [`Bundle`] it found, so no argument from the webview names a path.
+//! valid is never written. An MSIX-packaged Claude Desktop with no config of
+//! its own starts from the `%APPDATA%` one, which is left as it is (see
+//! [`locate`]). The Tauri crate wraps these commands and passes the
+//! [`Bundle`] it found, so no argument from the webview names a path.
 
 use std::fs;
 use std::io::{self, Write};
@@ -71,6 +73,10 @@ pub struct ServerEntry {
 pub struct ClaudeDesktopStatus {
     /// The config file this machine's Claude Desktop reads.
     pub config_path: PathBuf,
+    /// The `%APPDATA%` config read in its place, when `config_path` is an
+    /// MSIX-packaged Claude Desktop's and doesn't exist yet; else null. The
+    /// state, entry and other servers then describe that file.
+    pub seeded_from: Option<PathBuf>,
     /// Whether HedgeBuddy is set up in it.
     pub state: ClaudeDesktopState,
     /// Why the config can't be read (state `invalid`), else null.
@@ -98,6 +104,10 @@ pub struct ClaudeDesktopPlan {
     pub config_path: PathBuf,
     /// True when the file does not exist yet and will be created.
     pub creates_file: bool,
+    /// The `%APPDATA%` config the new file starts from, when `config_path`
+    /// is an MSIX-packaged Claude Desktop's and doesn't exist yet; else
+    /// null. That file is read, never changed.
+    pub seeded_from: Option<PathBuf>,
     /// Where the original is copied first, or null when there is no file
     /// yet or nothing would change.
     pub backup_path: Option<PathBuf>,
@@ -129,19 +139,24 @@ pub fn claude_desktop_status(
     ctx: &Context,
     bundle: &Bundle,
 ) -> Result<ClaudeDesktopStatus, ToolError> {
-    let config_path = config_path(ctx.hedge.host())?;
-    let file = read_config(&config_path);
+    let os = ctx.hedge.host().os();
+    let Located {
+        path,
+        seeded_from,
+        file,
+    } = locate(ctx.hedge.host())?;
     let expected = expected(bundle);
     Ok(ClaudeDesktopStatus {
-        state: file.state(expected.as_ref()),
+        state: file.state(expected.as_ref(), os),
         problem: file.problem(),
         current: file.current(),
         other_servers: file.other_servers(),
         expected,
         binary: bundle.binary.clone(),
-        claude_code_command: claude_code_command(ctx.hedge.host().os(), bundle),
+        claude_code_command: claude_code_command(os, bundle),
         client_json: client_json(bundle),
-        config_path,
+        config_path: path,
+        seeded_from,
     })
 }
 
@@ -151,15 +166,16 @@ pub fn claude_desktop_status(
 pub fn claude_desktop_plan(ctx: &Context, bundle: &Bundle) -> Result<ClaudeDesktopPlan, ToolError> {
     let change = prepare(ctx, bundle)?;
     let unchanged = change.unchanged();
-    let exists = change.file.exists();
+    let exists = change.backup_source().is_some();
     Ok(ClaudeDesktopPlan {
-        creates_file: !exists,
+        creates_file: !exists && !unchanged,
         backup_path: (exists && !unchanged).then(|| backup_path(&change.path, &backup_stamp())),
         before: change.file.current(),
         other_servers: change.file.other_servers(),
         unchanged,
         after: change.after,
         config_path: change.path,
+        seeded_from: change.seeded_from,
     })
 }
 
@@ -169,7 +185,9 @@ pub fn claude_desktop_plan(ctx: &Context, bundle: &Bundle) -> Result<ClaudeDeskt
 /// (never over an existing one), then the merged config is written
 /// atomically, then older HedgeBuddy backups past the newest five are
 /// removed. `now` is the local time as `YYYYMMDD-HHMMSS` ([`backup_stamp`]).
-/// Writes nothing when Claude Desktop is already set up.
+/// Writes nothing when Claude Desktop is already set up. A change that
+/// starts from the `%APPDATA%` config (see [`locate`]) writes the new
+/// package file only: no backup, since the file it read is left as it is.
 ///
 /// The config and its backup are private (0600 on Unix): the config often
 /// holds other servers' tokens in `env`. A config that is a symbolic link is
@@ -195,7 +213,7 @@ pub fn claude_desktop_apply(
     if change.unchanged() {
         return Ok(applied);
     }
-    if let Some(original) = change.file.original() {
+    if let Some(original) = change.backup_source() {
         applied.backup_path = Some(write_backup(&change.path, now, original)?);
     }
     write_config(&change.path, merged(change.file, &change.after))?;
@@ -211,22 +229,64 @@ pub fn backup_stamp() -> String {
     jiff::Zoned::now().strftime("%Y%m%d-%H%M%S").to_string()
 }
 
-/// The config file this machine's Claude Desktop reads: on Windows, the
-/// Microsoft Store package's redirected folder when exactly one `Claude_*`
-/// package is installed, else `%APPDATA%\Claude`; on macOS,
-/// `~/Library/Application Support/Claude`.
-fn config_path(host: &dyn Host) -> Result<PathBuf, ToolError> {
-    let folder = match host.os() {
-        Os::Windows => match msix_folder(host) {
-            Some(folder) => folder,
-            None => expand_path(host, "%APPDATA%")?.join("Claude"),
-        },
-        Os::Macos => expand_path(host, "~")?
-            .join("Library")
-            .join("Application Support")
-            .join("Claude"),
+/// This machine's Claude Desktop config, found and read by [`locate`].
+struct Located {
+    /// The config file Claude Desktop reads, and the one Set up writes.
+    path: PathBuf,
+    /// The `%APPDATA%` config `file` was read from instead, when `path` is an
+    /// MSIX package's and doesn't exist yet.
+    seeded_from: Option<PathBuf>,
+    /// What the config holds.
+    file: ConfigFile,
+}
+
+/// Find and read the config this machine's Claude Desktop reads: on
+/// Windows, `claude_desktop_config.json` in the MSIX package's redirected
+/// folder when exactly one `Claude_*` package is installed, else
+/// in `%APPDATA%\Claude`; on macOS, in `~/Library/Application Support/Claude`.
+///
+/// An MSIX-packaged app opens its own copy of an `AppData` file first and
+/// falls back to the real one, so when the package has no config yet but
+/// `%APPDATA%\Claude` has one, that one is read instead (`seeded_from`):
+/// Set up then merges into its contents and writes the package's file,
+/// keeping the operator's other servers whichever file Claude Desktop reads.
+/// The `%APPDATA%` file is never written, and one that isn't valid is
+/// refused like the package's own.
+fn locate(host: &dyn Host) -> Result<Located, ToolError> {
+    let (path, fallback) = match host.os() {
+        Os::Windows => {
+            let roaming =
+                expand_path(host, "%APPDATA%").map(|dir| dir.join("Claude").join(CONFIG_NAME));
+            match msix_folder(host) {
+                Some(folder) => (folder.join(CONFIG_NAME), roaming.ok()),
+                None => (roaming?, None),
+            }
+        }
+        Os::Macos => (
+            expand_path(host, "~")?
+                .join("Library")
+                .join("Application Support")
+                .join("Claude")
+                .join(CONFIG_NAME),
+            None,
+        ),
     };
-    Ok(folder.join(CONFIG_NAME))
+    let file = read_config(&path);
+    if let (ConfigFile::Missing { .. }, Some(roaming)) = (&file, fallback) {
+        let seed = read_config(&roaming);
+        if !matches!(seed, ConfigFile::Missing { .. }) {
+            return Ok(Located {
+                path,
+                seeded_from: Some(roaming),
+                file: seed,
+            });
+        }
+    }
+    Ok(Located {
+        path,
+        seeded_from: None,
+        file,
+    })
 }
 
 /// The Claude folder inside the one `%LOCALAPPDATA%\Packages\Claude_*`
@@ -288,11 +348,6 @@ fn parse_config(bytes: Vec<u8>) -> ConfigFile {
 }
 
 impl ConfigFile {
-    /// Whether the file exists and can be merged into.
-    fn exists(&self) -> bool {
-        self.original().is_some()
-    }
-
     /// The file's bytes as read, if it exists and can be merged into.
     fn original(&self) -> Option<&[u8]> {
         match self {
@@ -350,9 +405,10 @@ impl ConfigFile {
         }
     }
 
-    /// Whether HedgeBuddy is set up, against the entry Set up writes. With
-    /// no entry to compare (no bundled command), any usable entry counts.
-    fn state(&self, expected: Option<&ServerEntry>) -> ClaudeDesktopState {
+    /// Whether HedgeBuddy is set up on `os`, against the entry Set up
+    /// writes ([`runs`]). With no entry to compare (no bundled command), any
+    /// usable entry counts.
+    fn state(&self, expected: Option<&ServerEntry>, os: Os) -> ClaudeDesktopState {
         use ClaudeDesktopState::*;
         match self {
             ConfigFile::Invalid(_) => Invalid,
@@ -362,12 +418,23 @@ impl ConfigFile {
             ConfigFile::Missing { .. } => NotSetUp,
             ConfigFile::Object { .. } if !self.has_entry() => NotSetUp,
             ConfigFile::Object { .. } => match (self.current(), expected) {
-                (Some(current), Some(expected)) if current == *expected => SetUp,
+                (Some(current), Some(expected)) if runs(os, &current, expected) => SetUp,
                 (Some(_), None) => SetUp,
                 _ => Outdated,
             },
         }
     }
+}
+
+/// Whether `current` runs what `expected` does on `os`: the same arguments,
+/// and the same command, ignoring letter case on Windows, where paths are
+/// case-insensitive.
+fn runs(os: Os, current: &ServerEntry, expected: &ServerEntry) -> bool {
+    current.args == expected.args
+        && match os {
+            Os::Windows => current.command.to_lowercase() == expected.command.to_lowercase(),
+            Os::Macos => current.command == expected.command,
+        }
 }
 
 /// The entry Set up writes, or `None` without a bundled command.
@@ -414,16 +481,30 @@ fn client_json(bundle: &Bundle) -> String {
 struct Change {
     /// The config file.
     path: PathBuf,
+    /// The `%APPDATA%` config `file` was read from instead of `path`, if any.
+    seeded_from: Option<PathBuf>,
     /// What it holds now (never [`ConfigFile::Invalid`]).
     file: ConfigFile,
     /// The entry to write.
     after: ServerEntry,
+    /// The machine's platform.
+    os: Os,
 }
 
 impl Change {
     /// Whether the file already has the entry.
     fn unchanged(&self) -> bool {
-        self.file.state(Some(&self.after)) == ClaudeDesktopState::SetUp
+        self.file.state(Some(&self.after), self.os) == ClaudeDesktopState::SetUp
+    }
+
+    /// The bytes to back up before writing `path`: its own, as read. `None`
+    /// when there is no file there yet, including when the change starts
+    /// from the `%APPDATA%` config, which is never written.
+    fn backup_source(&self) -> Option<&[u8]> {
+        match self.seeded_from {
+            Some(_) => None,
+            None => self.file.original(),
+        }
     }
 }
 
@@ -431,12 +512,23 @@ impl Change {
 /// command, or the config can't be read or isn't valid.
 fn prepare(ctx: &Context, bundle: &Bundle) -> Result<Change, ToolError> {
     let after = expected(bundle).ok_or_else(|| ToolError::new(NO_BINARY))?;
-    let path = config_path(ctx.hedge.host())?;
-    match read_config(&path) {
+    let host = ctx.hedge.host();
+    let Located {
+        path,
+        seeded_from,
+        file,
+    } = locate(host)?;
+    match file {
         ConfigFile::Invalid(problem) => Err(ToolError::new(format!(
             "{problem}. HedgeBuddy leaves it as it is: fix it or move it away, then try again"
         ))),
-        file => Ok(Change { path, file, after }),
+        file => Ok(Change {
+            path,
+            seeded_from,
+            file,
+            after,
+            os: host.os(),
+        }),
     }
 }
 
@@ -626,6 +718,27 @@ mod tests {
             .join("claude_desktop_config.json")
     }
 
+    /// The Claude folder of the one MSIX package on the machine
+    /// (created), whose config is `claude_desktop_config.json` in it.
+    fn msix_claude(machine: &Path) -> PathBuf {
+        let claude = machine
+            .join("Local")
+            .join("Packages")
+            .join("Claude_pzs8sxrjxfjjc")
+            .join("LocalCache")
+            .join("Roaming")
+            .join("Claude");
+        fs::create_dir_all(&claude).unwrap();
+        claude
+    }
+
+    fn plan(ctx: &Context, bundle: &Bundle) -> ClaudeDesktopPlan {
+        checked(
+            "claude_desktop_plan",
+            claude_desktop_plan(ctx, bundle).unwrap(),
+        )
+    }
+
     fn write(path: &Path, text: &str) {
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(path, text).unwrap();
@@ -678,17 +791,206 @@ mod tests {
     #[test]
     fn windows_msix_package_path_wins() {
         let (m, _s, ctx) = windows();
+        let claude = msix_claude(m.path());
         let packages = m.path().join("Local").join("Packages");
-        let claude = packages
-            .join("Claude_pzs8sxrjxfjjc")
-            .join("LocalCache")
-            .join("Roaming")
-            .join("Claude");
-        fs::create_dir_all(&claude).unwrap();
         fs::create_dir_all(packages.join("Microsoft.WindowsNotepad_8wekyb3d8bbwe")).unwrap();
+        fs::create_dir_all(appdata_config(m.path()).parent().unwrap()).unwrap();
         let st = status(&ctx, &bundled());
         assert_eq!(st.config_path, claude.join("claude_desktop_config.json"));
+        assert_eq!(st.seeded_from, None);
         assert_eq!(st.state, ClaudeDesktopState::NotSetUp);
+
+        // The package's own config wins over an %APPDATA% one.
+        write(
+            &claude.join("claude_desktop_config.json"),
+            r#"{"mcpServers":{"mine":{"command":"m"}}}"#,
+        );
+        write(
+            &appdata_config(m.path()),
+            r#"{"mcpServers":{"other":{"command":"x"}}}"#,
+        );
+        let st = status(&ctx, &bundled());
+        assert_eq!(st.seeded_from, None);
+        assert_eq!(st.other_servers, ["mine"]);
+    }
+
+    #[test]
+    fn a_store_claude_without_a_config_reads_the_appdata_one() {
+        let (m, _s, ctx) = windows();
+        let package = msix_claude(m.path()).join("claude_desktop_config.json");
+        let roaming = appdata_config(m.path());
+        write(
+            &roaming,
+            r#"{"mcpServers":{"other":{"command":"x"},"hedgebuddy":{"command":"hedgebuddy","args":["mcp"]}}}"#,
+        );
+        let st = status(&ctx, &bundled());
+        assert_eq!(st.config_path, package);
+        assert_eq!(st.seeded_from.as_deref(), Some(roaming.as_path()));
+        assert_eq!(st.state, ClaudeDesktopState::Outdated);
+        assert_eq!(st.problem, None);
+        assert_eq!(st.other_servers, ["other"]);
+        assert_eq!(
+            st.current,
+            Some(ServerEntry {
+                command: "hedgebuddy".into(),
+                args: vec!["mcp".into()]
+            })
+        );
+
+        let plan = plan(&ctx, &bundled());
+        assert_eq!(plan.config_path, package);
+        assert_eq!(plan.seeded_from.as_deref(), Some(roaming.as_path()));
+        assert!(plan.creates_file && !plan.unchanged);
+        assert_eq!(
+            plan.backup_path, None,
+            "the %APPDATA% file is never changed"
+        );
+        assert_eq!(plan.before, st.current);
+        assert_eq!(plan.after, expected_entry());
+        assert_eq!(plan.other_servers, ["other"]);
+        assert!(!package.exists(), "the plan writes nothing");
+    }
+
+    #[test]
+    fn a_store_claude_is_set_up_from_the_appdata_config_which_stays_as_it_is() {
+        let (m, _s, ctx) = windows();
+        let claude = msix_claude(m.path());
+        let package = claude.join("claude_desktop_config.json");
+        let roaming = appdata_config(m.path());
+        let original = r#"{
+  "globalShortcut": "Ctrl+Space",
+  "mcpServers": {"other": {"command": "x", "args": ["--y"], "env": {"K": "v"}}}
+}"#;
+        write(&roaming, original);
+
+        let applied = apply(&ctx, &bundled(), NOW);
+        assert_eq!(applied.config_path, package);
+        assert_eq!(applied.backup_path, None);
+        assert!(applied.removed_backups.is_empty());
+        let now = read_json(&package);
+        assert_eq!(now["globalShortcut"], "Ctrl+Space");
+        assert_eq!(
+            now["mcpServers"]["other"],
+            json!({"command": "x", "args": ["--y"], "env": {"K": "v"}})
+        );
+        assert_eq!(
+            now["mcpServers"]["hedgebuddy"],
+            serde_json::to_value(expected_entry()).unwrap()
+        );
+        assert_eq!(fs::read_to_string(&roaming).unwrap(), original);
+        assert_eq!(names_in(&claude), ["claude_desktop_config.json"]);
+        assert_eq!(
+            names_in(roaming.parent().unwrap()),
+            ["claude_desktop_config.json"]
+        );
+
+        // The package's config exists now, so it is read from here on.
+        let st = status(&ctx, &bundled());
+        assert_eq!(st.seeded_from, None);
+        assert_eq!(st.state, ClaudeDesktopState::SetUp);
+        assert_eq!(st.other_servers, ["other"]);
+    }
+
+    #[test]
+    fn a_store_claude_whose_appdata_config_is_set_up_needs_nothing() {
+        let (m, _s, ctx) = windows();
+        let claude = msix_claude(m.path());
+        let roaming = appdata_config(m.path());
+        let text = json!({"mcpServers": {"hedgebuddy": expected_entry()}}).to_string();
+        write(&roaming, &text);
+        let st = status(&ctx, &bundled());
+        assert_eq!(st.state, ClaudeDesktopState::SetUp);
+        assert_eq!(st.seeded_from.as_deref(), Some(roaming.as_path()));
+        let plan = plan(&ctx, &bundled());
+        assert!(plan.unchanged && !plan.creates_file);
+        assert_eq!(plan.backup_path, None);
+        let applied = apply(&ctx, &bundled(), NOW);
+        assert_eq!(applied.backup_path, None);
+        assert!(names_in(&claude).is_empty(), "nothing is written");
+        assert_eq!(fs::read_to_string(&roaming).unwrap(), text);
+    }
+
+    #[test]
+    fn a_store_claude_with_an_invalid_appdata_config_is_refused() {
+        let (m, _s, ctx) = windows();
+        let claude = msix_claude(m.path());
+        let roaming = appdata_config(m.path());
+        write(&roaming, "not json {");
+        let st = status(&ctx, &bundled());
+        assert_eq!(st.config_path, claude.join("claude_desktop_config.json"));
+        assert_eq!(st.seeded_from.as_deref(), Some(roaming.as_path()));
+        assert_eq!(st.state, ClaudeDesktopState::Invalid);
+        let problem = st.problem.expect("a problem");
+        assert!(problem.contains("isn't valid"), "{problem}");
+        let refusal = format!(
+            "{problem}. HedgeBuddy leaves it as it is: fix it or move it away, then try again"
+        );
+        assert_eq!(
+            claude_desktop_plan(&ctx, &bundled()).unwrap_err().0,
+            refusal
+        );
+        assert_eq!(
+            claude_desktop_apply(&ctx, &bundled(), NOW).unwrap_err().0,
+            refusal
+        );
+        assert!(names_in(&claude).is_empty());
+        assert_eq!(fs::read_to_string(&roaming).unwrap(), "not json {");
+        assert_eq!(
+            names_in(roaming.parent().unwrap()),
+            ["claude_desktop_config.json"]
+        );
+    }
+
+    #[test]
+    fn a_command_differing_only_in_case_is_set_up_on_windows_only() {
+        let binary = r"C:\Program Files\HedgeBuddy\hedgebuddy.exe";
+        let bundle = Bundle {
+            binary: Some(PathBuf::from(binary)),
+            wheel: None,
+        };
+        let config = json!({"mcpServers": {"hedgebuddy": {
+            "command": r"c:\program files\hedgebuddy\HEDGEBUDDY.EXE",
+            "args": ["mcp"],
+        }}})
+        .to_string();
+
+        let (m, _s, ctx) = windows();
+        let path = appdata_config(m.path());
+        write(&path, &config);
+        assert_eq!(status(&ctx, &bundle).state, ClaudeDesktopState::SetUp);
+        assert!(plan(&ctx, &bundle).unchanged);
+        assert_eq!(apply(&ctx, &bundle, NOW).backup_path, None);
+        assert_eq!(fs::read_to_string(&path).unwrap(), config);
+
+        let mcp_args = json!({"mcpServers": {"hedgebuddy": {
+            "command": r"c:\program files\hedgebuddy\HEDGEBUDDY.EXE",
+            "args": ["MCP"],
+        }}});
+        write(&path, &mcp_args.to_string());
+        assert_eq!(status(&ctx, &bundle).state, ClaudeDesktopState::Outdated);
+
+        let machine = tempfile::tempdir().unwrap();
+        let (_s, _f, ctx) = test_ctx(FakeHost::new(Os::Macos).with_home(machine.path()));
+        let bundle = Bundle {
+            binary: Some(PathBuf::from(
+                "/Applications/HedgeBuddy.app/Contents/MacOS/hedgebuddy",
+            )),
+            wheel: None,
+        };
+        write(
+            &machine
+                .path()
+                .join("Library")
+                .join("Application Support")
+                .join("Claude")
+                .join("claude_desktop_config.json"),
+            &json!({"mcpServers": {"hedgebuddy": {
+                "command": "/applications/hedgebuddy.app/Contents/MacOS/hedgebuddy",
+                "args": ["mcp"],
+            }}})
+            .to_string(),
+        );
+        assert_eq!(status(&ctx, &bundle).state, ClaudeDesktopState::Outdated);
     }
 
     #[test]
@@ -1122,6 +1424,31 @@ mod tests {
         let mode = |p: &Path| fs::metadata(p).unwrap().permissions().mode() & 0o777;
         assert_eq!(mode(&path), 0o600);
         assert_eq!(mode(&applied.backup_path.unwrap()), 0o600);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_symlinked_config_becomes_a_plain_file_and_its_target_is_kept() {
+        let (m, _s, ctx) = windows();
+        let path = appdata_config(m.path());
+        let target = m.path().join("dotfiles").join("claude.json");
+        let original = r#"{"mcpServers":{"other":{"command":"x"}}}"#;
+        write(&target, original);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::os::unix::fs::symlink(&target, &path).unwrap();
+
+        let applied = apply(&ctx, &bundled(), NOW);
+        assert!(fs::symlink_metadata(&path).unwrap().file_type().is_file());
+        let now = read_json(&path);
+        assert_eq!(now["mcpServers"]["other"], json!({"command": "x"}));
+        assert_eq!(
+            now["mcpServers"]["hedgebuddy"],
+            serde_json::to_value(expected_entry()).unwrap()
+        );
+        assert_eq!(fs::read_to_string(&target).unwrap(), original);
+        let backup = applied.backup_path.expect("a backup");
+        assert!(fs::symlink_metadata(&backup).unwrap().file_type().is_file());
+        assert_eq!(fs::read_to_string(&backup).unwrap(), original);
     }
 
     #[test]

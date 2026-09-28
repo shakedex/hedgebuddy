@@ -93,9 +93,9 @@ jobs:
         run: bun install --frozen-lockfile
       - name: Place the bundled command and wheel
         run: python scripts/prepare_bundle.py
-      # Pinned to 2.11: check_bundle.py matches this CLI's NSIS script wording.
+      # Pinned to one 2.11 release: check_bundle.py matches this CLI's NSIS script wording.
       - name: Build the bundle (unsigned)
         working-directory: crates/app
-        run: bunx @tauri-apps/cli@~2.11 build --config tauri.bundle.conf.json --bundles ${{ matrix.os == 'windows-latest' && 'nsis' || 'app' }}
+        run: bunx @tauri-apps/cli@2.11.5 build --config tauri.bundle.conf.json --bundles ${{ matrix.os == 'windows-latest' && 'nsis' || 'app' }}
       - name: Check the bundle layout
         run: python scripts/check_bundle.py target

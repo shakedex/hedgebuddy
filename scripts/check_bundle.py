@@ -12,23 +12,28 @@ Run after `python scripts/prepare_bundle.py` and, in crates/app,
 
 Layout confirmed by real builds (V is the VERSION file):
 
-Windows (tauri-cli 2.11, NSIS; CI pins @tauri-apps/cli@~2.11, since the
-installer-script checks below match that CLI's wording):
+Windows (tauri-cli 2.11, NSIS; CI pins @tauri-apps/cli to one 2.11 release,
+since the installer-script checks below match that CLI's wording):
     target/release/hedgebuddy-app.exe                 the app
-    target/release/hedgebuddy.exe                     the sidecar, copied beside it by the build
+    target/release/hedgebuddy.exe                     cargo's own build of the command, beside
+        the app; always there after prepare_bundle.py, so it says nothing about the installer
+    crates/app/binaries/hedgebuddy-<host triple>.exe  the sidecar the installer packs, placed by
+        prepare_bundle.py; its --version is the one checked
     target/release/wheel/hedgebuddy-V-py3-none-any.whl  the resource, copied by the build
     target/release/bundle/nsis/HedgeBuddy_V_<arch>-setup.exe  the installer
     target/release/nsis/<arch>/installer.nsi          the script it was made from, which
         installs, all into $INSTDIR (Tauri's resource folder on Windows):
-        hedgebuddy-app.exe, hedgebuddy.exe, wheel\\hedgebuddy-V-py3-none-any.whl
+        hedgebuddy-app.exe, hedgebuddy.exe (from crates/app/binaries/hedgebuddy-<host triple>.exe)
+        and wheel\\hedgebuddy-V-py3-none-any.whl
 
 macOS (app bundle):
     target/release/bundle/macos/HedgeBuddy.app/Contents/MacOS/hedgebuddy-app  the app
     target/release/bundle/macos/HedgeBuddy.app/Contents/MacOS/hedgebuddy      the sidecar
     target/release/bundle/macos/HedgeBuddy.app/Contents/Resources/wheel/hedgebuddy-V-py3-none-any.whl
 
-Each check also runs the placed command's `--version` and reads the wheel's
-metadata, and both must name VERSION. Stdlib only, Python 3.9+.
+Each check also runs the packed command's `--version` and reads the wheel's
+metadata, and both must name VERSION. Stdlib only (plus `rustc -vV` on Windows,
+for the host triple in the sidecar's name), Python 3.9+.
 """
 
 import argparse
@@ -45,7 +50,7 @@ DESCRIPTION = (
     "Check that an app bundle ships the hedgebuddy command and the wheel "
     "where the app looks for them."
 )
-# How long the placed command's --version may take, in seconds.
+# How long the packed command's --version, or rustc -vV, may take, in seconds.
 VERSION_TIMEOUT = 60
 APP_NAME = "hedgebuddy-app"
 PRODUCT = "HedgeBuddy"
@@ -117,12 +122,33 @@ def wheel_name(version: str) -> str:
     return f"hedgebuddy-{version}-py3-none-any.whl"
 
 
+def host_triple() -> str:
+    """The Rust host triple, which names the sidecar prepare_bundle.py placed."""
+    try:
+        out = subprocess.run(
+            ["rustc", "-vV"], capture_output=True, text=True, timeout=VERSION_TIMEOUT
+        )
+    except OSError as e:
+        fail(f"'rustc -vV' could not run: {e}")
+    except subprocess.TimeoutExpired:
+        fail(f"'rustc -vV' took longer than {VERSION_TIMEOUT} seconds")
+    if out.returncode != 0:
+        fail(f"'rustc -vV' failed (exit {out.returncode}): {out.stderr.strip()}")
+    for line in out.stdout.splitlines():
+        if line.startswith("host:"):
+            return line.split(":", 1)[1].strip()
+    fail("'rustc -vV' printed no 'host:' line")
+
+
 def check_windows(release: Path, version: str, c: Checks) -> None:
     app = release / f"{APP_NAME}.exe"
-    sidecar = release / "hedgebuddy.exe"
+    built = release / "hedgebuddy.exe"
+    sidecar_name = f"hedgebuddy-{host_triple()}.exe"
+    sidecar = ROOT / "crates" / "app" / "binaries" / sidecar_name
     wheel = release / "wheel" / wheel_name(version)
     c.file(app, "app")
-    if c.file(sidecar, "sidecar beside the app"):
+    c.file(built, "cargo's hedgebuddy.exe beside the built app (not the installer's copy)")
+    if c.file(sidecar, "sidecar the installer packs"):
         c.command_version(sidecar, version)
     if c.file(wheel, "wheel resource"):
         c.wheel_version(wheel, version)
@@ -143,8 +169,8 @@ def check_windows(release: Path, version: str, c: Checks) -> None:
     c.contains(nsi, rf'^!define MAINBINARYNAME "{re.escape(APP_NAME)}"$', f"installs {APP_NAME}.exe")
     c.contains(
         nsi,
-        r'^\s*File /a "/oname=hedgebuddy\.exe" "[^"]*[\\/]binaries[\\/]hedgebuddy-[^"\\/]+\.exe"$',
-        "installs the sidecar as $INSTDIR\\hedgebuddy.exe",
+        rf'^\s*File /a "/oname=hedgebuddy\.exe" "[^"]*[\\/]binaries[\\/]{re.escape(sidecar_name)}"$',
+        f"installs {sidecar_name} as $INSTDIR\\hedgebuddy.exe",
     )
     name = re.escape(wheel_name(version))
     c.contains(
