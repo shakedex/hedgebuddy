@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { UseQueryResult } from "@tanstack/react-query";
-import { CircleCheck, CircleX, FileCode, FolderOpen, Package, RefreshCw, SquarePen, TriangleAlert, type LucideIcon } from "lucide-react";
+import { CircleCheck, CircleX, FileCode, FolderOpen, Package, SquarePen, TriangleAlert, type LucideIcon } from "lucide-react";
 import { toast } from "sonner";
 import { Link, useLocation } from "wouter";
 import { callApp, callTool } from "@/api/bridge";
@@ -16,6 +16,7 @@ import type {
   TargetAttachment,
 } from "@/api/tools.gen";
 import { ChangePreviewDialog, renderWords } from "@/components/app/change-preview-dialog";
+import { CheckAgainButton } from "@/components/app/check-again-button";
 import { EmptyState } from "@/components/app/empty-state";
 import { ErrorPanel } from "@/components/app/error-panel";
 import { Mono } from "@/components/app/mono";
@@ -214,16 +215,12 @@ function CheckSection({ name, profile }: { name: string; profile: string }) {
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center justify-between gap-2">
         <span className="micro-label">Check</span>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="text-muted-foreground hover:text-foreground-strong"
-          disabled={check.isFetching}
-          onClick={() => void check.refetch()}
-        >
-          <RefreshCw aria-hidden strokeWidth={1.75} className={cn(check.isFetching && "animate-spin")} />
-          {check.isFetching ? "Checking…" : "Check again"}
-        </Button>
+        <CheckAgainButton
+          pending={check.isFetching}
+          onClick={() => {
+            if (!check.isFetching) void check.refetch();
+          }}
+        />
       </div>
       {data.python === null ? (
         <CheckRow icon={TriangleAlert} tone="warning">
