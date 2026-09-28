@@ -514,7 +514,7 @@ const FOOLCAT_KEY = "HKCU\\Software\\FoolCat";
 const OWN_SCRIPT = "C:\\Tools\\notify_dit.py";
 
 /** Scripts an old tool left attached and then deleted. */
-const STALE_DIR = "C:\\Users\\you\\Quills\\service";
+const STALE_DIR = "C:\\Users\\operator\\Quills\\service";
 
 function scriptPath(os: Os, script: string): string {
   const sep = os === "windows" ? "\\" : "/";
@@ -697,4 +697,4 @@ export function scenarioSeed(scenario: Scenario): ScenarioSeed {
 }
 
 /** Where `pick_import_file` points: an export of `problems`' `commercial-one-day`, without secret values. */
-export const IMPORT_FILE = "C:/Users/you/Documents/commercial-one-day.hedgebuddy.json";
+export const IMPORT_FILE = "C:/Users/operator/Documents/commercial-one-day.hedgebuddy.json";

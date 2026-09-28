@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { useSettingsOverview } from "@/api/queries";
 import { ErrorPanel } from "@/components/app/error-panel";
 import { DataFolderPanel } from "./data-folder-panel";
@@ -14,15 +15,24 @@ import { PythonPanel } from "./python-panel";
  */
 export function SettingsScreen() {
   const overview = useSettingsOverview();
-  const failed = overview.isError && !overview.isSuccess;
+
+  // Home's own `lastError` pattern (final review, Important) — see `ConnectScreen`'s copy of this comment for
+  // why `isPending`/`isError` alone can't be trusted to tell Retry's refetch apart from the first load.
+  const lastError = useRef<unknown>(null);
+  if (overview.isError) lastError.current = overview.error;
+  else if (overview.isSuccess) lastError.current = null;
+  const failed = lastError.current !== null && !overview.isSuccess;
 
   return (
     <div className="@container h-full overflow-y-auto">
       <div className="flex max-w-[720px] flex-col gap-3 p-4 @max-[640px]:p-3">
         {failed ? (
-          <section className="surface flex flex-col gap-3 p-3">
-            <ErrorPanel error={overview.error} onRetry={() => void overview.refetch()} retrying={overview.isFetching} />
-          </section>
+          <ErrorPanel
+            error={overview.error ?? lastError.current}
+            onRetry={() => void overview.refetch()}
+            retrying={overview.isFetching}
+            title="Couldn't load Settings"
+          />
         ) : (
           <>
             <PythonPanel />

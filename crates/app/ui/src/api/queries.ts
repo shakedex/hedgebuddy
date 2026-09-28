@@ -112,7 +112,11 @@ export function useRecheckPython() {
     mutationFn: () => callApp("settings_overview", { recheck: true }),
     onSuccess: (data) => {
       queryClient.setQueryData(queryKey.app("settings_overview", {}), data);
-      void queryClient.invalidateQueries({ queryKey: queryKey.app("home_summary", {}) });
+      // Also `check_script`, not only `home_summary` (final review, Important): Scripts' own CHECK section
+      // reads `check_script`, whose 30 s `staleTime` would otherwise still show a script's now-fixed package
+      // problem for up to half a minute after Python is found or the package is installed some other way.
+      const names = new Set<string>(["home_summary", "check_script"]);
+      void queryClient.invalidateQueries({ predicate: (q) => names.has(String(q.queryKey[1])) });
     },
   });
 }
@@ -132,7 +136,9 @@ export function usePipInstall() {
   return useMutation({
     mutationFn: () => callApp("pip_install", {}),
     onSettled: () => {
-      const names = new Set<string>(["settings_overview", "home_summary"]);
+      // Also `check_script` (final review, Important): see `useRecheckPython`'s own comment — Install can fix
+      // the same package problem Scripts' CHECK shows, and its 30 s `staleTime` must not outlive the install.
+      const names = new Set<string>(["settings_overview", "home_summary", "check_script"]);
       void queryClient.invalidateQueries({ predicate: (q) => names.has(String(q.queryKey[1])) });
     },
   });

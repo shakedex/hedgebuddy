@@ -64,7 +64,7 @@ export function CreateProfileDialog({ open, onOpenChange, activate, onCloseFocus
   // exactly like switching profiles does. Declining leaves the dialog open with nothing done.
   const submit = () => {
     if (inFlightRef.current || !openRef.current) return;
-    if (activate) void confirmLeave().then((ok) => { if (ok) go(); });
+    if (activate) void confirmLeave("profile").then((ok) => { if (ok) go(); });
     else go();
   };
 

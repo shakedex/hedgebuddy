@@ -64,8 +64,10 @@ function rowFor(item: AttentionItem, activeProfile: string): { status: StatusKey
         label: "Hedge apps",
       };
     case "package_problem":
+      // Matches Settings (`pythonNotFound`, a triangle-alert): Python itself missing is a different, more
+      // fundamental problem than the package being outdated (`package`, a package icon).
       return {
-        status: "package",
+        status: item.python_found ? "package" : "pythonNotFound",
         text: !item.python_found
           ? "Python 3 is not installed"
           : item.installed === null

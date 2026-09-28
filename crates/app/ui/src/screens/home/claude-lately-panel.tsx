@@ -12,7 +12,17 @@ import { outcomeKey } from "@/lib/status";
 /** Spec §6.1 "Claude, lately": Claude's last 3 tool calls. A call that just succeeded needs no icon. */
 export function ClaudeLatelyPanel({ records, className }: { records: ActivityRecord[]; className?: string }) {
   return (
-    <Panel title="Claude, lately" className={className}>
+    <Panel
+      title="Claude, lately"
+      action={
+        // Same idiom as Recent runs' "All runs": a relative + inset `::after` gives it a >=28 px hit target
+        // without growing its text.
+        <Link href="/connect" className="relative text-xs text-link after:absolute after:-inset-x-1 after:-inset-y-1.5 hover:underline">
+          All activity
+        </Link>
+      }
+      className={className}
+    >
       {records.length === 0 ? (
         <EmptyState
           icon={Plug}

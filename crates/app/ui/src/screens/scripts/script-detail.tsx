@@ -23,7 +23,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { describeActions, describeState } from "@/lib/actions";
-import { appName } from "@/lib/format";
+import { appName, splitProblem } from "@/lib/format";
 import { focusMainHeading } from "@/lib/focus";
 import { STATUS, TONE_TEXT, type StatusKey, type Tone } from "@/lib/status";
 import { clearBusyToast, showError } from "@/lib/toast";
@@ -245,7 +245,13 @@ function CheckSection({ name, profile }: { name: string; profile: string }) {
           )}
           {data.package_problem ? (
             <CheckRow icon={Package} tone="warning">
-              {data.package_problem}
+              {/* Final review ruling: point to Settings' Install instead of the PyPI `pip install
+                  hedgebuddy==X` command `package_problem`'s own text would otherwise show — PyPI isn't
+                  published yet, so that command doesn't actually work. */}
+              {splitProblem(data.package_problem).sentence}.{" "}
+              <Link href="/settings" className="text-link hover:underline">
+                Install in Settings
+              </Link>
             </CheckRow>
           ) : installedVersion ? (
             <CheckRow icon={CircleCheck} tone="neutral">

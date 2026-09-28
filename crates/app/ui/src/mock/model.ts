@@ -6,7 +6,7 @@
  */
 import type { ActivityRecord, AppCommandTypes, Os, PythonStatus, Run, ToolTypes } from "@/api/tools.gen";
 import { catalogApp, catalogEvent } from "./catalog";
-import { ClaudeDesktop, HEDGEBUDDY_BINARY, type ClaudeDesktopSeed } from "./claudeDesktop";
+import { ClaudeDesktop, HEDGEBUDDY_BINARY, MSIX_CLAUDE_DESKTOP_PATH, type ClaudeDesktopSeed } from "./claudeDesktop";
 import { commercialOneDay, IMPORT_FILE, REQUIRED_VERSION, scenarioSeed, type PythonSeed, type Scenario } from "./fixtures";
 import { APPLY_NOTE, DATA_DIR, Hedge } from "./hedge";
 import { importsHedgebuddy, parseManifest, parseVarType, snakeCase, ToolError, validateEditorCommand, validateScriptName } from "./rules";
@@ -159,9 +159,9 @@ export class Model {
 
   constructor(scenario: Scenario) {
     const seed = scenarioSeed(scenario);
-    // `?claude=invalid`, `?nobinary=1`, `?nowheel=1`, `?pipfail=1`, `?prefserror=1` and `?catalogerror=1`
-    // each force an otherwise-unreachable state, in any scenario, so Connect and Settings can be checked
-    // visually against every state.
+    // `?claude=invalid`, `?claude=seeded`, `?nobinary=1`, `?nowheel=1`, `?pipfail=1`, `?prefserror=1` and
+    // `?catalogerror=1` each force an otherwise-unreachable state, in any scenario, so Connect and Settings
+    // can be checked visually against every state.
     const params = new URLSearchParams(window.location.search);
     this.scenario = scenario;
     this.os = seed.os;
@@ -173,11 +173,14 @@ export class Model {
     this.since = seed.since;
     this.preferences = seed.preferences;
     this.binary = params.get("nobinary") === "1" ? null : HEDGEBUDDY_BINARY[seed.os];
+    const claudeParam = params.get("claude");
     const claudeDesktopSeed: ClaudeDesktopSeed =
-      params.get("claude") === "invalid"
-        ? { ...seed.claudeDesktop, forceInvalidProblem: "expected value at line 1 column 1" }
-        : seed.claudeDesktop;
-    this.claudeDesktop = new ClaudeDesktop(seed.os, this.binary, claudeDesktopSeed);
+      claudeParam === "invalid" ? { ...seed.claudeDesktop, forceInvalidProblem: "expected value at line 1 column 1" } : seed.claudeDesktop;
+    // `?claude=seeded`: an MSIX-packaged Claude Desktop with no config of its own yet, reading the scenario's
+    // own config from `%APPDATA%` in its place (item 11, final review) — Windows only, since MSIX packaging
+    // is a Windows-only concept (`claude_desktop.rs`'s own `msix_folder`).
+    const msixPath = claudeParam === "seeded" && seed.os === "windows" ? MSIX_CLAUDE_DESKTOP_PATH : null;
+    this.claudeDesktop = new ClaudeDesktop(seed.os, this.binary, claudeDesktopSeed, msixPath);
     this.wheel = params.get("nowheel") === "1" ? null : seed.wheel;
     this.pipFail = params.get("pipfail") === "1";
     this.prefsBroken = params.get("prefserror") === "1";
@@ -598,7 +601,7 @@ export class Model {
   }
 
   pickExportPath(args: AppIn<"pick_export_path">): AppOut<"pick_export_path"> {
-    return { path: `C:/Users/you/Documents/${args.default_name}` };
+    return { path: `C:/Users/operator/Documents/${args.default_name}` };
   }
 
   pickImportFile(): AppOut<"pick_import_file"> {

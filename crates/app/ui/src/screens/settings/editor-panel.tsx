@@ -72,7 +72,9 @@ function EditorForm({ data }: { data: SettingsOverviewOutput }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data.editor_command, data.preferences_error]);
 
-  useUnsaved("settings-editor", dirty && !broken);
+  // Route-scoped (Task 7 ruling): the editor command is global, not per-profile, so a profile switch must not
+  // ask about it — only navigating away from Settings does.
+  useUnsaved("settings-editor", dirty && !broken, { scope: "route" });
 
   // Read at call time, not closed over: the toast's own "Try again" (`retrySave`, below) has to see whatever
   // is on screen *now*, not what the fields held when the failed save started.
@@ -159,14 +161,17 @@ function EditorForm({ data }: { data: SettingsOverviewOutput }) {
           <p id="editor-command-broken" className="flex items-start gap-1.5 text-xs text-warning">
             <TriangleAlert aria-hidden className="mt-0.5 size-3.5 shrink-0" strokeWidth={1.75} />
             <span className="min-w-0 flex-1 break-words">
-              {data.preferences_error}. HedgeBuddy uses {editorDefault} until preferences.json can be read.
+              {data.preferences_error}. HedgeBuddy uses {editorDefault} until <Mono className="text-warning">preferences.json</Mono> can be
+              read.
             </span>
           </p>
         )}
         <p className="text-xs text-muted-foreground">
           Leave empty to open scripts in {editorDefault}. Use <Mono className="text-muted-foreground">{"{file}"}</Mono> where the script
-          path goes; quote words with spaces (<Mono className="text-muted-foreground">{HELP_PATH_EXAMPLE[data.os]}</Mono>), and use single
-          quotes for a word that ends in a backslash.
+          path goes; quote words with spaces (<Mono className="text-muted-foreground">{HELP_PATH_EXAMPLE[data.os]}</Mono>)
+          {/* Windows only (final review, trivia): a macOS path never ends in a backslash, so the advice made no
+              sense there. */}
+          {data.os === "windows" && ", and use single quotes for a word that ends in a backslash"}.
         </p>
       </div>
 

@@ -13,6 +13,16 @@ export function basename(path: string): string {
   return idx === -1 ? path : path.slice(idx + 1);
 }
 
+/** A package problem's own `"; run: <command>"` suffix (`hedgebuddy-core`'s `package_problem`), split off so
+ *  a caller can show the sentence and the command separately — Settings' Python panel puts the command in
+ *  its own `CommandWell`; Scripts' CHECK section drops it entirely, in favour of a link to Settings (final
+ *  review ruling: PyPI isn't published, so the `pip install hedgebuddy==X` command doesn't actually work). */
+export function splitProblem(problem: string): { sentence: string; command: string | null } {
+  const at = problem.indexOf("; run: ");
+  if (at === -1) return { sentence: problem, command: null };
+  return { sentence: problem.slice(0, at), command: problem.slice(at + "; run: ".length) };
+}
+
 /** A message's own first line — a multi-line error (a TOML parse error's own source excerpt, say) renders as
  *  one plain sentence instead of garbling across lines; the full text still belongs in a `title` so it isn't
  *  lost, just not the default reading. */

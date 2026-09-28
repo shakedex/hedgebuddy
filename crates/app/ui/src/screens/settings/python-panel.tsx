@@ -3,29 +3,20 @@ import { CircleCheck, CircleX } from "lucide-react";
 import { queryClient, queryKey, usePipInstall, useRecheckPython, useSettingsOverview } from "@/api/queries";
 import type { BundleInfo, Os, PipInstallOutput, PythonStatus } from "@/api/tools.gen";
 import { wrapPath } from "@/components/app/change-preview-dialog";
+import { CheckAgainButton } from "@/components/app/check-again-button";
 import { CommandWell } from "@/components/app/command-well";
 import { Mono } from "@/components/app/mono";
 import { Readout } from "@/components/app/readout";
 import { StatusIcon } from "@/components/app/status-icon";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { basename } from "@/lib/format";
+import { basename, splitProblem } from "@/lib/format";
 import type { StatusKey } from "@/lib/status";
 import { showError } from "@/lib/toast";
 
 /** How the Hedge apps start Python on each OS (`python_env::launcher`): fixed per platform, independent of
  *  the interpreter actually found, so it needs no field of its own on `PythonStatus`. */
 const LAUNCHER_LABEL: Record<Os, string> = { windows: "py -3", macos: "python3" };
-
-/**
- * `python.problem`'s own `"; run: <command>"` suffix (`hedgebuddy-core`'s `package_problem`), split off so
- * the command can sit in its own `CommandWell` rather than run on inside the sentence.
- */
-function splitProblem(problem: string): { sentence: string; command: string | null } {
-  const at = problem.indexOf("; run: ");
-  if (at === -1) return { sentence: problem, command: null };
-  return { sentence: problem.slice(0, at), command: problem.slice(at + "; run: ".length) };
-}
 
 function PanelSkeleton() {
   return (
@@ -280,15 +271,7 @@ export function PythonPanel() {
       )}
 
       <div className="flex flex-wrap items-start justify-end gap-3 border-t border-border pt-2">
-        <button
-          type="button"
-          className="inline-flex min-h-7 shrink-0 items-center px-1 text-sm font-medium text-foreground hover:underline aria-disabled:pointer-events-none aria-disabled:opacity-60 aria-disabled:no-underline"
-          aria-disabled={recheck.isPending}
-          aria-busy={recheck.isPending}
-          onClick={doRecheck}
-        >
-          {recheck.isPending ? "Checking…" : "Check again"}
-        </button>
+        <CheckAgainButton pending={recheck.isPending} onClick={doRecheck} className="shrink-0" />
         <InstallAction python={python} bundle={bundle} onInstall={doInstall} installing={install.isPending} />
       </div>
 

@@ -4,12 +4,13 @@ import { callApp } from "@/api/bridge";
 import { queryClient, queryKey, useClaudeDesktopStatus } from "@/api/queries";
 import type { ClaudeDesktopApplyOutput, ClaudeDesktopPlanOutput, ClaudeDesktopStatusOutput } from "@/api/tools.gen";
 import { ChangePreviewDialog, type PreviewModel, wrapPath } from "@/components/app/change-preview-dialog";
+import { CheckAgainButton } from "@/components/app/check-again-button";
 import { Mono } from "@/components/app/mono";
 import { Readout } from "@/components/app/readout";
 import { StatusIcon } from "@/components/app/status-icon";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { ChangeRow } from "@/lib/actions";
+import type { ChangeRow, Words } from "@/lib/actions";
 import { focusMainHeading } from "@/lib/focus";
 import { basename } from "@/lib/format";
 import { claudeStateKey, type StatusKey } from "@/lib/status";
@@ -109,21 +110,31 @@ function planSummary(action: SetupAction, plan: ClaudeDesktopPlanOutput): React.
   );
 }
 
+/** The file row's detail (Task 12 typography rule: `mcpServers.hedgebuddy` in mono, via `Words`' `path`).
+ *  Three sentences: a brand-new file with nothing to start from; one seeded from the MSIX case's `%APPDATA%`
+ *  config (final review, item 11: names where it came from, since the operator's own other servers moved with
+ *  it); or an existing file that just gets the one entry set. */
+function fileRowDetail(plan: ClaudeDesktopPlanOutput): Words {
+  if (!plan.creates_file) return { text: "set ", path: "mcpServers.hedgebuddy" };
+  return plan.seeded_from
+    ? { text: "created from your existing config, with ", path: "mcpServers.hedgebuddy", after: " set" }
+    : { text: "created, with ", path: "mcpServers.hedgebuddy", after: " set" };
+}
+
 /**
  * Turns a `claude_desktop_plan` result into the preview dialog's ledger (Task 5 brief step 2). Review round
  * 1, Important 3: the backup row never claims the exact file name `apply` will actually write (its stamp is
  * struck fresh at apply time, seconds after the plan's own) — it names the folder instead. Review round 1,
  * Minor 8: a brand-new file gets its own detail on the same row rather than a second row repeating the same
- * config path.
+ * config path. Final review, item 11: `seeded_from` (the MSIX case) adds a `read` row for the `%APPDATA%`
+ * config the new file starts from — that file is read, never written, so it never gets a `backup` row of its
+ * own (`backup_path` is always null when `seeded_from` is set, `claude_desktop.rs`'s own `backup_source`).
  */
 function describePlan(action: SetupAction, plan: ClaudeDesktopPlanOutput): PreviewModel {
-  const changes: ChangeRow[] = [
-    {
-      kind: "file",
-      target: plan.config_path,
-      detail: { text: plan.creates_file ? "created, with mcpServers.hedgebuddy set" : "set mcpServers.hedgebuddy" },
-    },
-  ];
+  const changes: ChangeRow[] = [{ kind: "file", target: plan.config_path, detail: fileRowDetail(plan) }];
+  if (plan.seeded_from) {
+    changes.push({ kind: "read", target: plan.seeded_from, detail: { text: "read only, never changed" } });
+  }
   if (plan.backup_path) {
     changes.push({ kind: "backup", target: dirname(plan.backup_path), detail: { text: "a timestamped backup of the config, in this folder" } });
   }
@@ -196,25 +207,34 @@ export function ClaudeDesktopPanel() {
 
       <div className="flex flex-col gap-1.5">
         <Readout label="CONFIG">{wrapPath(data.config_path)}</Readout>
+        {/* Item 11 (final review): the MSIX case's config doesn't exist yet, so it starts from this file
+            instead — never changed, only read (`describePlan`'s own `read` row explains the same thing once
+            Set up is open). */}
+        {data.seeded_from && <Readout label="STARTS FROM">{wrapPath(data.seeded_from)}</Readout>}
         <Readout label="OTHER SERVERS" mono={otherServersKnown && data.other_servers.length > 0}>
           {!otherServersKnown ? "—" : data.other_servers.length > 0 ? data.other_servers.join(", ") : "none"}
         </Readout>
-        <Readout label="COMMAND" mono={commandValue !== null}>
-          {commandValue ? wrapPath(commandValue) : "—"}
-        </Readout>
+        {/* Item 13 (final review ruling): an outdated config with a readable current entry gets two readouts —
+            what actually runs now, and what Set up would point it at — instead of one "COMMAND" that has to
+            pick a side. Every other state has only the one thing worth showing, labelled "BUNDLED" (it's the
+            bundled binary, or the existing entry when there's no bundled binary to compare it with). */}
+        {data.state === "outdated" && data.current ? (
+          <>
+            <Readout label="RUNS NOW">{wrapPath(data.current.command)}</Readout>
+            <Readout label="BUNDLED" mono={data.expected !== null}>
+              {data.expected ? wrapPath(data.expected.command) : "—"}
+            </Readout>
+          </>
+        ) : (
+          <Readout label="BUNDLED" mono={commandValue !== null}>
+            {commandValue ? wrapPath(commandValue) : "—"}
+          </Readout>
+        )}
       </div>
 
       <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border pt-2">
         {!offerAction ? (
-          <button
-            type="button"
-            aria-disabled={query.isFetching}
-            aria-busy={query.isFetching}
-            className="inline-flex min-h-7 items-center px-1 text-sm font-medium text-foreground hover:underline aria-disabled:pointer-events-none aria-disabled:opacity-60 aria-disabled:no-underline"
-            onClick={checkAgain}
-          >
-            {query.isFetching ? "Checking…" : "Check again"}
-          </button>
+          <CheckAgainButton pending={query.isFetching} onClick={checkAgain} />
         ) : noBinary ? (
           <div className="flex flex-col items-end gap-1">
             <Button size="sm" disabled aria-describedby="claude-desktop-no-binary">
@@ -250,12 +270,19 @@ export function ClaudeDesktopPanel() {
           // stays as the fallback for the ordinary case (Cancel, or a dry-run that never applied).
           await queryClient.invalidateQueries({ queryKey: queryKey.app("claude_desktop_status", {}) });
           markRestartPending();
-          // Review round 1, Important 3: the toast names the backup `apply` actually wrote, not the plan's
-          // (their stamps can differ) — and only when there was one (a brand-new file has none).
-          toast(
-            "Set up. Restart Claude Desktop to use it.",
-            applied.backup_path ? { description: <Mono>{basename(applied.backup_path)}</Mono> } : undefined,
-          );
+          // Final review ruling: the title names the action taken ("Set up" for a brand-new entry, "Updated"
+          // for an existing one that pointed elsewhere); the description is always the restart sentence, plus
+          // — review round 1, Important 3 — the backup `apply` actually wrote (not the plan's: their stamps
+          // can differ), only when there was one (a brand-new file has none).
+          toast(lastActionRef.current === "update" ? "Updated Claude Desktop" : "Set up Claude Desktop", {
+            description: applied.backup_path ? (
+              <>
+                Restart Claude Desktop to use it. <Mono>{basename(applied.backup_path)}</Mono>
+              </>
+            ) : (
+              "Restart Claude Desktop to use it."
+            ),
+          });
           focusMainHeading();
         }}
       />

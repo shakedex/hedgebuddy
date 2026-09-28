@@ -49,7 +49,8 @@ export function ProfileSwitcher() {
   // rule for that), so it asks first, same as a guarded navigate would.
   const switchTo = (name: string) => {
     if (name === active || activate.isPending) return;
-    void confirmLeave().then((ok) => {
+    // "profile": a route-scoped key (Settings' editor command) must not block a profile switch (Task 7 ruling).
+    void confirmLeave("profile").then((ok) => {
       if (!ok) return;
       const retry = () => activate.mutate(name, { onError: (e) => showError(e, retry) });
       retry();
@@ -103,7 +104,7 @@ export function ProfileSwitcher() {
                 // Rule for this task: deleting the active profile changes it, so it asks first, same as
                 // switching profiles. Declining leaves the menu closed and nothing else happens.
                 const target = active;
-                void confirmLeave().then((ok) => {
+                void confirmLeave("profile").then((ok) => {
                   if (!ok || !target) return;
                   deletingNameRef.current = target;
                   setDeleteOpen(true);

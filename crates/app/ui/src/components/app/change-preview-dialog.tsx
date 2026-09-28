@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  Ban, Copy, FileCog, FilePen, KeyRound, KeySquare, Link, LoaderCircle, Trash2, TriangleAlert, Unlink, type LucideIcon,
+  Ban, Copy, Eye, FileCog, FilePen, KeyRound, KeySquare, Link, LoaderCircle, Trash2, TriangleAlert, Unlink, type LucideIcon,
 } from "lucide-react";
 import { ErrorPanel } from "@/components/app/error-panel";
 import { Mono } from "@/components/app/mono";
@@ -11,7 +11,8 @@ import type { ChangeKind, ChangeRow, Words } from "@/lib/actions";
 import { clearBusyToast, showError } from "@/lib/toast";
 
 /** One Lucide icon per ledger row kind (Design direction, 5B: "The change-preview dialog"; `backup` added in
- *  5C for Connect's Claude Desktop preview). */
+ *  5C for Connect's Claude Desktop preview; `read` added in the final review for the MSIX case's read-only
+ *  `%APPDATA%` row). */
 const KIND_ICON: Record<ChangeKind, LucideIcon> = {
   registry: KeyRound,
   registry_delete: KeySquare,
@@ -21,6 +22,7 @@ const KIND_ICON: Record<ChangeKind, LucideIcon> = {
   attach: Link,
   detach: Unlink,
   backup: Copy,
+  read: Eye,
 };
 
 /** The sr-only word read before each row's target and detail: colour and the icon alone don't reach a
@@ -34,6 +36,7 @@ const KIND_WORD: Record<ChangeKind, string> = {
   attach: "Attach",
   detach: "Detach",
   backup: "Backup",
+  read: "Read only",
 };
 
 /** What `describe` turns a dry run's result into (spec §7). */

@@ -34,6 +34,12 @@ export const HEDGEBUDDY_BINARY: Record<Os, string> = {
   macos: "/Applications/HedgeBuddy.app/Contents/MacOS/hedgebuddy",
 };
 
+/** `?claude=seeded`: the one `Claude_*` MSIX package's own config path, Windows only (`claude_desktop.rs`'s
+ *  `msix_folder`) — separate from `CLAUDE_DESKTOP_PATH`, the `%APPDATA%` file it starts from until Set up
+ *  writes it. The package id is the same fixture value the Rust tests use. */
+export const MSIX_CLAUDE_DESKTOP_PATH =
+  "C:\\Users\\operator\\AppData\\Local\\Packages\\Claude_pzs8sxrjxfjjc\\LocalCache\\Roaming\\Claude\\claude_desktop_config.json";
+
 /** `path` quoted for a shell on `os` (claude_desktop.rs `shell_quote`): double quotes on Windows, POSIX
  *  single quotes on macOS (each `'` written `'\''`). */
 export function shellQuote(os: Os, path: string): string {
@@ -155,12 +161,20 @@ export class ClaudeDesktop {
   private readonly forceInvalidProblem?: string;
   /** Backups by file name (their content, as the config's bytes were when each was made). */
   private readonly backups = new Map<string, string>();
+  /** `?claude=seeded`: the MSIX package's own config, once Set up has written it — separate from `text`,
+   *  which then keeps describing the `%APPDATA%` file it started from and is never touched
+   *  (`claude_desktop.rs`'s own `locate`/`backup_source`). Null (the ordinary case) when `msixPath` is null,
+   *  and also null before that first Set up/Update. */
+  private packageText: string | null = null;
 
   constructor(
     private readonly os: Os,
     /** The bundled `hedgebuddy` command, or null in a build without one (`?nobinary=1`). */
     private readonly binary: string | null,
     seed: ClaudeDesktopSeed,
+    /** `?claude=seeded`: the MSIX package's own config path, distinct from `CLAUDE_DESKTOP_PATH`'s
+     *  `%APPDATA%` one; null in the ordinary case. */
+    private readonly msixPath: string | null = null,
   ) {
     this.text = seed.text;
     this.folderExists = seed.folderExists || seed.text !== null;
@@ -168,14 +182,29 @@ export class ClaudeDesktop {
   }
 
   get configPath(): string {
-    return CLAUDE_DESKTOP_PATH[this.os];
+    return this.msixPath ?? CLAUDE_DESKTOP_PATH[this.os];
+  }
+
+  /** The `%APPDATA%` config read in `configPath`'s place, or null the ordinary way (`msixPath` unset), once
+   *  the package's own file has been written, or when there is nothing there to seed from
+   *  (`claude_desktop.rs`'s own `locate`: the fallback is only used when it isn't itself missing). */
+  private get seededFrom(): string | null {
+    if (this.msixPath === null || this.packageText !== null) return null;
+    return parseConfig(this.text, this.folderExists).kind === "missing" ? null : CLAUDE_DESKTOP_PATH[this.os];
   }
 
   private parsed(): ParsedConfig {
     if (this.forceInvalidProblem !== undefined) {
       return { kind: "invalid", problem: `${CONFIG_NAME} isn't valid: ${this.forceInvalidProblem}` };
     }
-    return parseConfig(this.text, this.folderExists);
+    const text = this.msixPath !== null ? (this.packageText ?? this.text) : this.text;
+    return parseConfig(text, this.folderExists);
+  }
+
+  /** Whether the config `parsed` describes exists and can be backed up — never true while seeded from the
+   *  `%APPDATA%` file, which is read but never written (`claude_desktop.rs`'s own `backup_source`). */
+  private backupSource(parsed: ParsedConfig): boolean {
+    return this.seededFrom === null && parsed.kind === "object";
   }
 
   private expected(): ServerEntry | null {
@@ -197,8 +226,7 @@ export class ClaudeDesktop {
     const expected = this.expected();
     return {
       config_path: this.configPath,
-      // The preview has no MSIX package, so its config is never read from %APPDATA% in its place.
-      seeded_from: null,
+      seeded_from: this.seededFrom,
       state: computeState(parsed, expected),
       problem: problemOf(parsed),
       current: currentEntry(parsed),
@@ -230,11 +258,11 @@ export class ClaudeDesktop {
   plan(): ClaudeDesktopPlanOutput {
     const { parsed, after } = this.prepare();
     const unchanged = this.unchanged(parsed, after);
-    const exists = parsed.kind === "object";
+    const exists = this.backupSource(parsed);
     return {
       config_path: this.configPath,
-      creates_file: !exists,
-      seeded_from: null,
+      creates_file: !exists && !unchanged,
+      seeded_from: this.seededFrom,
       backup_path: exists && !unchanged ? this.besideConfig(this.backupName(backupStamp())) : null,
       before: currentEntry(parsed),
       after,
@@ -243,18 +271,25 @@ export class ClaudeDesktop {
     };
   }
 
-  /** Set up Claude Desktop; writes nothing when it is already set up (claude_desktop.rs `claude_desktop_apply`). */
+  /** Set up Claude Desktop; writes nothing when it is already set up (claude_desktop.rs `claude_desktop_apply`).
+   *  `?claude=seeded`, while still seeded: writes only the MSIX package's own file (`packageText`) — the
+   *  `%APPDATA%` config it read is never touched, so there is no backup either (`backupSource`, above). */
   apply(): ClaudeDesktopApplyOutput {
     const { parsed, after } = this.prepare();
     const result: ClaudeDesktopApplyOutput = { config_path: this.configPath, backup_path: null, removed_backups: [] };
     if (this.unchanged(parsed, after)) return result;
-    if (parsed.kind === "object") {
+    if (this.backupSource(parsed) && parsed.kind === "object") {
       const name = this.backupName(backupStamp());
       this.backups.set(name, parsed.text);
       result.backup_path = this.besideConfig(name);
     }
-    this.text = JSON.stringify(merged(parsed, after), null, 2) + "\n";
-    this.folderExists = true;
+    const nextText = JSON.stringify(merged(parsed, after), null, 2) + "\n";
+    if (this.msixPath !== null) {
+      this.packageText = nextText;
+    } else {
+      this.text = nextText;
+      this.folderExists = true;
+    }
     if (result.backup_path !== null) result.removed_backups = this.pruneBackups();
     return result;
   }
