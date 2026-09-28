@@ -21,6 +21,8 @@ pub const ACTIVITY_KEEP: usize = 200;
 pub const ACTIVITY_TRIM_AT: usize = 250;
 /// How long a trim waits for the data folder's lock before giving up for now.
 const TRIM_WAIT: Duration = Duration::from_secs(1);
+/// The longest target a record keeps, in characters (longer ones end in `…`).
+const ACTIVITY_TARGET_MAX: usize = 200;
 /// The arguments that name what a call acts on, in order of preference.
 const TARGET_KEYS: [&str; 6] = ["name", "script", "run_id", "event", "app", "profile"];
 
@@ -64,14 +66,26 @@ impl ActivityRecord {
 }
 
 /// What a call with `args` acts on: the first of [`TARGET_KEYS`] whose value
-/// is a non-empty string. Nothing else from `args` is ever kept.
+/// is a non-empty string, cut to [`ACTIVITY_TARGET_MAX`] characters. Nothing
+/// else from `args` is ever kept.
 pub fn activity_target(args: &Value) -> Option<String> {
     TARGET_KEYS.iter().find_map(|key| {
         args.get(key)
             .and_then(Value::as_str)
             .filter(|s| !s.is_empty())
-            .map(str::to_owned)
+            .map(cap_target)
     })
+}
+
+/// `target`, or its first `ACTIVITY_TARGET_MAX - 1` characters and `…` when
+/// it is longer than [`ACTIVITY_TARGET_MAX`] characters.
+fn cap_target(target: &str) -> String {
+    if target.chars().count() <= ACTIVITY_TARGET_MAX {
+        return target.to_owned();
+    }
+    let mut cut: String = target.chars().take(ACTIVITY_TARGET_MAX - 1).collect();
+    cut.push('…');
+    cut
 }
 
 impl Store {
@@ -186,6 +200,25 @@ mod tests {
         );
         assert_eq!(activity_target(&json!({"value": "https://secret"})), None);
         assert_eq!(activity_target(&serde_json::Value::Null), None);
+    }
+
+    #[test]
+    fn activity_target_is_capped() {
+        let long = activity_target(&json!({"name": "a".repeat(300)})).unwrap();
+        assert_eq!(long.chars().count(), 200);
+        assert!(long.ends_with('…'), "{long}");
+        assert!(long.starts_with(&"a".repeat(199)));
+        // Counted in characters, not bytes: a multi-byte name is cut on a
+        // character boundary at the same length.
+        let wide = activity_target(&json!({"name": "é".repeat(300)})).unwrap();
+        assert_eq!(wide.chars().count(), 200);
+        assert!(wide.ends_with('…'));
+        // At the cap, nothing is cut.
+        let exact = "b".repeat(200);
+        assert_eq!(
+            activity_target(&json!({"name": exact.clone()})).as_deref(),
+            Some(exact.as_str())
+        );
     }
 
     #[test]

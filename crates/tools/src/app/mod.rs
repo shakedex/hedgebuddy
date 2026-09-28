@@ -15,10 +15,15 @@ use serde_json::{json, Value};
 
 use crate::{output_schema_of, schema_of, Context, NoParams, ToolError};
 
+mod claude_desktop;
 mod files;
 mod home;
 mod overview;
 
+pub use claude_desktop::{
+    backup_stamp, claude_desktop_apply, claude_desktop_plan, claude_desktop_status, Bundle,
+    ClaudeDesktopApplied, ClaudeDesktopPlan, ClaudeDesktopState, ClaudeDesktopStatus, ServerEntry,
+};
 pub use files::{
     app_docs_url, editor_argv, export_profile, find_in_path, import_profile, path_status,
     reveal_target, script_file, script_template, text_editor_argv, ExportArgs, ExportResult,
@@ -81,6 +86,9 @@ pub fn commands() -> Vec<AppCommandDef> {
         app_command!("pick_folder", PickFolderArgs, PickedPath),
         app_command!("pick_export_path", PickExportArgs, PickedPath),
         app_command!("pick_import_file", NoParams, PickedPath),
+        app_command!("claude_desktop_status", NoParams, ClaudeDesktopStatus),
+        app_command!("claude_desktop_plan", NoParams, ClaudeDesktopPlan),
+        app_command!("claude_desktop_apply", NoParams, ClaudeDesktopApplied),
     ]
 }
 

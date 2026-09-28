@@ -739,6 +739,65 @@ export type AppsOverviewOutput = {
   os: Os;
 };
 
+/** Parameters of tools that take none. */
+export type ClaudeDesktopApplyInput = Record<string, never>;
+
+/** Result of `claude_desktop_apply`. */
+export type ClaudeDesktopApplyOutput = {
+  /** Where the original was copied, or null when there was no file or nothing changed. */
+  backup_path: string | null;
+  /** The config file that was written. */
+  config_path: string;
+  /** Old HedgeBuddy backups removed to keep the newest five. */
+  removed_backups: Array<string>;
+};
+
+/** Parameters of tools that take none. */
+export type ClaudeDesktopPlanInput = Record<string, never>;
+
+/** Result of `claude_desktop_plan`: what `claude_desktop_apply` would do. */
+export type ClaudeDesktopPlanOutput = {
+  /** The hedgebuddy entry after the change. */
+  after: ServerEntry;
+  /** Where the original is copied first, or null when there is no file yet or nothing would change. */
+  backup_path: string | null;
+  /** The hedgebuddy entry in the file now, if any. */
+  before: ServerEntry | null;
+  /** The config file that would change. */
+  config_path: string;
+  /** True when the file does not exist yet and will be created. */
+  creates_file: boolean;
+  /** The other MCP servers in the file, by name (kept as they are). */
+  other_servers: Array<string>;
+  /** True when nothing would change (already set up). */
+  unchanged: boolean;
+};
+
+/** Parameters of tools that take none. */
+export type ClaudeDesktopStatusInput = Record<string, never>;
+
+/** Result of `claude_desktop_status`. */
+export type ClaudeDesktopStatusOutput = {
+  /** The bundled hedgebuddy command, or null in a build without one. */
+  binary: string | null;
+  /** `claude mcp add hedgebuddy -- "<binary>" mcp` (or `hedgebuddy mcp` without a binary). */
+  claude_code_command: string;
+  /** `{"mcpServers": {"hedgebuddy": {...}}}` for other clients, pretty-printed. */
+  client_json: string;
+  /** The config file this machine's Claude Desktop reads. */
+  config_path: string;
+  /** The hedgebuddy entry in the file now, if any. */
+  current: ServerEntry | null;
+  /** The entry Set up writes, or null without a bundled binary. */
+  expected: ServerEntry | null;
+  /** The other MCP servers in the file, by name (kept as they are). */
+  other_servers: Array<string>;
+  /** Why the config can't be read (state `invalid`), else null. */
+  problem: string | null;
+  /** Whether HedgeBuddy is set up in it. */
+  state: ClaudeDesktopState;
+};
+
 /** Arguments of `export_profile`. */
 export type ExportProfileInput = {
   /** The absolute path of the file to write (replaced if it exists), outside the data folder, with no `.` or `..` part. */
@@ -981,6 +1040,9 @@ export type VariablesOverviewOutput = {
 export interface AppCommandTypes {
   activity: { input: ActivityInput; output: ActivityOutput };
   apps_overview: { input: AppsOverviewInput; output: AppsOverviewOutput };
+  claude_desktop_apply: { input: ClaudeDesktopApplyInput; output: ClaudeDesktopApplyOutput };
+  claude_desktop_plan: { input: ClaudeDesktopPlanInput; output: ClaudeDesktopPlanOutput };
+  claude_desktop_status: { input: ClaudeDesktopStatusInput; output: ClaudeDesktopStatusOutput };
   export_profile: { input: ExportProfileInput; output: ExportProfileOutput };
   home_summary: { input: HomeSummaryInput; output: HomeSummaryOutput };
   import_profile: { input: ImportProfileInput; output: ImportProfileOutput };
@@ -1003,6 +1065,9 @@ export type AppCommandName = keyof AppCommandTypes;
 export const app = {
   activity: (args: ActivityInput = {}) => callApp("activity", args),
   appsOverview: (args: AppsOverviewInput = {}) => callApp("apps_overview", args),
+  claudeDesktopApply: (args: ClaudeDesktopApplyInput = {}) => callApp("claude_desktop_apply", args),
+  claudeDesktopPlan: (args: ClaudeDesktopPlanInput = {}) => callApp("claude_desktop_plan", args),
+  claudeDesktopStatus: (args: ClaudeDesktopStatusInput = {}) => callApp("claude_desktop_status", args),
   exportProfile: (args: ExportProfileInput) => callApp("export_profile", args),
   homeSummary: (args: HomeSummaryInput = {}) => callApp("home_summary", args),
   importProfile: (args: ImportProfileInput) => callApp("import_profile", args),
@@ -1228,6 +1293,9 @@ export type CatalogState = {
   /** Apps whose catalog file is overridden from `<data>/catalog/`. */
   overridden: Array<string>;
 };
+
+/** Whether Claude Desktop is set up to start HedgeBuddy. */
+export type ClaudeDesktopState = "set_up" | "outdated" | "not_set_up" | "no_claude" | "invalid";
 
 /** One command of `run_app_command`. */
 export type CommandArg = {
@@ -1636,6 +1704,14 @@ export type Scripting = {
 
 /** How scripts are attached for an app on this platform. */
 export type ScriptingSupport = "registry" | "helper_workspace" | "manual" | "none";
+
+/** The `mcpServers.hedgebuddy` entry. */
+export type ServerEntry = {
+  /** Its arguments. */
+  args: Array<string>;
+  /** The program Claude Desktop starts. */
+  command: string;
+};
 
 /** Counts for the sidebar badges. */
 export type SidebarBadges = {

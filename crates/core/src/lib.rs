@@ -47,6 +47,7 @@ pub use export::{
     read_profile_export, write_profile_export, ImportSummary, ProfileExport, EXPORT_MAX_BYTES,
     IMPORT_MAX_ITEMS,
 };
+pub use fs_util::write_atomic;
 pub use hedge::Hedge;
 pub use host::{FakeHost, Host, Os, RealHost};
 pub use lock::{DataLock, BUSY_MESSAGE, LOCK_TIMEOUT};
