@@ -32,6 +32,10 @@ APP = ROOT / "crates" / "app"
 BINARIES = APP / "binaries"
 WHEEL_DIR = APP / "bundle" / "wheel"
 PYTHON = ROOT / "python"
+# How long a build (cargo, uv) may take, and a quick query (rustc -vV,
+# hedgebuddy --version), in seconds.
+BUILD_TIMEOUT = 30 * 60
+QUERY_TIMEOUT = 60
 
 
 def fail(message: str) -> NoReturn:
@@ -42,9 +46,11 @@ def run(argv: List[str], cwd: Path) -> None:
     """Run `argv` in `cwd`, showing its output; stop on failure."""
     print(f"$ {' '.join(argv)}  (in {cwd.relative_to(ROOT)})", flush=True)
     try:
-        result = subprocess.run(argv, cwd=cwd)
+        result = subprocess.run(argv, cwd=cwd, timeout=BUILD_TIMEOUT)
     except FileNotFoundError:
         fail(f"'{argv[0]}' was not found; install it and run this again")
+    except subprocess.TimeoutExpired:
+        fail(f"'{' '.join(argv)}' took longer than {BUILD_TIMEOUT // 60} minutes; stopped it")
     if result.returncode != 0:
         fail(f"'{' '.join(argv)}' failed (exit {result.returncode})")
 
@@ -52,9 +58,13 @@ def run(argv: List[str], cwd: Path) -> None:
 def capture(argv: List[str]) -> str:
     """Run `argv` and return its stdout."""
     try:
-        result = subprocess.run(argv, cwd=ROOT, capture_output=True, text=True)
+        result = subprocess.run(
+            argv, cwd=ROOT, capture_output=True, text=True, timeout=QUERY_TIMEOUT
+        )
     except FileNotFoundError:
         fail(f"'{argv[0]}' was not found; install it and run this again")
+    except subprocess.TimeoutExpired:
+        fail(f"'{' '.join(argv)}' took longer than {QUERY_TIMEOUT} seconds; stopped it")
     if result.returncode != 0:
         fail(f"'{' '.join(argv)}' failed (exit {result.returncode}): {result.stderr.strip()}")
     return result.stdout
@@ -78,14 +88,26 @@ def host_triple() -> str:
 
 
 def target_dir() -> Path:
+    """Cargo's target folder. A relative CARGO_TARGET_DIR is taken from the
+    repo root, where this script runs cargo."""
     custom = os.environ.get("CARGO_TARGET_DIR")
-    return Path(custom) if custom else ROOT / "target"
+    return ROOT / custom if custom else ROOT / "target"
 
 
 def fresh_dir(path: Path) -> None:
-    if path.exists():
-        shutil.rmtree(path)
-    path.mkdir(parents=True)
+    try:
+        if path.exists():
+            shutil.rmtree(path)
+        path.mkdir(parents=True)
+    except OSError as e:
+        fail(f"could not clear {path}: {e}")
+
+
+def copy(source: Path, dest: Path) -> None:
+    try:
+        shutil.copy2(source, dest)
+    except OSError as e:
+        fail(f"could not copy {source} to {dest}: {e}")
 
 
 def place_binary(version: str, build: bool) -> Path:
@@ -101,7 +123,7 @@ def place_binary(version: str, build: bool) -> Path:
         fail(f"{source} reports '{reported}', not version {version}; run without --skip-build")
     fresh_dir(BINARIES)
     dest = BINARIES / f"hedgebuddy-{triple}{suffix}"
-    shutil.copy2(source, dest)
+    copy(source, dest)
     return dest
 
 
@@ -115,7 +137,7 @@ def place_wheel(version: str, build: bool) -> Path:
         fail(f"{source} is missing; {hint}")
     fresh_dir(WHEEL_DIR)
     dest = WHEEL_DIR / name
-    shutil.copy2(source, dest)
+    copy(source, dest)
     return dest
 
 

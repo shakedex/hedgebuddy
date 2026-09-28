@@ -12,7 +12,8 @@ Run after `python scripts/prepare_bundle.py` and, in crates/app,
 
 Layout confirmed by real builds (V is the VERSION file):
 
-Windows (tauri-cli 2.11, NSIS):
+Windows (tauri-cli 2.11, NSIS; CI pins @tauri-apps/cli@~2.11, since the
+installer-script checks below match that CLI's wording):
     target/release/hedgebuddy-app.exe                 the app
     target/release/hedgebuddy.exe                     the sidecar, copied beside it by the build
     target/release/wheel/hedgebuddy-V-py3-none-any.whl  the resource, copied by the build
@@ -40,6 +41,12 @@ from pathlib import Path
 from typing import List, NoReturn
 
 ROOT = Path(__file__).resolve().parent.parent
+DESCRIPTION = (
+    "Check that an app bundle ships the hedgebuddy command and the wheel "
+    "where the app looks for them."
+)
+# How long the placed command's --version may take, in seconds.
+VERSION_TIMEOUT = 60
 APP_NAME = "hedgebuddy-app"
 PRODUCT = "HedgeBuddy"
 
@@ -67,9 +74,14 @@ class Checks:
             self.bad(f"{path} is not executable")
             return
         try:
-            out = subprocess.run([str(path), "--version"], capture_output=True, text=True)
+            out = subprocess.run(
+                [str(path), "--version"], capture_output=True, text=True, timeout=VERSION_TIMEOUT
+            )
         except OSError as e:
             self.bad(f"{path} --version could not run: {e}")
+            return
+        except subprocess.TimeoutExpired:
+            self.bad(f"{path} --version took longer than {VERSION_TIMEOUT} seconds")
             return
         reported = out.stdout.strip()
         if out.returncode == 0 and reported.split()[-1:] == [version]:
@@ -155,7 +167,7 @@ def check_macos(release: Path, version: str, c: Checks) -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser = argparse.ArgumentParser(description=DESCRIPTION)
     parser.add_argument("target_dir", type=Path, help="the Cargo target folder, e.g. target")
     args = parser.parse_args()
     try:

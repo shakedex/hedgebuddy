@@ -12,10 +12,14 @@ use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 /// Open the data folder, start watching it, and run the window.
 ///
 /// The main window is created here, after the state is managed, not by
-/// Tauri at start (`create: false` in `tauri.conf.json`). So when the data
-/// folder can't be opened, the error dialog shows with no window open: with
-/// a window, macOS attaches the dialog to it as a sheet, which needs the
-/// event loop that `blocking_show` holds up on the main thread.
+/// Tauri at start (`create: false` in `tauri.conf.json`). So the webview
+/// never exists without the state its commands need, and when the data
+/// folder can't be opened the error dialog shows alone: no blank window
+/// sits behind it, turning "Not responding" on Windows while
+/// `blocking_show` holds the main thread. The dialog must stay without a
+/// parent: with `.parent(window)`, macOS shows it as a sheet on that
+/// window, which needs the main thread's event loop, and `blocking_show`
+/// would wait forever.
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -52,7 +56,17 @@ pub fn run() {
                 Err(e) => eprintln!("hedgebuddy: live refresh is off: {e}"),
             }
             app.manage(state);
-            for config in app.config().app.windows.clone() {
+            // Only the windows deferred with `create: false`; Tauri has
+            // already built any with `create: true`.
+            let deferred: Vec<_> = app
+                .config()
+                .app
+                .windows
+                .iter()
+                .filter(|w| !w.create)
+                .cloned()
+                .collect();
+            for config in deferred {
                 WebviewWindowBuilder::from_config(app.handle(), &config)?.build()?;
             }
             Ok(())

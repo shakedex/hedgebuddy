@@ -330,7 +330,9 @@ pub async fn open_app_docs(
 /// `Contents/MacOS` on macOS), and the wheel for this app's version in the
 /// resource folder's `wheel/` (the install folder on Windows,
 /// `Contents/Resources` on macOS). Each is `None` when its file is not there,
-/// as in a build made without `tauri.bundle.conf.json`.
+/// as in a build made without `tauri.bundle.conf.json`. Both paths are plain
+/// (see [`plain_path`]), since Claude Desktop's config and the pip command
+/// line show them to the operator.
 fn bundle(app: &AppHandle) -> Bundle {
     let binary = std::env::current_exe()
         .ok()
@@ -338,6 +340,7 @@ fn bundle(app: &AppHandle) -> Bundle {
             let name = format!("{BINARY_NAME}{}", std::env::consts::EXE_SUFFIX);
             exe.parent().map(|dir| dir.join(name))
         })
+        .map(plain_path)
         .filter(|p| p.is_file());
     let wheel = app
         .path()
@@ -348,8 +351,31 @@ fn bundle(app: &AppHandle) -> Bundle {
             dir.join(WHEEL_DIR)
                 .join(format!("hedgebuddy-{version}-py3-none-any.whl"))
         })
+        .map(plain_path)
         .filter(|p| p.is_file());
     Bundle { binary, wheel }
+}
+
+/// `path` without the `\\?\` prefix Windows can put on the app's own path:
+/// `\\?\C:\…` becomes `C:\…` and `\\?\UNC\server\share\…` becomes
+/// `\\server\share\…`, as the operator would type them. Any other path,
+/// including a verbatim one that names no drive or share, is unchanged.
+fn plain_path(path: PathBuf) -> PathBuf {
+    let Some(text) = path.to_str() else {
+        return path;
+    };
+    if let Some(share) = text.strip_prefix(r"\\?\UNC\") {
+        return PathBuf::from(format!(r"\\{share}"));
+    }
+    match text.strip_prefix(r"\\?\") {
+        Some(rest) if is_drive_path(rest) => PathBuf::from(rest),
+        _ => path,
+    }
+}
+
+/// Whether `text` starts with a drive, as in `C:\`.
+fn is_drive_path(text: &str) -> bool {
+    matches!(text.as_bytes(), [letter, b':', b'\\', ..] if letter.is_ascii_alphabetic())
 }
 
 /// Whether Claude Desktop is set up to start the bundled `hedgebuddy`
@@ -501,7 +527,43 @@ fn picked(choice: Option<FilePath>) -> Result<PickedPath, ToolError> {
 mod tests {
     use hedgebuddy_tools::ToolError;
 
-    use super::{install_slot, AsyncMutex, CommandError};
+    use std::path::PathBuf;
+
+    use super::{install_slot, plain_path, AsyncMutex, CommandError};
+
+    #[test]
+    fn plain_path_drops_the_verbatim_prefix_of_drives_and_shares_only() {
+        let cases = [
+            (
+                r"\\?\C:\Program Files\HedgeBuddy\hedgebuddy.exe",
+                r"C:\Program Files\HedgeBuddy\hedgebuddy.exe",
+            ),
+            (
+                r"\\?\UNC\server\share\HedgeBuddy\wheel\x.whl",
+                r"\\server\share\HedgeBuddy\wheel\x.whl",
+            ),
+            (
+                r"C:\Program Files\HedgeBuddy\hedgebuddy.exe",
+                r"C:\Program Files\HedgeBuddy\hedgebuddy.exe",
+            ),
+            (r"\\server\share\x.whl", r"\\server\share\x.whl"),
+            (
+                r"\\?\Volume{0b1f}\HedgeBuddy\hedgebuddy.exe",
+                r"\\?\Volume{0b1f}\HedgeBuddy\hedgebuddy.exe",
+            ),
+            (
+                "/Applications/HedgeBuddy.app/Contents/MacOS/hedgebuddy",
+                "/Applications/HedgeBuddy.app/Contents/MacOS/hedgebuddy",
+            ),
+        ];
+        for (given, plain) in cases {
+            assert_eq!(
+                plain_path(PathBuf::from(given)),
+                PathBuf::from(plain),
+                "{given}"
+            );
+        }
+    }
 
     #[test]
     fn a_second_install_is_refused_while_one_holds_the_slot() {
