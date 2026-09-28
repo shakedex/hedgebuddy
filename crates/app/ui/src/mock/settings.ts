@@ -12,6 +12,10 @@ const WHEEL_SUFFIX = "-py3-none-any.whl";
 /** Why a build with no bundled wheel can't install it (settings.rs `NO_WHEEL`). */
 export const NO_WHEEL = "this build has no bundled package";
 
+/** `?prefserror=1`: `preferences.json` can't be read, in the shape `preferences.rs`'s own read failures take
+ *  (a JSON syntax error), so Settings' Editor command panel can be checked with `preferences_error` set. */
+export const PREFS_ERROR = "cannot read preferences.json: invalid JSON at line 1";
+
 /** `launcher(os)` (python_env.rs): fixed per platform, independent of the interpreter actually found. */
 const LAUNCHER: Record<Os, string[]> = { windows: ["py", "-3"], macos: ["python3"] };
 

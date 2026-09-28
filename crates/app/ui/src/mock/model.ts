@@ -9,8 +9,8 @@ import { catalogApp, catalogEvent } from "./catalog";
 import { ClaudeDesktop, HEDGEBUDDY_BINARY, type ClaudeDesktopSeed } from "./claudeDesktop";
 import { commercialOneDay, IMPORT_FILE, REQUIRED_VERSION, scenarioSeed, type PythonSeed, type Scenario } from "./fixtures";
 import { APPLY_NOTE, DATA_DIR, Hedge } from "./hedge";
-import { importsHedgebuddy, parseManifest, parseVarType, snakeCase, ToolError, validateScriptName } from "./rules";
-import { bundleInfo, NO_WHEEL, pipCommandLine, pipSuccessOutput, PIP_FAIL_OUTPUT } from "./settings";
+import { importsHedgebuddy, parseManifest, parseVarType, snakeCase, ToolError, validateEditorCommand, validateScriptName } from "./rules";
+import { bundleInfo, NO_WHEEL, pipCommandLine, pipSuccessOutput, PIP_FAIL_OUTPUT, PREFS_ERROR } from "./settings";
 import { Store, type ProfileExport, type ResolvedVariable } from "./store";
 import { appsOverview, catalogError, homeSummary, scriptsOverview, variablesOverview, varView } from "./views";
 
@@ -133,7 +133,12 @@ export class Model {
   private readonly runs: Run[];
   private readonly activityLog: ActivityRecord[];
   private readonly since: string | null;
-  private readonly preferences: AppOut<"preferences_get">;
+  /** Not `readonly`: a successful `preferences_set` updates it in place. */
+  private preferences: AppOut<"preferences_get">;
+  /** `?prefserror=1`: `preferences.json` can't be read, so `settings_overview` reports `preferences_error`
+   *  and a null `editor_command`, and `preferences_set` refuses (Task 6 note: the mock had always returned
+   *  `preferences_error: null`, since nothing forced the failing case). */
+  private readonly prefsBroken: boolean;
   private readonly claudeDesktop: ClaudeDesktop;
   /** The bundled `hedgebuddy` command, or null (`?nobinary=1`: a build without one). */
   private readonly binary: string | null;
@@ -146,8 +151,9 @@ export class Model {
 
   constructor(scenario: Scenario) {
     const seed = scenarioSeed(scenario);
-    // `?claude=invalid`, `?nobinary=1`, `?nowheel=1` and `?pipfail=1` each force an otherwise-unreachable
-    // state, in any scenario, so Connect and Settings can be checked visually against every state.
+    // `?claude=invalid`, `?nobinary=1`, `?nowheel=1`, `?pipfail=1` and `?prefserror=1` each force an
+    // otherwise-unreachable state, in any scenario, so Connect and Settings can be checked visually against
+    // every state.
     const params = new URLSearchParams(window.location.search);
     this.scenario = scenario;
     this.os = seed.os;
@@ -166,6 +172,7 @@ export class Model {
     this.claudeDesktop = new ClaudeDesktop(seed.os, this.binary, claudeDesktopSeed);
     this.wheel = params.get("nowheel") === "1" ? null : seed.wheel;
     this.pipFail = params.get("pipfail") === "1";
+    this.prefsBroken = params.get("prefserror") === "1";
     const source = new Store(DATA_DIR.windows, "\\", { profiles: { "commercial-one-day": commercialOneDay(false) }, active: null });
     this.exportFiles.set(this.hedge.pathKey(IMPORT_FILE), source.exportProfile("commercial-one-day", false));
   }
@@ -389,6 +396,24 @@ export class Model {
     return { ...this.preferences };
   }
 
+  /** A non-empty `editor_command` must parse as a shell-like command (`validateEditorCommand`, a port of
+   *  `editor_argv`) before anything changes, mirroring `preferences_set`'s own order — a broken command is
+   *  never saved. `?prefserror=1` refuses outright, as the real tool would (it reads the file back before
+   *  writing, so a corrupt one fails the same way). */
+  preferencesSet(args: AppIn<"preferences_set">): AppOut<"preferences_set"> {
+    if (this.prefsBroken) throw new ToolError(PREFS_ERROR);
+    if ("editor_command" in args) {
+      const raw = args.editor_command ?? null;
+      const trimmed = raw?.trim() ?? "";
+      if (trimmed !== "") validateEditorCommand(raw!);
+      this.preferences = { ...this.preferences, editor_command: trimmed === "" ? null : trimmed };
+    }
+    if ("last_opened" in args) {
+      this.preferences = { ...this.preferences, last_opened: args.last_opened ?? null };
+    }
+    return { ...this.preferences };
+  }
+
   // ---- Python and Home ---------------------------------------------------------------------------
 
   private packageProblem(py: PythonSeed): string | null {
@@ -446,8 +471,8 @@ export class Model {
       python: this.pythonStatus(),
       install_command: this.python && this.wheel ? pipCommandLine(this.os, this.wheel) : null,
       bundle: bundleInfo(this.binary, this.wheel),
-      editor_command: this.preferences.editor_command,
-      preferences_error: null,
+      editor_command: this.prefsBroken ? null : this.preferences.editor_command,
+      preferences_error: this.prefsBroken ? PREFS_ERROR : null,
     };
   }
 

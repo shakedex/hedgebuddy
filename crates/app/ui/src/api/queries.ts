@@ -102,6 +102,21 @@ export function useSettingsOverview() {
   });
 }
 
+/** Settings' "Check again" (Task 6 ruling): re-probes Python right now instead of waiting out the 10-minute
+ *  miss cache, by calling `settings_overview` with `{ recheck: true }` and writing the fresh result straight
+ *  into the shared query's cache — every readout that depends on it updates without a second round trip.
+ *  Also invalidates `home_summary`, so the sidebar's Settings badge clears the moment a recheck finds what
+ *  Install would otherwise have fixed (Python installed, or the package found some other way). */
+export function useRecheckPython() {
+  return useMutation({
+    mutationFn: () => callApp("settings_overview", { recheck: true }),
+    onSuccess: (data) => {
+      queryClient.setQueryData(queryKey.app("settings_overview", {}), data);
+      void queryClient.invalidateQueries({ queryKey: queryKey.app("home_summary", {}) });
+    },
+  });
+}
+
 /** Connect's activity list (spec §6.6): the last 200 Claude calls. */
 export function useActivity() {
   return useQuery({

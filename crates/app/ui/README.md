@@ -40,6 +40,7 @@ Every scenario runs on one in-memory model (`src/mock/model.ts`, with `store.ts`
 | `?claude=invalid` | Claude Desktop's config is invalid: `claude_desktop_status` reports state `invalid` with `problem: "claude_desktop_config.json isn't valid: expected value at line 1 column 1"`; `claude_desktop_plan` and `claude_desktop_apply` both refuse |
 | `?nobinary=1` | The build has no bundled `hedgebuddy` command: `claude_desktop_status`'s `binary` and `expected` are null, `claude_code_command` is `claude mcp add hedgebuddy -- hedgebuddy mcp`, `settings_overview`'s `bundle.binary` is null, and `claude_desktop_plan`/`claude_desktop_apply` refuse with "no bundled hedgebuddy command" |
 | `?nowheel=1` | The build has no bundled wheel, in any scenario (`macos` already shows this by itself): `settings_overview`'s `bundle.wheel` and `install_command` are null, and `pip_install` refuses with "this build has no bundled package" |
+| `?prefserror=1` | `preferences.json` can't be read: `settings_overview` reports `preferences_error` (and a null `editor_command`) instead of the real value, and `preferences_set` refuses with the same message, in any scenario |
 
 These combine with `?scenario=` and with each other (for example `?scenario=macos&claude=invalid`).
 

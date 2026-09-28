@@ -43,6 +43,7 @@ const appHandlers: AppHandlers = {
   home_summary: () => model.homeSummary(),
   activity: (args) => model.activity(args),
   preferences_get: () => model.preferencesGet(),
+  preferences_set: (args) => model.preferencesSet(args),
   variables_overview: (args) => model.variablesOverview(args),
   scripts_overview: (args) => model.scriptsOverview(args),
   apps_overview: () => model.appsOverview(),

@@ -22,6 +22,7 @@ export const STATUS = {
   unsupported: { icon: Ban, word: "not supported yet", tone: "muted" },
   varMissing: { icon: Braces, word: "not set", tone: "warning" },
   package: { icon: Package, word: "package problem", tone: "warning" },
+  packageOk: { icon: CircleCheck, word: "up to date", tone: "neutral" },
   alert: { icon: TriangleAlert, word: "needs a look", tone: "warning" },
   callOk: { icon: CircleCheck, word: "ok", tone: "neutral" },
   callError: { icon: CircleX, word: "error", tone: "destructive" },
