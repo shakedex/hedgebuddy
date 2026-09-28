@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/shakedex/hedgebuddy/schema/profile-export.schema.json",
+  "title": "HedgeBuddy profile export",
+  "description": "One profile as a file, written by the desktop app's Export. `profile` must also validate against profile.schema.json. `secrets` is present only when the operator chose to include them.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["hedgebuddy_profile_export", "exported_at", "profile"],
+  "properties": {
+    "hedgebuddy_profile_export": { "const": 1 },
+    "exported_at": { "type": "string", "format": "date-time" },
+    "profile": { "type": "object" },
+    "secrets": { "type": "object", "additionalProperties": { "type": "string" } },
+    "scripts": { "type": "object", "additionalProperties": { "type": "string" } }
+  }
+}

@@ -148,6 +148,10 @@ export function RunDetail({ runId, activeProfile }: { runId: string; activeProfi
 
   const app = appName(run.app);
   const event = run.event ?? "—";
+  // Task 12 ruling: "Open script" opens the Scripts screen on this run's own profile — never the active
+  // one — so when that isn't the active profile, disable it and say why right next to it, rather than
+  // silently landing the operator on a script pinned to a profile they're not even working in.
+  const wrongProfile = run.profile !== activeProfile;
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -172,7 +176,7 @@ export function RunDetail({ runId, activeProfile }: { runId: string; activeProfi
             </Fact>
             <Fact label="Profile" mono title={run.profile}>
               {run.profile}
-              {run.profile !== activeProfile && <span className="pl-1.5 font-sans text-xs text-muted-foreground">· not active</span>}
+              {wrongProfile && <span className="pl-1.5 font-sans text-xs text-muted-foreground">· not active</span>}
             </Fact>
             <Fact label="Started" className="readout">
               {dayLabel(dayKey(run.started_at))} {clock(run.started_at, true)}
@@ -217,16 +221,33 @@ export function RunDetail({ runId, activeProfile }: { runId: string; activeProfi
           </>
         )}
       </div>
-      <div className="flex h-11 shrink-0 items-center justify-end gap-2 border-t border-border px-3">
-        <Button variant="outline" size="sm" onClick={() => void handleCopy()}>
-          <Copy aria-hidden strokeWidth={1.75} />
-          Copy details
-        </Button>
-        <Button asChild variant="outline" size="sm">
-          <Link href={`/scripts/${encodeURIComponent(run.script)}`}>
+      <div className="flex min-h-11 shrink-0 flex-wrap items-center justify-end gap-x-2 gap-y-1 border-t border-border px-3">
+        <Button
+          asChild
+          variant="outline"
+          size="sm"
+          className={cn(wrongProfile && "aria-disabled:pointer-events-none aria-disabled:opacity-45")}
+        >
+          <Link
+            href={`/scripts/${encodeURIComponent(run.script)}`}
+            aria-disabled={wrongProfile}
+            aria-describedby={wrongProfile ? "run-open-script-reason" : undefined}
+            onClick={(e) => {
+              if (wrongProfile) e.preventDefault();
+            }}
+          >
             <FileCode aria-hidden strokeWidth={1.75} />
             Open script
           </Link>
+        </Button>
+        {wrongProfile && (
+          <span id="run-open-script-reason" className="text-xs text-muted-foreground">
+            In <Mono className="text-muted-foreground">{run.profile}</Mono>, which isn't active.
+          </span>
+        )}
+        <Button variant="outline" size="sm" onClick={() => void handleCopy()}>
+          <Copy aria-hidden strokeWidth={1.75} />
+          Copy details
         </Button>
       </div>
     </div>

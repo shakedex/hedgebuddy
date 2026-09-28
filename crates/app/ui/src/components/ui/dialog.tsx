@@ -45,10 +45,19 @@ function DialogOverlay({
   )
 }
 
+/** True when an outside-interaction event's target sits inside Sonner's toaster (its own portal, outside
+ *  the dialog) — a real click there must not also read as a dismiss of the dialog underneath it. */
+function isInToaster(event: { target: EventTarget | null }): boolean {
+  const target = event.target
+  return target instanceof Element && target.closest("[data-sonner-toaster]") !== null
+}
+
 function DialogContent({
   className,
   children,
   showCloseButton = true,
+  onPointerDownOutside,
+  onInteractOutside,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean
@@ -62,6 +71,14 @@ function DialogContent({
           "fixed top-[50%] left-[50%] z-50 grid w-full max-w-[min(440px,calc(100%-2rem))] translate-x-[-50%] translate-y-[-50%] gap-3 rounded-lg border border-border-strong bg-card p-4 text-base shadow-float duration-150 outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-98 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-98",
           className
         )}
+        onPointerDownOutside={(e) => {
+          if (isInToaster(e)) e.preventDefault()
+          onPointerDownOutside?.(e)
+        }}
+        onInteractOutside={(e) => {
+          if (isInToaster(e)) e.preventDefault()
+          onInteractOutside?.(e)
+        }}
         {...props}
       >
         {children}
@@ -83,7 +100,11 @@ function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="dialog-header"
-      className={cn("flex flex-col gap-1 pr-8 text-left", className)}
+      // `min-w-0`: a grid item's automatic minimum width is its content's min-content size, which for an
+      // unbroken run (a 64-character profile slug, say) is the whole string — `break-words` below only
+      // controls how it's *drawn* once its box has a width, so without this it never shrinks enough for that
+      // to matter and the title/description overflow the dialog instead of wrapping.
+      className={cn("flex min-w-0 flex-col gap-1 pr-8 text-left", className)}
       {...props}
     />
   )
@@ -123,7 +144,10 @@ function DialogTitle({
   return (
     <DialogPrimitive.Title
       data-slot="dialog-title"
-      className={cn("text-lg font-semibold text-foreground-strong", className)}
+      // `break-words`: a title or description often embeds a profile/variable name with no natural break
+      // point (a 64-character slug, say) — without this it overflows the dialog's fixed width instead of
+      // wrapping.
+      className={cn("text-lg font-semibold text-foreground-strong break-words", className)}
       {...props}
     />
   )
@@ -136,7 +160,7 @@ function DialogDescription({
   return (
     <DialogPrimitive.Description
       data-slot="dialog-description"
-      className={cn("text-sm text-muted-foreground", className)}
+      className={cn("text-sm text-muted-foreground break-words", className)}
       {...props}
     />
   )

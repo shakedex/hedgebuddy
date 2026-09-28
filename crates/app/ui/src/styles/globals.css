@@ -149,6 +149,12 @@
   ::selection { background: color-mix(in srgb, var(--primary) 35%, transparent); color: var(--foreground-strong); }
   * { scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }
   :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+  /* A modal dialog sets `pointer-events: none` on the rest of the page while it's open, and `pointer-events`
+     inherits — without this, Sonner's toasts (portalled straight to `<body>`) inherit `none` too, so a busy
+     toast's "Try again" can never be clicked while its own dialog is still open. `DialogContent` pairs this
+     with `onPointerDownOutside`/`onInteractOutside` so a real click on the toaster isn't *also* read as a
+     click outside the dialog and dismisses it. */
+  [data-sonner-toaster] { pointer-events: auto; }
 }
 
 /* A readout: tabular, open digits, a little tight. */

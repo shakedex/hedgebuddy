@@ -8,6 +8,7 @@ All notable changes to this project are documented here. Versioning follows [Zer
 - Fresh start. The Go/Fyne desktop app, the Go updater, and the 0.10 Python library are archived under the git tag `legacy/0.10.0`. Nothing in this line is compatible with them.
 - Default branch is now `main`. The old `master` branch was deleted; its last commit is tag `legacy/0.10.0`.
 - `check_requirements` counts a secret without a stored value as unmet.
+- `set_var` keeps the current value of an existing variable of the same type when `value` is left out, so a description (including a secret's) can be changed without retyping the value.
 - `list_runs` decodes run files lossily, so one bad byte skips a single line instead of the whole day.
 - On Windows, atomic writes retry a rename that fails with `PermissionDenied` for up to one second.
 - The desktop app now requires macOS 26.0 or newer.
@@ -36,3 +37,10 @@ All notable changes to this project are documented here. Versioning follows [Zer
 - The MCP server records each tool call in `activity.jsonl` (tool, target and outcome, never argument values) and trims the file to the last 200 calls once it passes 250.
 - Writes from the MCP server, `hedgebuddy call` and the app take a cross-process lock on the data folder, waiting up to 10 seconds before failing with "another HedgeBuddy is busy; try again".
 - The app keeps its preferences, such as when it was last opened, in `preferences.json`.
+- The desktop app's Variables screen: a typed editor for each of the nine variable types, with Reveal for a secret, a "not connected" warning for a path on an unmounted drive, add and delete, and unmet requirements pinned to the top with an Add link.
+- The desktop app's Scripts screen: attach, detach, sync and delete, a check of the script's Python, its syntax and the installed `hedgebuddy` package, and New from a template, which opens the new file in the operator's editor (or a plain text editor when none is set).
+- The desktop app's Hedge apps screen: each app's version, scripting and Pro badges, every event's state, and Clear or Clear all for events pointing at deleted scripts.
+- The change-preview dialog: attaching, detaching, syncing, clearing a stale event and deleting a script, a variable or a profile each run a dry run first and show the planned changes in plain words before Apply runs it for real.
+- Profile export and import as one JSON file, with secret values left out unless asked; a file with secrets is created owner-only on macOS and Linux.
+- App-only commands `open_in_editor`, `reveal_path`, `script_template`, `export_profile`, `import_profile`, `variables_overview`, `scripts_overview`, `apps_overview`, `path_status`, `open_app_docs`, `pick_folder`, `pick_export_path` and `pick_import_file`, backed by `tauri-plugin-dialog` and `tauri-plugin-opener`.
+- A catalog override in `<data>/catalog/` reloads while the app is running, without a restart.

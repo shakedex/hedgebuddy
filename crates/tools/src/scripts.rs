@@ -2,9 +2,9 @@
 
 use std::path::PathBuf;
 
-use hedgebuddy_core::hedge::{managed_script, validate_manifest, AttachState};
+use hedgebuddy_core::hedge::{managed_script, validate_manifest, AttachState, EventAttachment};
 use hedgebuddy_core::{
-    parse_manifest, python_env, validate_script_name, Manifest, RequirementIssue, ScriptInfo,
+    parse_manifest, python_env, validate_script_name, Manifest, RequirementIssue, ScriptInfo, Store,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -209,11 +209,7 @@ pub(crate) fn attached_to(ctx: &Context, profile: &str, script: &str) -> Vec<App
             continue;
         };
         for a in list {
-            let path = match &a.state {
-                AttachState::Attached { path, .. } | AttachState::Staged { path, .. } => path,
-                _ => continue,
-            };
-            if managed_script(&ctx.store, path) == Some((profile.to_owned(), script.to_owned())) {
+            if runs_script(&ctx.store, &a, profile, script) {
                 out.push(AppEvent {
                     app: a.app,
                     event: a.event,
@@ -222,6 +218,15 @@ pub(crate) fn attached_to(ctx: &Context, profile: &str, script: &str) -> Vec<App
         }
     }
     out
+}
+
+/// Whether the event `a` is attached to (or staged for) `profile/script`.
+pub(crate) fn runs_script(store: &Store, a: &EventAttachment, profile: &str, script: &str) -> bool {
+    let path = match &a.state {
+        AttachState::Attached { path, .. } | AttachState::Staged { path, .. } => path,
+        _ => return false,
+    };
+    managed_script(store, path).is_some_and(|(p, s)| p == profile && s == script)
 }
 
 fn list_scripts(ctx: &Context, p: ProfileArg) -> Result<ListScriptsResult, ToolError> {

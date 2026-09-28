@@ -3,6 +3,7 @@ import { AppSidebar } from "@/components/app/app-sidebar";
 import { ErrorBoundary } from "@/components/app/error-boundary";
 import { ProfileSwitcher } from "@/components/app/profile-switcher";
 import { ScreenHeader } from "@/components/app/screen-header";
+import { UnsavedDialog } from "@/components/app/unsaved-dialog";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { navFor } from "@/lib/routes";
@@ -29,6 +30,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </ErrorBoundary>
         </div>
       </SidebarInset>
+      <UnsavedDialog />
     </SidebarProvider>
   );
 }

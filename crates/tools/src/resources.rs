@@ -3,7 +3,7 @@
 
 use crate::{Context, ToolError};
 
-const SCHEMAS: [(&str, &str); 7] = [
+const SCHEMAS: [(&str, &str); 8] = [
     (
         "hedgebuddy",
         include_str!("../../../schema/hedgebuddy.schema.json"),
@@ -15,6 +15,10 @@ const SCHEMAS: [(&str, &str); 7] = [
     (
         "secrets",
         include_str!("../../../schema/secrets.schema.json"),
+    ),
+    (
+        "profile-export",
+        include_str!("../../../schema/profile-export.schema.json"),
     ),
     (
         "run-record",
@@ -91,8 +95,13 @@ pub fn read(ctx: &Context, uri: &str) -> Option<(&'static str, String)> {
     (uri == "hedgebuddy://docs/hedge-llms").then(|| ("text/plain", HEDGE_LLMS.to_owned()))
 }
 
-/// A starting point for a script handling `app`'s `event`.
-pub fn author_script(ctx: &Context, app: &str, event: &str) -> Result<String, ToolError> {
+/// The Python source of a new script for `app`'s `event`: the manifest
+/// docstring, and a `main` listing the payload fields.
+pub(crate) fn script_template_source(
+    ctx: &Context,
+    app: &str,
+    event: &str,
+) -> Result<String, ToolError> {
     let m = ctx.hedge.catalog().app(app)?;
     let e = m.event(event)?;
     let prefix = format!("{}_", e.id);
@@ -104,21 +113,36 @@ pub fn author_script(ctx: &Context, app: &str, event: &str) -> Result<String, To
         } else {
             ""
         };
-        fields.push_str(&format!("#   event.{attr:<28} <- {key}{json}\n"));
+        fields.push_str(&format!("    #   event.{attr:<28} <- {key}{json}\n"));
     }
     if fields.is_empty() {
-        fields.push_str("#   (this event has no payload)\n");
+        fields.push_str("    #   (this event has no payload)\n");
     }
+    // The body lines are indented in the string itself, not by the source layout: a `\` line continuation
+    // drops the next line's leading spaces, which once left `hb.log` outside `main` (an IndentationError).
+    Ok(format!(
+        "\"\"\"\n{{\"hedgebuddy\": 1, \"app\": \"{app}\", \"event\": \"{event}\", \"requires\": {{}}}}\n---\n\
+Describe what this script does.\n\"\"\"\nimport hedgebuddy as hb\n\n\n@hb.script\ndef main(event, vars):\n\
+{indent}# Payload fields for {name} {event}:\n{fields}\
+{indent}# Variables declared in \"requires\" are available as vars.NAME, typed.\n\
+{indent}hb.log(\"started\")\n{indent}return 0\n",
+        name = m.app.name,
+        indent = "    ",
+    ))
+}
+
+/// A starting point for a script handling `app`'s `event`.
+pub fn author_script(ctx: &Context, app: &str, event: &str) -> Result<String, ToolError> {
+    let m = ctx.hedge.catalog().app(app)?;
+    let e = m.event(event)?;
+    let source = script_template_source(ctx, app, event)?;
+    let fence = "`".repeat(3);
     Ok(format!(
         "Write a HedgeBuddy script for {name} event {event}: {description}\n\n\
 Save it with write_script, set any required variables with set_var, check it with check_script, \
 then attach it with attach_script (dry_run first). The hedgebuddy package must be installed for \
 the Python the Hedge apps use; check_script reports it. Template:\n\n\
-```python\n\"\"\"\n{{\"hedgebuddy\": 1, \"app\": \"{app}\", \"event\": \"{event}\", \"requires\": {{}}}}\n---\n\
-Describe what this script does.\n\"\"\"\nimport hedgebuddy as hb\n\n\n@hb.script\ndef main(event, vars):\n\
-    # Payload fields for {name} {event}:\n{fields}\
-    # Variables declared in \"requires\" are available as vars.NAME, typed.\n\
-    hb.log(\"started\")\n    return 0\n```\n\n\
+{fence}python\n{source}{fence}\n\n\
 List every variable the script reads in \"requires\" as {{\"NAME\": {{\"type\": \"string\"}}}} \
 (types: string, secret, int, float, bool, path, url, string[], path[]; add \"default\" to make one optional).\n",
         name = m.app.name,
@@ -137,7 +161,7 @@ mod tests {
     fn resources_cover_catalog_schemas_and_docs() {
         let (_d, _f, ctx) = test_ctx(FakeHost::new(Os::Windows));
         let all = list(&ctx);
-        assert_eq!(all.len(), 12);
+        assert_eq!(all.len(), 13);
         let (mime, text) = read(&ctx, "hedgebuddy://catalog/offshoot").unwrap();
         assert_eq!(mime, "application/json");
         let v: serde_json::Value = serde_json::from_str(&text).unwrap();
@@ -154,6 +178,37 @@ mod tests {
         assert!(read(&ctx, "https://example.com").is_none());
         for r in &all {
             assert!(read(&ctx, &r.uri).is_some(), "{} does not read", r.uri);
+        }
+    }
+
+    #[test]
+    fn the_template_source_is_a_valid_script_for_its_event() {
+        let (_d, _f, ctx) = test_ctx(FakeHost::new(Os::Windows));
+        let source = script_template_source(&ctx, "offshoot", "FileCopyCompleted").unwrap();
+        let manifest = hedgebuddy_core::parse_manifest(&source).unwrap().unwrap();
+        assert_eq!(manifest.app.as_deref(), Some("offshoot"));
+        assert_eq!(manifest.event.as_deref(), Some("FileCopyCompleted"));
+        assert!(source.contains("@hb.script"));
+        assert!(author_script(&ctx, "offshoot", "FileCopyCompleted")
+            .unwrap()
+            .contains(&source));
+        assert!(script_template_source(&ctx, "offshoot", "Nope").is_err());
+    }
+
+    #[test]
+    fn the_template_body_is_indented_under_main() {
+        let (_d, _f, ctx) = test_ctx(FakeHost::new(Os::Windows));
+        for event in ["FileCopyCompleted", "OffShootStarted"] {
+            let source = script_template_source(&ctx, "offshoot", event).unwrap();
+            let (_, body) = source.split_once("def main(event, vars):\n").unwrap();
+            let lines: Vec<&str> = body.lines().collect();
+            assert!(lines.iter().any(|l| l.trim() == "hb.log(\"started\")"));
+            for line in lines {
+                assert!(
+                    line.starts_with("    "),
+                    "{event}: not indented under main: {line:?}"
+                );
+            }
         }
     }
 

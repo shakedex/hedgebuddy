@@ -4,6 +4,7 @@ import { useActivateProfile } from "@/api/queries";
 import { CreateProfileDialog } from "@/components/app/create-profile-dialog";
 import { Mono } from "@/components/app/mono";
 import { Button } from "@/components/ui/button";
+import { useImportProfile } from "@/hooks/use-import-profile";
 import { showError } from "@/lib/toast";
 
 function StepNumber({ n }: { n: number }) {
@@ -19,17 +20,35 @@ function StepNumber({ n }: { n: number }) {
 
 function ChooseProfile({ profiles }: { profiles: string[] }) {
   const activate = useActivateProfile();
+  const [createOpen, setCreateOpen] = useState(false);
+  const newProfileRef = useRef<HTMLButtonElement>(null);
+  const importProfile = useImportProfile();
   const activateTo = (name: string) => {
     const retry = () => activate.mutate(name, { onError: (e) => showError(e, retry) });
     retry();
   };
   return (
-    <div className="flex flex-wrap gap-2">
-      {profiles.map((name) => (
-        <Button key={name} variant="outline" size="sm" disabled={activate.isPending} onClick={() => activateTo(name)}>
-          <Mono>{name}</Mono>
+    <div className="flex flex-col gap-2">
+      <div className="flex flex-wrap gap-2">
+        {profiles.map((name) => (
+          <Button key={name} variant="outline" size="sm" disabled={activate.isPending} onClick={() => activateTo(name)}>
+            <Mono>{name}</Mono>
+          </Button>
+        ))}
+      </div>
+      {/* Secondary to the chooser above (spec: with profiles that already exist, picking one is the main
+          action here) — quiet `ghost` buttons rather than the chooser's own `outline`, so the two don't
+          read as the same kind of choice. */}
+      <div className="flex flex-wrap gap-2">
+        <Button ref={newProfileRef} variant="ghost" size="sm" className="w-fit" onClick={() => setCreateOpen(true)}>
+          New profile…
         </Button>
-      ))}
+        <Button variant="ghost" size="sm" className="w-fit" disabled={importProfile.picking} onClick={importProfile.start}>
+          Import profile…
+        </Button>
+      </div>
+      <CreateProfileDialog open={createOpen} onOpenChange={setCreateOpen} activate onCloseFocus={() => newProfileRef.current?.focus()} />
+      {importProfile.dialog}
     </div>
   );
 }
@@ -37,12 +56,19 @@ function ChooseProfile({ profiles }: { profiles: string[] }) {
 function CreateFirstProfile() {
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const importProfile = useImportProfile();
   return (
     <>
-      <Button ref={triggerRef} size="sm" className="w-fit" onClick={() => setOpen(true)}>
-        Create profile
-      </Button>
+      <div className="flex flex-wrap gap-2">
+        <Button ref={triggerRef} size="sm" className="w-fit" onClick={() => setOpen(true)}>
+          New profile…
+        </Button>
+        <Button variant="outline" size="sm" className="w-fit" disabled={importProfile.picking} onClick={importProfile.start}>
+          Import profile…
+        </Button>
+      </div>
       <CreateProfileDialog open={open} onOpenChange={setOpen} activate onCloseFocus={() => triggerRef.current?.focus()} />
+      {importProfile.dialog}
     </>
   );
 }

@@ -95,7 +95,7 @@ Two tests in `hedgebuddy-tools` keep the schemas honest:
 | `home_summary()` | 5A | Everything Home shows, in one call (§6.1). The Python package check inside it is cached for 60 seconds. |
 | `activity(limit)` | 5A | The latest Claude activity records, newest first. |
 | `preferences_get()`, `preferences_set(patch)` | 5A | Reads and updates `preferences.json`. |
-| `open_in_editor(profile, script)` | 5B | Opens a profile script with the editor command from preferences, or else the system's default app for `.py` files. |
+| `open_in_editor(profile, script)` | 5B | Opens a profile script with the editor command from preferences, or else a text editor: Notepad on Windows, `open -t` on macOS. Not the default app for `.py` files, which may be the Python launcher and would run the script. |
 | `reveal_path(path)` | 5B | Reveals a path in Explorer or Finder. Only paths inside the data folder, script paths and Hedge app files are allowed. |
 | `script_template(app, event)` | 5B | Returns starter source for a new script. The Scripts screen saves it with the `write_script` tool. |
 | `export_profile(name, include_secrets, dest)`, `import_profile(path, name)` | 5B | Exports a profile to JSON, with secrets only when `include_secrets` is set. Import creates a new profile from such a file. These stay app-only so an agent cannot export secrets. |

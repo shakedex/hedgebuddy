@@ -11,6 +11,8 @@ cargo tauri dev
 
 This builds the UI and opens it in the Tauri webview, backed by the real Rust commands (`tool`, `home_summary`, `activity`, `preferences_get`, `preferences_set`) and a real data folder.
 
+File pickers, opening a file in the editor, and revealing a path in the file manager (`pick_folder`, `pick_export_path`, `pick_import_file`, `open_in_editor`, `reveal_path`, `open_app_docs`) run in Rust, through `tauri-plugin-dialog` and `tauri-plugin-opener`. The webview itself has no permission for any of this — `crates/app/capabilities/default.json` grants only `core:event:default` — it just calls the app command and gets a result back.
+
 ## Browser preview (no Tauri, no Rust)
 
 ```bash
@@ -22,11 +24,14 @@ Serves the UI at `http://localhost:5199` with a mock bridge instead of Tauri, so
 
 | Scenario | Shows |
 |---|---|
-| `problems` (default) | Attention items, a mix of run outcomes |
-| `healthy` | Nothing needing attention |
+| `problems` (default) | The mockups. Attention items and a mix of run outcomes. The active profile `commercial-one-day` has every variable type, a secret, a path on an unplugged drive (`X:/Reports`) and a missing `CLIENT_EMAIL` that `on_copy_complete.py` requires; its scripts target OffShoot, FoolCat and nothing (`helpers_notes.py` has no manifest). OffShoot's events run this profile's scripts, the operator's own `C:\Tools\notify_dit.py`, and three deleted files (stale). FoolCat is newer than the version HedgeBuddy was tested with and has scripting turned off while `foolcat_report.py` is attached. `doc-series` has nothing attached |
+| `healthy` | The same with nothing needing attention: `CLIENT_EMAIL` set, `REPORT_DIR` on a mounted drive, no stale events |
 | `empty` | A first launch: no profile, runs or Claude activity yet, so Home shows its first-run steps |
 | `error` | Every read fails |
-| `busy` | Reads work; writes fail with "another HedgeBuddy is busy; try again" |
+| `busy` | Reads work; writes (dry runs too) fail with "another HedgeBuddy is busy; try again" |
+| `macos` | `problems` on a Mac: OffShoot's `FileCopyCompleted` is staged in the OffShoot Helper workspace, events with no macOS location are unsupported, FoolCat's events are attached by hand, EditReady is in the catalog but not installed here, and Canister is installed with no scripting events |
+
+Every scenario runs on one in-memory model (`src/mock/model.ts`, with `store.ts` for the data folder and `hedge.ts` for the Hedge apps), which follows the real tools' rules: manifests, requirements, dry runs and the sync report come out as the Rust tools return them. Writes change the model and fire the `data-changed` categories the app's watcher would; attaching, detaching, syncing and clearing change the pretend registry or workspace and fire nothing, as in the app. For `path_status`, drive `X:` and `/Volumes/Offline` are unplugged. The pickers return fixed paths, importing reads a copy of `commercial-one-day` without its secret value (or a file exported in the same session), and `open_in_editor`, `reveal_path` and `open_app_docs` only log to the console.
 
 In the browser console, `window.__hb.emit(["runs"])` fires a fake `data-changed` event for the given categories, to check that screens refetch without a reload. In `busy`, `window.__hb.busy(["set_active_profile"])` makes only the named writes report busy (for example, to fail only the second step of creating and activating a profile), and `window.__hb.busy(null)` restores every write.
 

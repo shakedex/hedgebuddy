@@ -1,6 +1,6 @@
 import {
   AppWindow, Ban, Braces, CircleCheck, CircleDashed, CirclePause, CircleX, FileCode, FileX, Hand,
-  History, Hourglass, House, Link, Package, Plug, Settings, TriangleAlert, Unlink, type LucideIcon,
+  History, Hourglass, House, Link, Link2Off, Package, Plug, Settings, TriangleAlert, Unlink, type LucideIcon,
 } from "lucide-react";
 import type { ActivityOutcome, Run, RunStatus } from "@/api/tools.gen";
 
@@ -14,6 +14,7 @@ export const STATUS = {
   runUnfinished: { icon: CircleDashed, word: "unfinished", tone: "neutral" },
   attached: { icon: Link, word: "attached", tone: "neutral" },
   detached: { icon: Unlink, word: "nothing attached", tone: "muted" },
+  otherScript: { icon: Link2Off, word: "runs another script", tone: "neutral" },
   external: { icon: FileCode, word: "your own file", tone: "neutral" },
   stale: { icon: FileX, word: "file missing", tone: "warning" },
   staged: { icon: Hourglass, word: "apply in OffShoot Helper", tone: "warning" },

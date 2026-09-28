@@ -2,7 +2,7 @@
 
 use std::fs;
 use std::io;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
@@ -69,17 +69,54 @@ pub(crate) fn is_forbidden_char(c: char) -> bool {
 /// rename over the target. Creates parent directories. When `private` is
 /// true the file is created with mode 0600 on Unix (no-op on Windows).
 pub fn write_atomic(path: &Path, bytes: &[u8], private: bool) -> Result<()> {
+    write_atomic_with(path, bytes, private, &mut || {
+        COUNTER.fetch_add(1, Ordering::Relaxed)
+    })
+}
+
+/// [`write_atomic`], with `next` giving the counter of each temp name tried.
+fn write_atomic_with(
+    path: &Path,
+    bytes: &[u8],
+    private: bool,
+    next: &mut dyn FnMut() -> u64,
+) -> Result<()> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|e| CoreError::io(parent, e))?;
     }
-    let pid = std::process::id();
-    let count = COUNTER.fetch_add(1, Ordering::Relaxed);
-    let mut tmp = path.as_os_str().to_owned();
-    tmp.push(format!(".{pid}.{count}.tmp"));
-    let tmp = Path::new(&tmp);
+    let (mut file, tmp) = create_temp(path, private, next)?;
+    let written = {
+        use std::io::Write;
+        file.write_all(bytes).and_then(|()| file.sync_all())
+    };
+    drop(file);
+    if let Err(e) = written {
+        let _ = fs::remove_file(&tmp);
+        return Err(CoreError::io(tmp, e));
+    }
+    rename_with_retry(|| fs::rename(&tmp, path), cfg!(windows), RENAME_RETRY_FOR).map_err(|e| {
+        let _ = fs::remove_file(&tmp);
+        CoreError::io(path, e)
+    })?;
+    Ok(())
+}
 
+/// How many temp names `write_atomic` tries before giving up.
+const TEMP_TRIES: u32 = 100;
+
+/// A new, empty sibling temp file of `path`, `<path>.<pid>.<n>.tmp` with `n`
+/// from `next`, and its name. Created with `create_new`, so whatever is
+/// already at that name (a crash's leftover, or a link planted there) is
+/// never opened, followed or truncated: the next name is tried instead, up
+/// to [`TEMP_TRIES`] names. With `private` the file is created 0600 on Unix,
+/// and since it is always new, that mode always applies.
+fn create_temp(
+    path: &Path,
+    private: bool,
+    next: &mut dyn FnMut() -> u64,
+) -> Result<(fs::File, PathBuf)> {
     let mut opts = fs::OpenOptions::new();
-    opts.write(true).create(true).truncate(true);
+    opts.write(true).create_new(true);
     #[cfg(unix)]
     if private {
         use std::os::unix::fs::OpenOptionsExt;
@@ -88,24 +125,24 @@ pub fn write_atomic(path: &Path, bytes: &[u8], private: bool) -> Result<()> {
     #[cfg(not(unix))]
     let _ = private;
 
-    {
-        use std::io::Write;
-        let result = (|| {
-            let mut f = opts.open(tmp).map_err(|e| CoreError::io(tmp, e))?;
-            f.write_all(bytes).map_err(|e| CoreError::io(tmp, e))?;
-            f.sync_all().map_err(|e| CoreError::io(tmp, e))?;
-            Ok::<(), CoreError>(())
-        })();
-        if let Err(e) = result {
-            let _ = fs::remove_file(tmp);
-            return Err(e);
+    let pid = std::process::id();
+    for _ in 0..TEMP_TRIES {
+        let mut tmp = path.as_os_str().to_owned();
+        tmp.push(format!(".{pid}.{}.tmp", next()));
+        let tmp = PathBuf::from(tmp);
+        match opts.open(&tmp) {
+            Ok(file) => return Ok((file, tmp)),
+            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {}
+            Err(e) => return Err(CoreError::io(tmp, e)),
         }
     }
-    rename_with_retry(|| fs::rename(tmp, path), cfg!(windows), RENAME_RETRY_FOR).map_err(|e| {
-        let _ = fs::remove_file(tmp);
-        CoreError::io(path, e)
-    })?;
-    Ok(())
+    Err(CoreError::io(
+        path,
+        io::Error::new(
+            io::ErrorKind::AlreadyExists,
+            format!("no free temp file name next to it after {TEMP_TRIES} tries"),
+        ),
+    ))
 }
 
 /// Serialize `value` as pretty JSON (two-space indent, trailing newline) and
@@ -222,6 +259,68 @@ mod tests {
         write_atomic(&target, b"new", false).unwrap();
         release.join().unwrap();
         assert_eq!(fs::read(&target).unwrap(), b"new");
+    }
+
+    #[test]
+    fn write_atomic_skips_temp_names_that_are_taken() {
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("t.json");
+        let pid = std::process::id();
+        let taken = dir.path().join(format!("t.json.{pid}.0.tmp"));
+        fs::write(&taken, b"someone else's").unwrap();
+        let mut n = 0;
+        write_atomic_with(&target, b"new", false, &mut || {
+            n += 1;
+            n - 1
+        })
+        .unwrap();
+        assert_eq!(fs::read(&target).unwrap(), b"new");
+        assert_eq!(fs::read(&taken).unwrap(), b"someone else's");
+        // Every name taken: an error after a bounded number of tries, and
+        // nothing is touched.
+        let mut tries = 0;
+        let err = write_atomic_with(&target, b"newer", false, &mut || {
+            tries += 1;
+            0
+        })
+        .unwrap_err();
+        assert!(matches!(err, CoreError::Io { .. }), "{err}");
+        assert_eq!(tries, TEMP_TRIES);
+        assert_eq!(fs::read(&target).unwrap(), b"new");
+        assert_eq!(fs::read(&taken).unwrap(), b"someone else's");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn write_atomic_never_follows_a_link_at_the_temp_name() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("t.json");
+        let victim = dir.path().join("victim.txt");
+        fs::write(&victim, b"keep").unwrap();
+        let pid = std::process::id();
+        let planted = dir.path().join(format!("t.json.{pid}.7.tmp"));
+        std::os::unix::fs::symlink(&victim, &planted).unwrap();
+        // A dangling link, which `create` would have created a file through.
+        let dangling_to = dir.path().join("made-through-link.txt");
+        let dangling = dir.path().join(format!("t.json.{pid}.8.tmp"));
+        std::os::unix::fs::symlink(&dangling_to, &dangling).unwrap();
+        let mut n = 7;
+        write_atomic_with(&target, b"new", true, &mut || {
+            n += 1;
+            n - 1
+        })
+        .unwrap();
+        assert_eq!(fs::read(&target).unwrap(), b"new");
+        assert_eq!(
+            fs::metadata(&target).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+        assert_eq!(fs::read(&victim).unwrap(), b"keep");
+        assert!(!dangling_to.exists());
+        for link in [&planted, &dangling] {
+            assert!(fs::symlink_metadata(link).unwrap().file_type().is_symlink());
+        }
     }
 
     #[test]
