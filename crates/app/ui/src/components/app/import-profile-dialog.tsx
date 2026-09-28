@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { plural } from "@/lib/format";
-import { showError } from "@/lib/toast";
+import { clearBusyToast, showError } from "@/lib/toast";
 import { confirmLeave } from "@/lib/unsaved";
 import { cn } from "@/lib/utils";
 
@@ -89,10 +89,6 @@ export function ImportProfileDialog({ open, onOpenChange, path, onCloseFocus }: 
   const inFlightRef = useRef(false);
   const openRef = useRef(open);
   openRef.current = open;
-  // The id of a busy-toast `showError` last showed (from either `import_profile` or the switch that can
-  // follow it), so a retry that then succeeds can dismiss it (Task 12 ruling: a busy toast must not linger
-  // once the thing it was about has gone through).
-  const errorToastRef = useRef<string | number | null>(null);
   const submitRef = useRef<HTMLButtonElement>(null);
   const switchRef = useRef<HTMLButtonElement>(null);
   // A plain `ref.current?.focus()` right where a failure sets the phase back to something interactive is a
@@ -130,10 +126,7 @@ export function ImportProfileDialog({ open, onOpenChange, path, onCloseFocus }: 
     callTool("set_active_profile", { name: result.profile }).then(
       () => {
         inFlightRef.current = false;
-        if (errorToastRef.current !== null) {
-          toast.dismiss(errorToastRef.current);
-          errorToastRef.current = null;
-        }
+        clearBusyToast();
         void invalidateFor(["index"]).then(() => {
           if (openRef.current) onOpenChange(false);
         });
@@ -147,7 +140,7 @@ export function ImportProfileDialog({ open, onOpenChange, path, onCloseFocus }: 
           setPhase("switch-pending");
           setRefocusSwitch(true);
         }
-        errorToastRef.current = showError(e, () => {
+        showError(e, () => {
           if (inFlightRef.current || !openRef.current) return; // Guarded: Close may have won the race.
           trySwitch(result);
         });
@@ -176,10 +169,7 @@ export function ImportProfileDialog({ open, onOpenChange, path, onCloseFocus }: 
     callApp("import_profile", { path, name: cur.name }).then(
       (result) => {
         inFlightRef.current = false;
-        if (errorToastRef.current !== null) {
-          toast.dismiss(errorToastRef.current);
-          errorToastRef.current = null;
-        }
+        clearBusyToast();
         // The import already happened regardless of what a switch does next — say so right away.
         toastImported(result);
         setImported(result);
@@ -197,7 +187,7 @@ export function ImportProfileDialog({ open, onOpenChange, path, onCloseFocus }: 
           setPhase("editing");
           setRefocusSubmit(true);
         }
-        errorToastRef.current = showError(e, submit);
+        showError(e, submit);
       },
     );
   };

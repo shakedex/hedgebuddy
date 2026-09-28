@@ -409,7 +409,7 @@ function Panels() {
         <AttentionRow status="varMissing">
           <Mono>CLIENT_EMAIL</Mono> is needed but not set
         </AttentionRow>
-        <AttentionRow status="stale">3 OffShoot events point at deleted scripts</AttentionRow>
+        <AttentionRow status="stale">3 OffShoot events point at missing files</AttentionRow>
         <AttentionRow status="package">hedgebuddy package is 0.10.0, needs 0.11.0</AttentionRow>
       </Panel>
       <Panel title="Recent runs" action={<Button variant="ghost" size="sm">All runs <ChevronRight aria-hidden /></Button>}>
@@ -844,7 +844,7 @@ function ChangePreviewGallery() {
         describe={() => ({
           summary: <>HedgeBuddy will delete <Mono className="text-foreground">on_copy_complete.py</Mono> from commercial-one-day.</>,
           changes: [{ kind: "delete", target: "on_copy_complete.py", detail: { text: "removed from commercial-one-day" } }],
-          warnings: [<>OffShoot · FileCopyCompleted will be left pointing at a file that no longer exists</>],
+          warnings: [<>OffShoot · FileCopyCompleted will be left pointing at a missing file</>],
         })}
         apply={() => Promise.resolve()}
         onApplied={confirmed("Deleted on_copy_complete.py")}

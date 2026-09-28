@@ -82,9 +82,9 @@ function NeedRow({ row, selected }: { row: RequirementRow; selected: boolean }) 
 }
 
 function VariableRow({ v, selected, notMounted }: { v: VarView; selected: boolean; notMounted: boolean }) {
-  // Path and URL values are mono everywhere (typography rule); every other summary (a count, "on"/"off",
-  // a comma-joined list) stays plain text.
-  const monoValue = v.type === "path" || v.type === "url";
+  // Path, URL, int and float values are mono everywhere (typography rule); every other summary ("on"/"off",
+  // a comma-joined list, an item count) stays plain text.
+  const monoValue = v.type === "path" || v.type === "url" || v.type === "int" || v.type === "float";
   const summary = summarize(v.type, v.value);
   return (
     <Link

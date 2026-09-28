@@ -24,9 +24,9 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { describeActions, describeState } from "@/lib/actions";
 import { appName } from "@/lib/format";
-import { focusListbox, focusMainHeading } from "@/lib/focus";
+import { focusMainHeading } from "@/lib/focus";
 import { STATUS, TONE_TEXT, type StatusKey, type Tone } from "@/lib/status";
-import { showError } from "@/lib/toast";
+import { clearBusyToast, showError } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import { ScriptPreview } from "./script-preview";
 
@@ -393,6 +393,7 @@ export function ScriptDetail({ name, profile, overview, appsOverview }: {
     callApp("open_in_editor", { profile, script: name }).then(
       (r) => {
         if (mountedRef.current) setOpeningEditor(false);
+        clearBusyToast();
         toast(`Opened in ${r.with}`);
       },
       (e: unknown) => {
@@ -408,6 +409,7 @@ export function ScriptDetail({ name, profile, overview, appsOverview }: {
     callApp("reveal_path", { path: scriptRow.path }).then(
       () => {
         if (mountedRef.current) setRevealing(false);
+        clearBusyToast();
       },
       (e: unknown) => {
         if (mountedRef.current) setRevealing(false);
@@ -421,7 +423,7 @@ export function ScriptDetail({ name, profile, overview, appsOverview }: {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex min-h-11 shrink-0 flex-wrap items-center justify-between gap-x-2 gap-y-1 border-b border-border px-4 py-2 @max-[640px]:px-3">
+      <div className="flex min-h-11 shrink-0 flex-wrap items-center justify-between gap-x-2 gap-y-1 border-b border-border px-4 @max-[640px]:px-3">
         {/* `break-all`, not `truncate`: script names can run long, and a cut-off name is worse here than a
             name that wraps to a second line (design direction rule 5). `flex-auto` (not `flex-1`, which gives
             a zero flex-basis): the name should claim its own natural width first, so on a short name the two
@@ -566,10 +568,11 @@ export function ScriptDetail({ name, profile, overview, appsOverview }: {
         title={`Delete ${name}?`}
         applyLabel="Delete"
         destructive
-        returnFocus={() => {
-          focusMainHeading();
-          return null;
-        }}
+        // Ruling: after deleting a script, focus goes to the list (the listbox), not a heading. The listbox
+        // is still there — at 480 the route swaps to the bare list, at 960 it's beside the (now-empty) detail
+        // pane — so this is the fallback whenever the dialog's own opener (the Delete button, gone once the
+        // route navigates away) is not; `screen-heading` only covers the case neither exists.
+        returnFocus={() => document.getElementById("scripts-listbox") ?? document.getElementById("screen-heading")}
         plan={() => callTool("delete_script", { name, dry_run: true, profile })}
         describe={(p) => {
           if (!("would_delete" in p)) throw new Error("delete_script: unexpected dry-run result");
@@ -597,12 +600,6 @@ export function ScriptDetail({ name, profile, overview, appsOverview }: {
           // (removing this row from `overview.data`) while this route is still showing it, flashing "This
           // script is gone" for a frame before the navigate below finally ran.
           navigate("/scripts", { replace: true });
-          // Radix's own close-focus restore lands on the Delete button — still connected at that instant,
-          // since the navigate above hasn't unmounted this pane yet — and once it does, `ListDetail`'s own
-          // effect moves focus again on its way to the bare list. Neither is where focus belongs once the
-          // dust settles, so this reasserts it a frame later, after both of those have already happened
-          // (ruling: after deleting a script, focus goes to the list — the listbox — not the heading).
-          requestAnimationFrame(() => focusListbox("scripts-listbox"));
           invalidateHedgeState();
           await invalidateFor([`scripts:${profile}`]);
         }}

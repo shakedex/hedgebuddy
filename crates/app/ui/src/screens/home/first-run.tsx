@@ -61,7 +61,7 @@ function CreateFirstProfile() {
     <>
       <div className="flex flex-wrap gap-2">
         <Button ref={triggerRef} size="sm" className="w-fit" onClick={() => setOpen(true)}>
-          Create profile
+          New profile…
         </Button>
         <Button variant="outline" size="sm" className="w-fit" disabled={importProfile.picking} onClick={importProfile.start}>
           Import profile…

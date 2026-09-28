@@ -70,17 +70,28 @@ function isLocalIpLiteral(host: string): boolean {
   return isLocalIpv4(unbracketed) || isLocalIpv6(unbracketed);
 }
 
+/** Whether `host` is a DNS-shaped `*.local` name (mDNS): one or more labels of ASCII letters, digits and
+ *  hyphens, joined by single dots, the last of which is `local` (case-insensitive) \u2014 stricter than "ends
+ *  with .local" (files.rs `is_dot_local`). A UNC server text smuggled through the verbatim-prefix regex above
+ *  can carry a slash, as in `evil.example.com/x.local`: that ends with ".local" but fails a label's
+ *  alnum-or-hyphen check here, so the whole host is rejected and falls through to the "any dot" check below. */
+function isDotLocal(host: string): boolean {
+  const labels = host.split(".");
+  return labels.length >= 2 && /^local$/i.test(labels[labels.length - 1]) && labels.every((l) => /^[A-Za-z0-9-]+$/.test(l));
+}
+
 /** A share whose server is named with a dot, or is an IP address, which `path_status` never contacts
  *  (files.rs `is_remote_host_path`): `\\files.example.com\x`, `//8.8.8.8/x`, `\\?\UNC\[2001:db8::1]\x`,
- *  `\\167772165\x` \u2014 except a strictly parsed private, loopback or link-local IP literal, or a `*.local`
- *  name (mDNS), which stay on the local network and are checked instead (`\\10.0.0.5\x`, `\\nas.local\x`). */
+ *  `\\167772165\x` \u2014 except a strictly parsed private, loopback or link-local IP literal, or a strictly
+ *  DNS-shaped `*.local` name (mDNS, [`isDotLocal`]), which stay on the local network and are checked instead
+ *  (`\\10.0.0.5\x`, `\\nas.local\x`). */
 function remoteShare(path: string): boolean {
   const verbatim = /^\\\\\?\\UNC[\\/]([^\\]*)/i.exec(path);
   const plain = /^[\\/]{2}([^\\/]*)/.exec(path);
   const server = verbatim ? verbatim[1] : plain && plain[1] !== "?" && plain[1] !== "." ? plain[1] : null;
   if (server === null) return false;
   const host = server.split("@")[0];
-  if (isLocalIpLiteral(host) || /\.local$/i.test(host)) return false;
+  if (isLocalIpLiteral(host) || isDotLocal(host)) return false;
   return /^\d+$/.test(host) || /^0x[0-9a-f]+$/i.test(host) || /[.:[\]\u3002\uff0e\uff61]/.test(host);
 }
 

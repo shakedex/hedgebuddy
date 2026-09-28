@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { describeActions } from "@/lib/actions";
 import { plural } from "@/lib/format";
-import { showError } from "@/lib/toast";
+import { clearBusyToast, showError } from "@/lib/toast";
 import { EventsTable } from "./events-table";
 
 type StaleEvent = Extract<EventAttachment, { state: "stale" }>;
@@ -151,6 +151,7 @@ export function AppDetail({ app, overview, activeProfile }: {
     callApp("open_app_docs", { app }).then(
       (r) => {
         if (mountedRef.current) setOpeningDocs(false);
+        clearBusyToast();
         toast(`Opened in ${r.with}`);
       },
       (e: unknown) => {
@@ -164,7 +165,7 @@ export function AppDetail({ app, overview, activeProfile }: {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex min-h-11 shrink-0 flex-wrap items-center justify-between gap-x-2 gap-y-1 border-b border-border px-4 py-2 @max-[640px]:px-3">
+      <div className="flex min-h-11 shrink-0 flex-wrap items-center justify-between gap-x-2 gap-y-1 border-b border-border px-4 @max-[640px]:px-3">
         <span className="flex min-w-0 flex-auto flex-wrap items-baseline gap-x-2 gap-y-0.5">
           <span className="break-words text-base font-medium text-foreground-strong">{status.name}</span>
           {status.version && <span className="text-sm text-muted-foreground">{status.version}</span>}

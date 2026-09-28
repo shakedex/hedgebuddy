@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { showError } from "@/lib/toast";
+import { clearBusyToast, showError } from "@/lib/toast";
 import { confirmLeave } from "@/lib/unsaved";
 import { cn } from "@/lib/utils";
 
@@ -28,9 +28,6 @@ export function CreateProfileDialog({ open, onOpenChange, activate, onCloseFocus
   const openRef = useRef(open);
   openRef.current = open;
   const inFlightRef = useRef(false);
-  // The id of a busy-toast `showError` last showed, so a retry that then succeeds can dismiss it (Task 12
-  // ruling: a busy toast must not linger once the thing it was about has gone through).
-  const errorToastRef = useRef<string | number | null>(null);
 
   /** Closing (Create, Cancel, Escape or an overlay click) always clears the fields for next time, and the
    *  create-retry memory with them (ruling 16): a later create starts clean rather than reusing this round's. */
@@ -40,7 +37,6 @@ export function CreateProfileDialog({ open, onOpenChange, activate, onCloseFocus
       setName("");
       setDescription("");
       create.forgetRetry();
-      errorToastRef.current = null;
     }
   };
 
@@ -52,16 +48,13 @@ export function CreateProfileDialog({ open, onOpenChange, activate, onCloseFocus
       {
         onSuccess: () => {
           inFlightRef.current = false;
-          if (errorToastRef.current !== null) {
-            toast.dismiss(errorToastRef.current);
-            errorToastRef.current = null;
-          }
+          clearBusyToast();
           toast(`Created profile ${name}`);
           close(false);
         },
         onError: (e) => {
           inFlightRef.current = false;
-          errorToastRef.current = showError(e, submit);
+          showError(e, submit);
         },
       },
     );

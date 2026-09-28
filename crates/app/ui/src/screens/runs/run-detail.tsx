@@ -221,16 +221,7 @@ export function RunDetail({ runId, activeProfile }: { runId: string; activeProfi
           </>
         )}
       </div>
-      <div className="flex min-h-11 shrink-0 flex-wrap items-center justify-end gap-x-2 gap-y-1 border-t border-border px-3 py-2">
-        {wrongProfile && (
-          <span id="run-open-script-reason" className="text-xs text-muted-foreground">
-            In <Mono className="text-muted-foreground">{run.profile}</Mono>, which isn't active.
-          </span>
-        )}
-        <Button variant="outline" size="sm" onClick={() => void handleCopy()}>
-          <Copy aria-hidden strokeWidth={1.75} />
-          Copy details
-        </Button>
+      <div className="flex min-h-11 shrink-0 flex-wrap items-center justify-end gap-x-2 gap-y-1 border-t border-border px-3">
         <Button
           asChild
           variant="outline"
@@ -248,6 +239,15 @@ export function RunDetail({ runId, activeProfile }: { runId: string; activeProfi
             <FileCode aria-hidden strokeWidth={1.75} />
             Open script
           </Link>
+        </Button>
+        {wrongProfile && (
+          <span id="run-open-script-reason" className="text-xs text-muted-foreground">
+            In <Mono className="text-muted-foreground">{run.profile}</Mono>, which isn't active.
+          </span>
+        )}
+        <Button variant="outline" size="sm" onClick={() => void handleCopy()}>
+          <Copy aria-hidden strokeWidth={1.75} />
+          Copy details
         </Button>
       </div>
     </div>

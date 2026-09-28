@@ -2,14 +2,13 @@ import { useEffect, useRef, useState } from "react";
 import {
   Ban, FileCog, FilePen, KeyRound, KeySquare, Link, LoaderCircle, Trash2, TriangleAlert, Unlink, type LucideIcon,
 } from "lucide-react";
-import { toast } from "sonner";
 import { ErrorPanel } from "@/components/app/error-panel";
 import { Mono } from "@/components/app/mono";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { ChangeKind, ChangeRow, Words } from "@/lib/actions";
-import { showError } from "@/lib/toast";
+import { clearBusyToast, showError } from "@/lib/toast";
 
 /** One Lucide icon per ledger row kind (Design direction, 5B: "The change-preview dialog"). */
 const KIND_ICON: Record<ChangeKind, LucideIcon> = {
@@ -98,10 +97,6 @@ export function ChangePreviewDialog<P, R>({
   const requestId = useRef(0);
   // True while a real apply() is in flight, so a busy toast's "Try again" can never overlap the button.
   const applyInFlightRef = useRef(false);
-  // The id of the toast a failed apply() last showed (from `showError`), so a retry that then succeeds can
-  // dismiss it explicitly — otherwise a busy toast's "Try again" a moment ago stays on screen even once the
-  // thing it was about has gone through (Task 12 ruling).
-  const errorToastRef = useRef<string | number | null>(null);
   // The latest `open`, read from a toast's "Try again" callback: it must do nothing once this dialog has
   // closed, since no fresh dry run has happened since.
   const openRef = useRef(open);
@@ -147,7 +142,6 @@ export function ChangePreviewDialog<P, R>({
   const runPlan = () => {
     const id = ++requestId.current;
     applyInFlightRef.current = false;
-    errorToastRef.current = null;
     setPhase("planning");
     setPlanError(null);
     setRetrying(false);
@@ -199,10 +193,7 @@ export function ChangePreviewDialog<P, R>({
       (result) => {
         applyInFlightRef.current = false;
         if (requestId.current !== id) return;
-        if (errorToastRef.current !== null) {
-          toast.dismiss(errorToastRef.current);
-          errorToastRef.current = null;
-        }
+        clearBusyToast();
         onOpenChange(false);
         try {
           onApplied?.(result);
@@ -214,7 +205,7 @@ export function ChangePreviewDialog<P, R>({
         applyInFlightRef.current = false;
         if (requestId.current !== id) return;
         setPhase("ready");
-        errorToastRef.current = showError(e, doApply);
+        showError(e, doApply);
       },
     );
   };
@@ -373,6 +364,14 @@ function PlanningSkeleton() {
   );
 }
 
+/** Whether a ledger row's `target` is a path, registry key or script name (mono, typography rule) rather than
+ *  an app name and event id (regular text) — true for every kind except Sync's own attach/detach rows, whose
+ *  target is "AppName · event_id" (spec §7's "the target in mono" is about the *usual* row; those two are
+ *  the one kind of row this doesn't hold for). */
+function targetIsMono(kind: ChangeKind): boolean {
+  return kind !== "attach" && kind !== "detach";
+}
+
 function LedgerRow({ row }: { row: ChangeRow }) {
   const Icon = KIND_ICON[row.kind];
   return (
@@ -380,7 +379,11 @@ function LedgerRow({ row }: { row: ChangeRow }) {
       <Icon aria-hidden className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" strokeWidth={1.75} />
       <span className="sr-only">{KIND_WORD[row.kind]}</span>
       <div className="min-w-0 flex-1">
-        <Mono className="block text-xs break-words">{wrapPath(row.target)}</Mono>
+        {targetIsMono(row.kind) ? (
+          <Mono className="block text-xs break-words">{wrapPath(row.target)}</Mono>
+        ) : (
+          <span className="block text-xs break-words text-foreground">{row.target}</span>
+        )}
         {row.detail && <p className="text-xs text-muted-foreground">{renderWords(row.detail)}</p>}
       </div>
     </li>
@@ -401,7 +404,8 @@ export function wrapPath(path: string): React.ReactNode {
 }
 
 /** Renders `Words` for a warning or a ledger detail: the path portion, if any, in mono with wrap-friendly
- *  breaks; everything else stays plain text, inheriting whatever colour the row already has. */
+ *  breaks (`afterPath`, a second mono segment such as a profile name, the same way); everything else stays
+ *  plain text, inheriting whatever colour the row already has. */
 export function renderWords(words: Words): React.ReactNode {
   if (!words.path) return words.text;
   return (
@@ -409,6 +413,7 @@ export function renderWords(words: Words): React.ReactNode {
       {words.text}
       <span className="font-mono">{wrapPath(words.path)}</span>
       {words.after}
+      {words.afterPath && <span className="font-mono">{wrapPath(words.afterPath)}</span>}
     </>
   );
 }

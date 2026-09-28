@@ -17,8 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { appName } from "@/lib/format";
-import { focusListbox } from "@/lib/focus";
-import { showError } from "@/lib/toast";
+import { clearBusyToast, showError } from "@/lib/toast";
 import { markSaved, useUnsaved } from "@/lib/unsaved";
 import { VAR_TYPES, emptyEdit, fromEdit, toEdit, validateName, validateValue, type EditValue } from "@/lib/var-values";
 
@@ -206,6 +205,7 @@ function VariableForm({ name, profile, data }: { name: string; profile: string; 
       // created row, or it would wrongly conclude the variable doesn't exist yet.
       async (result) => {
         await invalidateFor([`profile:${profile}`]);
+        clearBusyToast();
         toast(`Saved ${result.name}`);
         // Told, regardless of whether this form is still mounted; but if the operator has already left (or
         // is about to, having discarded this in the meantime), don't touch its state or redirect them back.
@@ -274,7 +274,12 @@ function VariableForm({ name, profile, data }: { name: string; profile: string; 
               error={dirty ? valueErr : null}
               secret={
                 type === "secret"
-                  ? { state: secretState, onChange: setSecretState, reveal: revealSecret, canRevealStored: !creating && baseline.type === "secret" }
+                  ? {
+                      state: secretState,
+                      onChange: setSecretState,
+                      reveal: revealSecret,
+                      canRevealStored: !creating && baseline.type === "secret" && !existingVar?.missing,
+                    }
                   : undefined
               }
             />
@@ -362,6 +367,11 @@ function VariableForm({ name, profile, data }: { name: string; profile: string; 
           title={`Delete ${name}?`}
           applyLabel="Delete"
           destructive
+          // Ruling: after deleting a variable, focus goes to the list (the listbox), not a heading — see
+          // `ScriptDetail`'s own delete dialog for why this is a plain fallback element rather than a
+          // side-effecting callback (Radix's own close-focus restore needs an element to check `isConnected`
+          // against, not an eager `.focus()` call racing a rAF).
+          returnFocus={() => document.getElementById("variables-listbox") ?? document.getElementById("screen-heading")}
           plan={() => callTool("delete_var", { name, dry_run: true, profile })}
           describe={(p) => {
             if (!("would_delete" in p)) throw new Error("delete_var: unexpected dry-run result");
@@ -385,18 +395,19 @@ function VariableForm({ name, profile, data }: { name: string; profile: string; 
           }}
           apply={() => callTool("delete_var", { name, profile })}
           onApplied={async () => {
-            await invalidateFor([`profile:${profile}`]);
             toast(`Deleted ${name}`);
             // Deleting discards whatever was unsaved here too — nothing left to ask about. Unlike a save,
             // there's no later render to naturally settle `dirty` to false (the variable is simply gone), so
             // this clears the guard's set directly rather than waiting on one.
             markSaved(`variable:${name}`);
+            // Navigate *before* awaiting the invalidation, not after (matching `ScriptDetail`'s own delete):
+            // awaiting first would let the refetch land — `existingVar` above is reactive, not frozen — while
+            // this route is still showing it, flipping `creating` to true and re-rendering this as a blank
+            // "New variable" form for a frame before the navigate below finally ran. That reactive flip would
+            // also hard-unmount this dialog (rather than letting Radix's own open→false close run its course),
+            // skipping `onCloseAutoFocus` and so this dialog's `returnFocus` fallback above entirely.
             navigate("/variables", { replace: true });
-            // Ruling: after deleting a variable, focus goes to the list (the listbox), not a heading. A
-            // frame later, matching `ScriptDetail`'s own delete — see its comment for why immediately isn't
-            // enough (Radix's own close-focus restore and `ListDetail`'s Back-focus effect both still have
-            // to happen first).
-            requestAnimationFrame(() => focusListbox("variables-listbox"));
+            await invalidateFor([`profile:${profile}`]);
           }}
         />
       )}

@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { showError } from "@/lib/toast";
+import { clearBusyToast, showError } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 
 /** Script-name rule (Task 12 step 4): ends in `.py`, no path characters, and not already the name of a
@@ -69,9 +69,6 @@ export function NewScriptDialog({ open, onOpenChange, profile, appsOverview, exi
 
   const create = useCreateScript();
   const inFlightRef = useRef(false);
-  // The id of a busy-toast `showError` last showed, so a retry that then succeeds can dismiss it (Task 12
-  // ruling: a busy toast must not linger once the thing it was about has gone through).
-  const errorToastRef = useRef<string | number | null>(null);
   // Bumped on every open *and* every close (the effect below), so a closure from an earlier open/close cycle
   // — a busy toast's "Try again", bound to a `submit` from before the operator cancelled and reopened this
   // same (never-unmounted) dialog — can tell it no longer belongs to the current one and bail before it ever
@@ -139,7 +136,6 @@ export function NewScriptDialog({ open, onOpenChange, profile, appsOverview, exi
     setTemplateError(null);
     templateRequestId.current++;
     create.forgetRetry();
-    errorToastRef.current = null;
   };
 
   const close = (next: boolean) => {
@@ -167,10 +163,7 @@ export function NewScriptDialog({ open, onOpenChange, profile, appsOverview, exi
         onSuccess: (result) => {
           inFlightRef.current = false;
           if (session !== sessionRef.current) return;
-          if (errorToastRef.current !== null) {
-            toast.dismiss(errorToastRef.current);
-            errorToastRef.current = null;
-          }
+          clearBusyToast();
           toast(`Created ${result.name}`);
           close(false);
           onCreated(result.name);
@@ -178,7 +171,7 @@ export function NewScriptDialog({ open, onOpenChange, profile, appsOverview, exi
         onError: (e) => {
           inFlightRef.current = false;
           if (session !== sessionRef.current) return;
-          errorToastRef.current = showError(e, submit);
+          showError(e, submit);
         },
       },
     );

@@ -260,7 +260,7 @@ export function ScriptList({
   }
 
   const toolbar = (
-    <div className="flex shrink-0 flex-col gap-1.5 border-b border-border px-2 py-1.5">
+    <div className="flex shrink-0 flex-col gap-1.5 border-b border-border px-2 pb-1.5">
       <div className="flex h-11 items-center gap-2">
         <div className="relative min-w-0 flex-1">
           <Search aria-hidden className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground" strokeWidth={1.75} />
@@ -377,7 +377,16 @@ export function ScriptList({
               )),
               ...p.skipped.map((s) => (
                 <>
-                  <Mono className="text-warning">{s.script}</Mono>: {describeSkipReason(s.reason)}
+                  <Mono className="text-warning">{s.script}</Mono>:{" "}
+                  {describeSkipReason(s.reason).map((part, i) =>
+                    part.name ? (
+                      <Mono key={i} className="text-warning">
+                        {part.name}
+                      </Mono>
+                    ) : (
+                      part.text
+                    ),
+                  )}
                 </>
               )),
             ];

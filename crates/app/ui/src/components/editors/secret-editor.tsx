@@ -89,7 +89,10 @@ export function SecretEditor({ id, state, onChange, reveal, error, canRevealStor
           id={id}
           type={revealed ? "text" : "password"}
           className="font-mono"
-          placeholder="••••••••"
+          // A masked placeholder implies something is actually stored to reveal; with nothing stored (brand
+          // new, just retyped from another type, or a secret the store itself reports missing), there's
+          // nothing behind the dots, so this stays blank instead of implying otherwise.
+          placeholder={canRevealStored ? "••••••••" : undefined}
           spellCheck={false}
           autoComplete="new-password"
           // `changed` wins regardless of `revealed`: once the operator has typed, that's the value on

@@ -2,6 +2,7 @@ import { useRef } from "react";
 import { keepPreviousData, QueryClient, useMutation, useQuery } from "@tanstack/react-query";
 import { BridgeError, callApp, callTool } from "./bridge";
 import type { AppCommandName, AppCommandTypes, CreateProfileOutput, ToolName, ToolTypes } from "./tools.gen";
+import { clearBusyToast } from "@/lib/toast";
 
 /** `path_status`'s own limit (its input's doc comment: "at most 64"). */
 const PATH_STATUS_LIMIT = 64;
@@ -109,7 +110,12 @@ export function useRun(runId: string | null) {
 export function useActivateProfile() {
   return useMutation({
     mutationFn: (name: string) => callTool("set_active_profile", { name }),
-    onSuccess: () => invalidateFor(["index"]),
+    onSuccess: () => {
+      // Covers both callers (the profile-switcher pill and first-run's "Choose a profile" step): a busy
+      // failure's "Try again" must not linger once a retry — or a fresh click — has gone through.
+      clearBusyToast();
+      return invalidateFor(["index"]);
+    },
   });
 }
 
