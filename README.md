@@ -21,7 +21,7 @@ HedgeBuddy is a small setup tool for DITs who automate Hedge's apps (OffShoot, F
 
 ## Use it from Claude (MCP)
 
-With the desktop app installed, open HedgeBuddy → **Connect**. Claude Desktop shows Set up (or Update, if it already points at something else) behind a preview of the change, with a timestamped backup of the config before anything is written; Claude Code and any other MCP-speaking client each get a ready command, with Copy. There's nothing to type by hand.
+With the desktop app installed, open HedgeBuddy → **Connect**. Claude Desktop shows Set up (or Update, if it already points at something else) behind a preview of the change, with a timestamped backup of the config before anything is written; Claude Code and any other MCP-speaking client each get a ready command, with Copy. Claude Desktop needs no typing at all; for Claude Code, paste the copied command into a terminal, and for another client, paste the copied JSON into its config.
 
 Building just the CLI, without the desktop app? Build and install the binary (it lands in `~/.cargo/bin`, which rustup puts on PATH):
 
@@ -36,7 +36,7 @@ hedgebuddy tools
 claude mcp add hedgebuddy -- hedgebuddy mcp
 ```
 
-**Claude Desktop:** add this to `claude_desktop_config.json` (`%APPDATA%\Claude\` on Windows, `~/Library/Application Support/Claude/` on macOS), using the full path to the binary if `hedgebuddy` is not on the PATH Claude Desktop sees, then restart Claude Desktop:
+**Claude Desktop:** add this to `claude_desktop_config.json` (`%APPDATA%\Claude\` on Windows, `~/Library/Application Support/Claude/` on macOS), using the full path to the binary if `hedgebuddy` is not on the PATH Claude Desktop sees, then restart Claude Desktop. If Claude Desktop is installed as a Windows app package (a `Claude_*` folder exists in `%LOCALAPPDATA%\Packages`), it reads the file in `%LOCALAPPDATA%\Packages\Claude_*\LocalCache\Roaming\Claude\` whenever one is there, so edit that one:
 
 ```json
 {
