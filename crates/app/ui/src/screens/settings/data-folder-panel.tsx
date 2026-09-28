@@ -7,7 +7,7 @@ import { Mono } from "@/components/app/mono";
 import { Readout } from "@/components/app/readout";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { appName } from "@/lib/format";
+import { appName, firstLine } from "@/lib/format";
 import { clearBusyToast, showError } from "@/lib/toast";
 
 function PanelSkeleton() {
@@ -81,7 +81,12 @@ export function DataFolderPanel() {
       {data.catalog_error && (
         <p className="flex items-start gap-1.5 text-xs text-warning">
           <TriangleAlert aria-hidden className="mt-0.5 size-3.5 shrink-0" strokeWidth={1.75} />
-          <span className="min-w-0 flex-1 break-words">{data.catalog_error}. HedgeBuddy uses its built-in catalog until this is fixed.</span>
+          {/* A TOML parse error's own text can run to several lines (a source excerpt and a caret); only the
+              first is shown, with the full text still reachable in `title` (brief: catalog errors render
+              garbled otherwise). */}
+          <span className="min-w-0 flex-1 break-words" title={data.catalog_error}>
+            {firstLine(data.catalog_error)}. HedgeBuddy uses its built-in catalog until this is fixed.
+          </span>
         </p>
       )}
 

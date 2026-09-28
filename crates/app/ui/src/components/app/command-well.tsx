@@ -12,9 +12,13 @@ const COPIED_MS = 1500;
  * joints instead of splitting mid-word (Design direction 5C: "wraps at spaces and separators… never
  * mid-word"). Unlike `wrapPath` (`change-preview-dialog.tsx`), which only breaks at path separators, a
  * command well's text is also space-separated arguments (`claude mcp add hedgebuddy -- "…" mcp`).
+ *
+ * A backslash only offers a break when the next character isn't itself a backslash — the JSON well's own
+ * text escapes a Windows path's single separator as two (`C:\\Users\\…`), and a break landing between that
+ * pair would split one escape in half. A run of two ends up with its one break after the pair, not inside it.
  */
 function wrapCommand(text: string): React.ReactNode {
-  const parts = text.split(/(?<=[\\/\s])/);
+  const parts = text.split(/(?<=[/\s])|(?<=\\)(?!\\)/);
   const nodes: React.ReactNode[] = [];
   parts.forEach((part, i) => {
     nodes.push(part);

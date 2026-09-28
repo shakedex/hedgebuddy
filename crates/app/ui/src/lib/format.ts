@@ -13,6 +13,14 @@ export function basename(path: string): string {
   return idx === -1 ? path : path.slice(idx + 1);
 }
 
+/** A message's own first line — a multi-line error (a TOML parse error's own source excerpt, say) renders as
+ *  one plain sentence instead of garbling across lines; the full text still belongs in a `title` so it isn't
+ *  lost, just not the default reading. */
+export function firstLine(text: string): string {
+  const at = text.indexOf("\n");
+  return at === -1 ? text : text.slice(0, at);
+}
+
 /** Local 24-hour time: `02:14`, or `02:14:07` with seconds. */
 export function clock(ts: string, seconds = false): string {
   return new Date(ts).toLocaleTimeString(undefined, {

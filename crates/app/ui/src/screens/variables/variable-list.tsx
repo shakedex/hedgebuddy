@@ -14,6 +14,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useImportProfile } from "@/hooks/use-import-profile";
 import { useListKeyboard } from "@/hooks/use-list-keyboard";
+import { useFocusHeadingWhenEmptied } from "@/lib/focus";
 import { summarize } from "@/lib/var-values";
 import { cn } from "@/lib/utils";
 
@@ -161,6 +162,9 @@ export function VariableList({ overview, selectedName, filterText, onFilterTextC
 
   const data = overview.data;
   const { variables, needs, filteredNeeds, filteredVars } = filterOverview(data, filterText);
+  // See `useFocusHeadingWhenEmptied`: deleting the last variable (or the last pinned requirement) leaves the
+  // delete dialog's own `returnFocus` landing on a listbox that the follow-up refetch then removes.
+  useFocusHeadingWhenEmptied(needs.length === 0 && variables.length === 0);
 
   const allPaths = useMemo(() => variables.flatMap(pathValuesOf), [variables]);
   const pathStatus = usePathStatus(allPaths);

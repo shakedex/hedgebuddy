@@ -125,7 +125,7 @@ function describePlan(action: SetupAction, plan: ClaudeDesktopPlanOutput): Previ
     },
   ];
   if (plan.backup_path) {
-    changes.push({ kind: "backup", target: dirname(plan.backup_path), detail: { text: "a timestamped backup beside it" } });
+    changes.push({ kind: "backup", target: dirname(plan.backup_path), detail: { text: "a timestamped backup of the config, in this folder" } });
   }
   return {
     summary: planSummary(action, plan),
@@ -173,7 +173,10 @@ export function ClaudeDesktopPanel() {
   const noBinary = data.binary === null;
   const offerAction = data.state === "not_set_up" || data.state === "no_claude" || data.state === "outdated";
   const actionLabel = data.state === "outdated" ? "Update…" : "Set up…";
-  const checkAgain = () => void query.refetch();
+  const checkAgain = () => {
+    if (query.isFetching) return;
+    void query.refetch();
+  };
   // Review round 1, Minor 6: without a bundled binary there is nothing to compare the config against
   // (`expected` is null), but the entry already there is still worth showing rather than a bare "—".
   const commandValue = data.expected ? data.expected.command : (data.current?.command ?? null);
@@ -205,9 +208,9 @@ export function ClaudeDesktopPanel() {
         {!offerAction ? (
           <button
             type="button"
-            disabled={query.isFetching}
+            aria-disabled={query.isFetching}
             aria-busy={query.isFetching}
-            className="inline-flex min-h-7 items-center px-1 text-sm font-medium text-foreground hover:underline disabled:pointer-events-none disabled:opacity-60 disabled:no-underline"
+            className="inline-flex min-h-7 items-center px-1 text-sm font-medium text-foreground hover:underline aria-disabled:pointer-events-none aria-disabled:opacity-60 aria-disabled:no-underline"
             onClick={checkAgain}
           >
             {query.isFetching ? "Checking…" : "Check again"}

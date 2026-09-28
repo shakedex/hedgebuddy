@@ -25,7 +25,7 @@ function groupByDay(records: ActivityRecord[]): DayGroup[] {
 
 function ActivityRow({ record }: { record: ActivityRecord }) {
   return (
-    <div className="grid h-8 grid-cols-[44px_9rem_1fr_auto] items-center gap-2 px-1">
+    <div className="grid h-8 grid-cols-[44px_13rem_1fr_auto] items-center gap-2 px-1">
       <span className="readout text-xs text-muted-foreground">{clock(record.ts)}</span>
       <Mono className="min-w-0 truncate text-xs" title={record.tool}>
         {record.tool}

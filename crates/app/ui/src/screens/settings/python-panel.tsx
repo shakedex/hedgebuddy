@@ -253,7 +253,10 @@ export function PythonPanel() {
               <span aria-hidden className="text-muted-foreground">
                 ·
               </span>
-              <span className="min-w-0 flex-1 break-words">{python.problem}</span>
+              {/* The STATUS word already says "not found" — this doesn't repeat it (`python.problem` here is
+                  always the fixed "Python 3 was not found…" sentence: `python_status` in `home.rs` sets it
+                  only for the `found: false` case). */}
+              <span className="min-w-0 flex-1 break-words">The Hedge apps need Python 3 to run scripts.</span>
             </span>
           )}
         </Readout>
@@ -291,7 +294,7 @@ export function PythonPanel() {
 
       {data.install_command && (
         <p className="text-xs text-muted-foreground">
-          Runs <Mono className="text-muted-foreground [overflow-wrap:anywhere]">{data.install_command}</Mono>
+          Runs <Mono className="text-muted-foreground break-words">{wrapPath(data.install_command)}</Mono>
         </p>
       )}
     </section>
