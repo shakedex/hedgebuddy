@@ -13,12 +13,12 @@ These steps change real Hedge app settings and need a machine with OffShoot Pro 
 
 ## 3. Attach a real script
 - [ ] Install the hedgebuddy package for the Python OffShoot uses, from a checkout of this repository: `py -3 -m pip install ./python`.
-- [ ] `create_profile` `smoke`, then `write_script` `log_copy.py` with manifest app offshoot, event FileCopyCompleted. Make it an `@hb.script` script whose `main` calls `hb.log(f"{event.name}: {event.raw}")`. `check_script` reports no issues and does not say the package is missing. Result:
+- [ ] `create_profile` `smoke`, then add the ready-made script `docs/smoke/smoke_offshoot.py`: ask Claude to `write_script` it as `smoke_offshoot.py`, or copy the file into `<data folder>\profiles\smoke\scripts\`. It logs every field of each copy. `check_script` reports no issues and does not say the package is missing. Result:
 - [ ] `attach_script` with `dry_run`, then for real. `list_attachments` shows `attached`.
 - [ ] Copy a small folder with OffShoot **without restarting it**. Did the script run? (If not, restart OffShoot and repeat.) Result — do attachments apply live or only after a restart?:
-- [ ] `list_runs` shows the run of `log_copy.py` with status `ok`. Its log line holds the payload fields, such as `FileCopyCompleted_state`. Result:
-- [ ] Make the script fail: `write_script` `log_copy.py` again with `raise RuntimeError("smoke test")` as the last line of `main`, then copy again. `list_runs` (or `get_run`) shows the new run with status `error` and a traceback ending in `RuntimeError: smoke test`. Restore the script afterwards. Result:
-- [ ] If FoolCat is installed: `write_script` `log_report.py` with manifest app foolcat, event ReportCreated, and the same body. `attach_script` with `dry_run` first, then for real. Create a report in FoolCat. Did the script run? Result:
+- [ ] `list_runs` shows the run of `smoke_offshoot.py` with status `ok`. Its log lists the payload fields, such as `state` and `destinationPath`. Result:
+- [ ] Make the script fail: set the variable `SMOKE_FAIL` to true (in the app's Variables screen, or `set_var` `SMOKE_FAIL` bool true), then copy again. `list_runs` (or `get_run`) shows the new run with status `error` and a traceback ending in `RuntimeError: smoke test`. Set `SMOKE_FAIL` back to false afterwards. Result:
+- [ ] If FoolCat is installed: add `docs/smoke/smoke_foolcat.py` the same way, `attach_script` with `dry_run` first, then for real. Create a report in FoolCat. Did the script run? Result:
 
 ## 4. Commands
 - [ ] `run_app_command` offshoot `open` with `wait_seconds: 5`: OffShoot comes to the front and `outcome.responses` shows the callback-log lines. Result:
@@ -71,7 +71,7 @@ Run on Windows and macOS. These steps change Claude Desktop's config file and th
 - [ ] Copy the JSON config from Connect's Other MCP clients panel into another MCP-speaking client's own config: it connects and lists HedgeBuddy's tools over stdio. Result:
 - [ ] With Claude Desktop or Claude Code connected, ask Claude to run a few tools: Connect's activity list updates with each call (time, tool, target, outcome) while Claude is still working, without a reload. Result:
 - [ ] With the MSIX Claude Desktop (Windows), ask Claude to run a few tools and to change a variable: Connect's activity list shows those calls, the app's Variables screen shows the new value, and no `%LOCALAPPDATA%\Packages\Claude_*\LocalCache\Roaming\HedgeBuddy` folder has appeared (the MCP server Claude starts uses the app's own data folder). Result:
-- [ ] With network access turned off, use Settings' Install to run the bundled wheel (`pip install --no-index`): it succeeds offline, and Home and Settings both show `hedgebuddy` installed at the app's version. Result:
+- [ ] With an older hedgebuddy installed, click Update in Settings: it installs the app's version from PyPI, and Home and Settings both show it. Then repeat with the network off: PyPI fails and it installs the copy bundled with the app instead. Result:
 - [ ] Settings' Reveal (Show in folder) opens the real data folder in the file manager. Result:
 - [ ] With a catalog override in `<data>/catalog/`, Settings' Data folder panel lists it under Overrides. Result:
 - [ ] Set an editor command in Settings, then use Open in editor (Scripts): it runs that command. Set it to something unparsable (an unterminated quote): Save is refused with the reason shown, and the old command keeps working. Result:

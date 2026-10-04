@@ -1,6 +1,6 @@
 //! Settings screen data (spec §6.7): the Python interpreter, the data
-//! folder and its catalog overrides, the bundled `hedgebuddy` wheel and the
-//! pip command that installs it, and the operator's editor command.
+//! folder and its catalog overrides, the bundled `hedgebuddy` wheel, and the
+//! operator's editor command. Also the pip install behind Settings' Update.
 
 use std::path::{Path, PathBuf};
 
@@ -20,9 +20,9 @@ const WHEEL_PREFIX: &str = "hedgebuddy-";
 const WHEEL_SUFFIX: &str = "-py3-none-any.whl";
 /// `pip_install`'s `output` is kept to this many bytes, the tail only.
 const PIP_OUTPUT_CAP: usize = 64 * 1024;
-/// Why a build with no bundled wheel (or one whose file is missing) can't
-/// install it.
-const NO_WHEEL: &str = "this build has no bundled package";
+/// Printed between the PyPI attempt and the bundled-wheel attempt.
+const FALLBACK_NOTE: &str =
+    "Installing from PyPI failed. Installing the copy that came with HedgeBuddy.";
 
 /// Arguments of `settings_overview`.
 #[derive(Debug, Default, Deserialize, JsonSchema)]
@@ -61,9 +61,6 @@ pub struct SettingsOverview {
     pub catalog_error: Option<String>,
     /// The Python the Hedge apps use.
     pub python: PythonStatus,
-    /// The pip command Install runs, as the operator would type it, or null
-    /// without Python or a bundled wheel.
-    pub install_command: Option<String>,
     /// The bundled files this build ships with.
     pub bundle: BundleInfo,
     /// The operator's editor command, or null for the system default (also
@@ -106,11 +103,6 @@ pub fn settings_overview(
     let host = ctx.hedge.host();
     let python = python_status(python.get(host)?);
     let bundle = bundle_info(bundle);
-    let install_command = bundle
-        .wheel
-        .as_deref()
-        .filter(|_| python.found)
-        .map(|wheel| pip_command_line(host.os(), wheel));
     let (editor_command, preferences_error) = match ctx.store.preferences() {
         Ok(p) => (p.editor_command, None),
         Err(e) => (None, Some(e.to_string())),
@@ -121,22 +113,20 @@ pub fn settings_overview(
         catalog_overrides: ctx.hedge.catalog().overridden().to_vec(),
         catalog_error: ctx.catalog_error.clone(),
         python,
-        install_command,
         bundle,
         editor_command,
         preferences_error,
     })
 }
 
-/// Install the bundled wheel with pip, offline (`--no-index`), then
+/// Install the `hedgebuddy` version this app needs with pip: from PyPI
+/// first, and if that fails (no network, say) from the wheel bundled with the
+/// app, offline (`--no-index`; the wheel has no dependencies). Then
 /// invalidate the Python cache and re-probe so `installed` (and the next
-/// `home_summary`/`settings_overview`) reflect it immediately. This relies
-/// on the bundled wheel declaring no dependencies (`dependencies = []` in
-/// `python/pyproject.toml`): with `--no-index`, pip could not fetch any it
-/// had. Takes no data-folder lock: this needs no profile and touches
-/// nothing under the data folder. The Tauri crate keeps installs to one at
-/// a time with an app-wide mutex, since two pip runs at once would race on
-/// the same interpreter.
+/// `home_summary`/`settings_overview`) reflect it at once. Takes no
+/// data-folder lock: this touches nothing under the data folder. The Tauri
+/// crate keeps installs to one at a time with an app-wide mutex, since two
+/// pip runs at once would race on the same interpreter.
 pub fn pip_install(
     ctx: &Context,
     python: &PythonCache,
@@ -148,30 +138,56 @@ pub fn pip_install(
             "Python 3 was not found; the Hedge apps need it to run scripts",
         ));
     }
-    let wheel = bundle
-        .wheel
-        .as_deref()
-        .filter(|p| p.is_file())
-        .ok_or_else(|| ToolError::new(NO_WHEEL))?;
     let os = host.os();
-    let argv = pip_argv(os, wheel);
+    let wanted = format!("hedgebuddy=={}", env!("CARGO_PKG_VERSION"));
+    let pypi = pip_argv(os, &[], &wanted);
+    let first = run_pip(ctx, &pypi)?;
+    let mut status = first.status;
+    let mut command = pypi.join(" ");
+    let mut output = join_output(&first.stdout, &first.stderr);
+    if let Some(wheel) = bundle.wheel.as_deref().filter(|p| p.is_file()) {
+        if first.status != 0 {
+            let local = pip_argv(os, &["--no-index"], &wheel.display().to_string());
+            let second = run_pip(ctx, &local)?;
+            status = second.status;
+            command = pip_command_line(os, wheel);
+            output = [
+                output.as_str(),
+                FALLBACK_NOTE,
+                &join_output(&second.stdout, &second.stderr),
+            ]
+            .into_iter()
+            .filter(|s| !s.is_empty())
+            .collect::<Vec<_>>()
+            .join(
+                "
+",
+            );
+        }
+    }
+    python.invalidate();
+    let installed = python.get(host)?.and_then(|i| i.hedgebuddy);
+    Ok(PipInstallResult {
+        ok: status == 0,
+        exit_code: status,
+        command,
+        output: cap_tail(&output, PIP_OUTPUT_CAP),
+        installed,
+    })
+}
+
+/// Run one pip argv through the host (no console window on Windows).
+fn run_pip(
+    ctx: &Context,
+    argv: &[String],
+) -> Result<hedgebuddy_core::host::CommandOutput, ToolError> {
     let program = argv[0].as_str();
     let args: Vec<&str> = argv[1..].iter().map(String::as_str).collect();
-    let out = host.run(program, &args).map_err(|e| {
+    ctx.hedge.host().run(program, &args).map_err(|e| {
         ToolError::new(format!(
             "couldn't start {program}: {}",
             spawn_reason(program, e)
         ))
-    })?;
-    let combined = join_output(&out.stdout, &out.stderr);
-    python.invalidate();
-    let installed = python.get(host)?.and_then(|i| i.hedgebuddy);
-    Ok(PipInstallResult {
-        ok: out.status == 0,
-        exit_code: out.status,
-        command: pip_command_line(os, wheel),
-        output: cap_tail(&combined, PIP_OUTPUT_CAP),
-        installed,
     })
 }
 
@@ -199,9 +215,9 @@ fn parse_wheel_version(path: &Path) -> Option<String> {
     (!version.is_empty()).then(|| version.to_owned())
 }
 
-/// The argv `pip_install` runs: `launcher(os)`, then pip's own arguments
-/// (offline, without pip's own version nag), then the wheel path.
-fn pip_argv(os: Os, wheel: &Path) -> Vec<String> {
+/// A pip argv: `launcher(os)`, `-m pip install --upgrade` without pip's own
+/// version nag, then `extra` flags, then what to install.
+fn pip_argv(os: Os, extra: &[&str], target: &str) -> Vec<String> {
     let mut argv: Vec<String> = launcher(os).into_iter().map(str::to_owned).collect();
     argv.extend(
         [
@@ -209,20 +225,20 @@ fn pip_argv(os: Os, wheel: &Path) -> Vec<String> {
             "pip",
             "install",
             "--upgrade",
-            "--no-index",
             "--disable-pip-version-check",
         ]
         .map(str::to_owned),
     );
-    argv.push(wheel.display().to_string());
+    argv.extend(extra.iter().map(|s| (*s).to_owned()));
+    argv.push(target.to_owned());
     argv
 }
 
-/// [`pip_argv`], as the operator would type it: the wheel path quoted for a
-/// shell on `os` ([`shell_quote`]: single quotes on macOS, double quotes on
-/// Windows) — it is only ever shown or copied, never run this way.
+/// The bundled-wheel pip command as a shell line, with the wheel path quoted
+/// for `os` ([`shell_quote`]). It is only shown in the result, never run
+/// this way.
 fn pip_command_line(os: Os, wheel: &Path) -> String {
-    let mut argv = pip_argv(os, wheel);
+    let mut argv = pip_argv(os, &["--no-index"], &wheel.display().to_string());
     if let Some(last) = argv.last_mut() {
         let quoted = shell_quote(os, last);
         *last = quoted;
@@ -310,18 +326,46 @@ mod tests {
         }
     }
 
-    /// The pip argv `pip_install` runs for `wheel`, without the program.
-    fn pip_args(wheel: &str) -> [&str; 8] {
+    /// The PyPI pip argv `pip_install` runs first, without the program.
+    fn pypi_args() -> Vec<String> {
         [
             "-3",
             "-m",
             "pip",
             "install",
             "--upgrade",
-            "--no-index",
             "--disable-pip-version-check",
+        ]
+        .into_iter()
+        .map(str::to_owned)
+        .chain([format!("hedgebuddy=={}", env!("CARGO_PKG_VERSION"))])
+        .collect()
+    }
+
+    /// The bundled-wheel pip argv `pip_install` falls back to, without the
+    /// program.
+    fn wheel_args(wheel: &str) -> Vec<String> {
+        [
+            "-3",
+            "-m",
+            "pip",
+            "install",
+            "--upgrade",
+            "--disable-pip-version-check",
+            "--no-index",
             wheel,
         ]
+        .into_iter()
+        .map(str::to_owned)
+        .collect()
+    }
+
+    fn strs(v: &[String]) -> Vec<&str> {
+        v.iter().map(String::as_str).collect()
+    }
+
+    fn run_of(args: Vec<String>) -> Vec<String> {
+        std::iter::once("py".to_owned()).chain(args).collect()
     }
 
     #[test]
@@ -360,11 +404,6 @@ mod tests {
         assert_eq!(overview.bundle.wheel.as_deref(), Some(wheel.as_path()));
         assert_eq!(overview.bundle.wheel_version.as_deref(), Some("0.11.0"));
         assert_eq!(overview.preferences_error, None);
-        let expected = format!(
-            "py -3 -m pip install --upgrade --no-index --disable-pip-version-check \"{}\"",
-            wheel.display()
-        );
-        assert_eq!(overview.install_command.as_deref(), Some(expected.as_str()));
     }
 
     #[test]
@@ -381,7 +420,6 @@ mod tests {
             .unwrap(),
         );
         assert!(!overview.python.found);
-        assert_eq!(overview.install_command, None);
         assert_eq!(overview.bundle.wheel, None);
     }
 
@@ -435,36 +473,22 @@ mod tests {
     }
 
     #[test]
-    fn pip_install_runs_the_bundled_wheel_offline() {
+    fn pip_install_uses_pypi_first() {
         let wheel_dir = tempfile::tempdir().unwrap();
-        let wheel = write_wheel(wheel_dir.path(), "0.11.0");
-        let wheel_str = wheel.display().to_string();
         let bundle = Bundle {
             binary: None,
-            wheel: Some(wheel.clone()),
+            wheel: Some(write_wheel(wheel_dir.path(), "0.11.0")),
         };
 
-        // Prime the cache from a *different* host reporting the version
-        // installed before the upgrade. The pip run itself happens against a
-        // second host that reports the new version, so `installed` only
-        // matches 0.11.0 if `pip_install` actually invalidates the cache and
-        // re-probes afterwards, rather than e.g. returning a stale value.
+        // Prime the cache from a different host that still reports 0.10.0.
+        // `installed` only reads 0.11.0 if pip_install re-probes afterwards.
         let cache = PythonCache::default();
-        let (_d0, _f0, ctx_before) =
-            test_ctx(with_probe(FakeHost::new(Os::Windows), Some("0.10.0")));
-        assert_eq!(
-            cache
-                .get(ctx_before.hedge.host())
-                .unwrap()
-                .unwrap()
-                .hedgebuddy
-                .as_deref(),
-            Some("0.10.0")
-        );
+        let (_d0, _f0, before) = test_ctx(with_probe(FakeHost::new(Os::Windows), Some("0.10.0")));
+        cache.get(before.hedge.host()).unwrap();
 
         let host = with_probe(FakeHost::new(Os::Windows), Some("0.11.0")).with_run_response(
             "py",
-            &pip_args(&wheel_str),
+            &strs(&pypi_args()),
             pip_response(0, "Successfully installed hedgebuddy-0.11.0", ""),
         );
         let (_d, fake, ctx) = test_ctx(host);
@@ -476,39 +500,70 @@ mod tests {
             "{}",
             result.output
         );
+        assert!(!result.output.contains(FALLBACK_NOTE), "{}", result.output);
         assert_eq!(result.installed.as_deref(), Some("0.11.0"));
-
-        let mut pip_run = vec!["py".to_owned()];
-        pip_run.extend(pip_args(&wheel_str).map(str::to_owned));
-        let probe: Vec<String> = ["py", "-3", "-c", PROBE]
-            .into_iter()
-            .map(str::to_owned)
-            .collect();
-        assert_eq!(
-            fake.runs(),
-            vec![pip_run, probe],
-            "pip_install must re-probe (on its own host) after pip succeeds"
-        );
+        assert!(result
+            .command
+            .ends_with(&format!("hedgebuddy=={}", env!("CARGO_PKG_VERSION"))));
+        let probe = run_of(vec!["-3".into(), "-c".into(), PROBE.into()]);
+        assert_eq!(fake.runs(), vec![run_of(pypi_args()), probe]);
     }
 
     #[test]
-    fn pip_install_failure_is_a_result_not_an_error() {
+    fn pip_install_falls_back_to_the_bundled_wheel_when_pypi_fails() {
         let wheel_dir = tempfile::tempdir().unwrap();
         let wheel = write_wheel(wheel_dir.path(), "0.11.0");
         let wheel_str = wheel.display().to_string();
         let bundle = Bundle {
             binary: None,
-            wheel: Some(wheel),
+            wheel: Some(wheel.clone()),
         };
-        let host = with_probe(FakeHost::new(Os::Windows), Some("0.10.0")).with_run_response(
-            "py",
-            &pip_args(&wheel_str),
-            pip_response(1, "", "ERROR: could not find a version that satisfies"),
-        );
-        let (_d, _f, ctx) = test_ctx(host);
+        let host = with_probe(FakeHost::new(Os::Windows), Some("0.11.0"))
+            .with_run_response(
+                "py",
+                &strs(&pypi_args()),
+                pip_response(1, "", "ERROR: No matching distribution found"),
+            )
+            .with_run_response(
+                "py",
+                &strs(&wheel_args(&wheel_str)),
+                pip_response(0, "Successfully installed hedgebuddy-0.11.0", ""),
+            );
+        let (_d, fake, ctx) = test_ctx(host);
         let result = checked(
             "pip_install",
             pip_install(&ctx, &PythonCache::default(), &bundle).unwrap(),
+        );
+        assert!(result.ok);
+        assert!(
+            result.output.contains("No matching distribution"),
+            "{}",
+            result.output
+        );
+        assert!(result.output.contains(FALLBACK_NOTE), "{}", result.output);
+        assert!(
+            result.output.contains("Successfully installed"),
+            "{}",
+            result.output
+        );
+        assert_eq!(result.command, pip_command_line(Os::Windows, &wheel));
+        let runs = fake.runs();
+        assert!(runs.contains(&run_of(pypi_args())), "{runs:?}");
+        assert!(runs.contains(&run_of(wheel_args(&wheel_str))), "{runs:?}");
+    }
+
+    #[test]
+    fn pip_install_failure_is_a_result_not_an_error() {
+        // PyPI fails and there is no bundled wheel to fall back to.
+        let host = with_probe(FakeHost::new(Os::Windows), Some("0.10.0")).with_run_response(
+            "py",
+            &strs(&pypi_args()),
+            pip_response(1, "", "ERROR: could not find a version that satisfies"),
+        );
+        let (_d, fake, ctx) = test_ctx(host);
+        let result = checked(
+            "pip_install",
+            pip_install(&ctx, &PythonCache::default(), &Bundle::default()).unwrap(),
         );
         assert!(!result.ok);
         assert_eq!(result.exit_code, 1);
@@ -517,43 +572,31 @@ mod tests {
             "{}",
             result.output
         );
+        assert!(!fake
+            .runs()
+            .iter()
+            .any(|r| r.contains(&"--no-index".to_owned())));
     }
 
     #[test]
     fn pip_install_reports_a_spawn_failure_plainly() {
-        let wheel_dir = tempfile::tempdir().unwrap();
-        let wheel = write_wheel(wheel_dir.path(), "0.11.0");
-        let bundle = Bundle {
-            binary: None,
-            wheel: Some(wheel),
-        };
-        // No pip run response is registered, so FakeHost::run fails as if
-        // the program could not be spawned at all.
+        // No pip response is registered, so FakeHost::run fails as if the
+        // program could not be started at all.
         let host = with_probe(FakeHost::new(Os::Windows), Some("0.10.0"));
         let (_d, _f, ctx) = test_ctx(host);
-        let err = pip_install(&ctx, &PythonCache::default(), &bundle).unwrap_err();
+        let err = pip_install(&ctx, &PythonCache::default(), &Bundle::default()).unwrap_err();
         assert_eq!(err.0, "couldn't start py: not installed on this fake host");
     }
 
     #[test]
-    fn pip_install_needs_python_and_a_wheel() {
-        let wheel_dir = tempfile::tempdir().unwrap();
-        let wheel = write_wheel(wheel_dir.path(), "0.11.0");
-        let bundle = Bundle {
-            binary: None,
-            wheel: Some(wheel),
-        };
+    fn pip_install_needs_python() {
         let (_d, _f, ctx) = test_ctx(FakeHost::new(Os::Windows));
-        let err = pip_install(&ctx, &PythonCache::default(), &bundle).unwrap_err();
+        let err = pip_install(&ctx, &PythonCache::default(), &Bundle::default()).unwrap_err();
         assert!(err.0.contains("Python 3 was not found"), "{err}");
-
-        let (_d2, _f2, ctx2) = test_ctx(with_probe(FakeHost::new(Os::Windows), None));
-        let err = pip_install(&ctx2, &PythonCache::default(), &Bundle::default()).unwrap_err();
-        assert!(err.0.contains("no bundled package"), "{err}");
     }
 
     #[test]
-    fn pip_install_needs_a_wheel_file_that_actually_exists() {
+    fn pip_install_skips_a_bundled_wheel_that_is_missing() {
         let wheel_dir = tempfile::tempdir().unwrap();
         // Named like a real wheel, but never written.
         let missing = wheel_dir.path().join("hedgebuddy-0.11.0-py3-none-any.whl");
@@ -561,28 +604,30 @@ mod tests {
             binary: None,
             wheel: Some(missing),
         };
-        let (_d, _f, ctx) = test_ctx(with_probe(FakeHost::new(Os::Windows), Some("0.10.0")));
-        let err = pip_install(&ctx, &PythonCache::default(), &bundle).unwrap_err();
-        assert_eq!(err.0, NO_WHEEL);
+        let host = with_probe(FakeHost::new(Os::Windows), Some("0.10.0")).with_run_response(
+            "py",
+            &strs(&pypi_args()),
+            pip_response(1, "", "ERROR: offline"),
+        );
+        let (_d, fake, ctx) = test_ctx(host);
+        let result = pip_install(&ctx, &PythonCache::default(), &bundle).unwrap();
+        assert!(!result.ok);
+        assert!(!fake
+            .runs()
+            .iter()
+            .any(|r| r.contains(&"--no-index".to_owned())));
     }
 
     #[test]
     fn pip_output_is_capped() {
-        let wheel_dir = tempfile::tempdir().unwrap();
-        let wheel = write_wheel(wheel_dir.path(), "0.11.0");
-        let wheel_str = wheel.display().to_string();
-        let bundle = Bundle {
-            binary: None,
-            wheel: Some(wheel),
-        };
         let big: String = "0123456789".repeat(10 * 1024 + 1); // > 64 KiB, ASCII only
         let host = with_probe(FakeHost::new(Os::Windows), Some("0.11.0")).with_run_response(
             "py",
-            &pip_args(&wheel_str),
+            &strs(&pypi_args()),
             pip_response(0, &big, ""),
         );
         let (_d, _f, ctx) = test_ctx(host);
-        let result = pip_install(&ctx, &PythonCache::default(), &bundle).unwrap();
+        let result = pip_install(&ctx, &PythonCache::default(), &Bundle::default()).unwrap();
         assert_eq!(result.output.len(), PIP_OUTPUT_CAP);
         assert!(big.ends_with(&result.output));
     }
